@@ -1,0 +1,19 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Radii" subtitle="Soft corners — 12 · 16 · 22 (card) · 24 · pill" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); padding: 24px; font-family: var(--font-body); }
+  .sw { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
+  .chip { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .box { width: 78px; height: 78px; background: var(--surface); box-shadow: var(--sh-1); border: 1.5px solid var(--line); }
+  .n { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip"><div class="box" style="border-radius:var(--radius-sm)"></div><div class="n">sm · 12</div></div>
+  <div class="chip"><div class="box" style="border-radius:var(--radius-md)"></div><div class="n">md · 16</div></div>
+  <div class="chip"><div class="box" style="border-radius:var(--radius)"></div><div class="n">radius · 22</div></div>
+  <div class="chip"><div class="box" style="border-radius:var(--radius-lg)"></div><div class="n">lg · 24</div></div>
+  <div class="chip"><div class="box" style="width:120px;border-radius:var(--radius-pill)"></div><div class="n">pill · 999</div></div>
+</div>
+</body></html>

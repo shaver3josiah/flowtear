@@ -1,0 +1,44 @@
+/* ============================================================================
+   Flowtier — Typography tokens
+   Three roles, unchanged from the Bloom family:
+     body    Quicksand        — UI, labels, running text, buttons
+     display Playfair Display — headings, big numerals, the day-count hero
+     script  Great Vibes      — the wordmark & the occasional affectionate line
+   ============================================================================ */
+
+:root {
+  --font-body: "Quicksand", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-script: "Great Vibes", "Brush Script MT", cursive;
+
+  /* Weights — Quicksand ships 400/500/600/700 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Type scale (rem, 16px base). Display sizes lean large & serif-elegant. */
+  --text-2xs: 0.6875rem;   /* 11px — micro labels, calendar weekday heads */
+  --text-xs: 0.75rem;      /* 12px — captions, chip meta */
+  --text-sm: 0.8125rem;    /* 13px — secondary body, tab labels */
+  --text-base: 0.9375rem;  /* 15px — default body */
+  --text-md: 1rem;         /* 16px — emphasized body */
+  --text-lg: 1.125rem;     /* 18px — card titles */
+  --text-xl: 1.375rem;     /* 22px — section headings */
+  --text-2xl: 1.75rem;     /* 28px — screen titles */
+  --text-3xl: 2.5rem;      /* 40px — big numerals / stats */
+  --text-4xl: 3.5rem;      /* 56px — the cycle-ring day count */
+  --text-5xl: 4.5rem;      /* 72px — hero / splash */
+
+  /* Line heights */
+  --leading-tight: 1.1;
+  --leading-snug: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* Letter spacing — Quicksand is round & open; tighten display, track labels */
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-label: 0.08em;   /* uppercase micro-labels */
+}

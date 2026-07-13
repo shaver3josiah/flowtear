@@ -1,0 +1,118 @@
+/* ============================================================================
+   Flowtier — Color tokens
+   Palette inherited verbatim from the Bloom Calculator theme system. The base
+   :root is the "Cherry" default preset; three alternate presets ship as
+   [data-theme] scopes (Rose, Peony, Soft) and only override the subset they
+   change — everything else falls through to :root, exactly like the source app.
+
+   New for Flowtier (a cycle tracker, not a calculator): cycle-phase and
+   flow-intensity ramps, tuned to sit inside the rose palette.
+   ============================================================================ */
+
+:root {
+  /* ---- Base palette (Cherry, the default) ------------------------------- */
+  --bg: #FDF2F7;              /* page background */
+  --surface: #FFFFFF;         /* card surface — white in every preset */
+  --surface-soft: #FBE4EE;    /* keys, panels, quiet fills */
+  --surface-2: #FDF0F5;       /* accent panels */
+  --primary: #F06FA7;         /* flower petals — the signature pink */
+  --primary-strong: #E2417F;  /* strong accent, active states */
+  --deep: #B01B58;            /* headlines */
+  --text: #421527;            /* main text — deep plum */
+  --muted: #885B6D;           /* soft / secondary text */
+  --line: #F2CEDF;            /* hairline borders */
+  --flower-center: #FFC966;   /* the gold flower center */
+  --good: #17703B;            /* growth / positive green */
+
+  --shadow: rgba(176, 27, 88, .16);  /* per-preset shadow tint */
+  --ripple: rgba(255, 255, 255, .55);
+
+  /* ---- Cycle phase ramp (Flowtier) -------------------------------------
+     Menstrual → Follicular → Fertile → Ovulation → Luteal, walked around the
+     cycle ring. Warm rose to gold to orchid, all harmonized to the palette. */
+  --phase-menstrual: #E14B7A;   /* bleed days — deep rose */
+  --phase-follicular: #F7A8C6;  /* rising — soft petal pink */
+  --phase-fertile: #F6BE6A;     /* fertile window — warm gold (flower family) */
+  --phase-ovulation: #EC9A32;   /* peak day — deep amber */
+  --phase-luteal: #C98BC7;      /* PMS window — orchid mauve */
+
+  /* soft tints of each phase, for calendar washes & backgrounds */
+  --phase-menstrual-soft: #FBDCE6;
+  --phase-follicular-soft: #FCE7F0;
+  --phase-fertile-soft: #FDEDD4;
+  --phase-ovulation-soft: #FBE4C6;
+  --phase-luteal-soft: #F3E1F1;
+
+  /* ---- Flow intensity ramp (Flowtier) ----------------------------------
+     spotting → light → medium → heavy. Mirrors the source tracker's pink-to-
+     deep-red progression, remapped onto the rose palette. */
+  --flow-spotting: #F7C6D9;
+  --flow-light: #F492B7;
+  --flow-medium: #E85C90;
+  --flow-heavy: #BE2C60;
+  --flow-none: #D9C4CE;        /* logged, no flow */
+
+  /* ---- Semantic aliases ------------------------------------------------- */
+  --text-body: var(--text);
+  --text-muted: var(--muted);
+  --text-heading: var(--deep);
+  --text-on-primary: #FFFFFF;
+  --text-on-accent: #FFFFFF;
+
+  --surface-page: var(--bg);
+  --surface-card: var(--surface);
+  --surface-panel: var(--surface-soft);
+  --surface-accent: var(--surface-2);
+
+  --accent: var(--primary);
+  --accent-strong: var(--primary-strong);
+  --border-hairline: var(--line);
+  --border-strong: var(--primary);
+
+  --focus-ring: color-mix(in srgb, var(--primary-strong) 40%, transparent);
+}
+
+/* ---- Rose preset --------------------------------------------------------- */
+[data-theme="rose"] {
+  --bg: #FDF2F1;
+  --surface-soft: #FADDE0;
+  --surface-2: #FCEBEC;
+  --primary: #E56A87;
+  --primary-strong: #CE3E63;
+  --deep: #A11C41;
+  --text: #431B23;
+  --muted: #835862;
+  --line: #F1CBD1;
+  --flower-center: #FFC878;
+  --shadow: rgba(161, 28, 65, .16);
+}
+
+/* ---- Peony preset -------------------------------------------------------- */
+[data-theme="peony"] {
+  --bg: #FDF1F8;
+  --surface-soft: #F9DCEC;
+  --surface-2: #FCEAF3;
+  --primary: #E15BA4;
+  --primary-strong: #C22E85;
+  --deep: #8E1560;
+  --text: #3B1030;
+  --muted: #815571;
+  --line: #EFC8E0;
+  --flower-center: #FFC966;
+  --shadow: rgba(142, 21, 96, .16);
+}
+
+/* ---- Soft preset --------------------------------------------------------- */
+[data-theme="soft"] {
+  --bg: #FEF7F9;
+  --surface-soft: #FBE7ED;
+  --surface-2: #FDF1F4;
+  --primary: #EE9DBB;
+  --primary-strong: #DB6E93;
+  --deep: #B04266;
+  --text: #4A2533;
+  --muted: #82606D;
+  --line: #F4D8E1;
+  --flower-center: #FFD488;
+  --shadow: rgba(176, 66, 102, .14);
+}

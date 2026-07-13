@@ -1,0 +1,61 @@
+<!-- @dsCard group="Animations" viewport="700x240" name="Glitter twinkle" subtitle="Ambient sparkle + tap-to-burst — gold, pink & white" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); padding: 20px; }
+  .stage { position: relative; height: 200px; border-radius: var(--radius); overflow: hidden; cursor: pointer;
+    background: radial-gradient(120% 100% at 50% 40%, var(--surface), var(--surface-soft)); box-shadow: var(--sh-1);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .stage b { font-family: var(--font-display); font-size: 22px; color: var(--deep); position: relative; z-index: 2; }
+  .stage span.cap { font-size: 12px; color: var(--muted); position: relative; z-index: 2; }
+  .tw { position: absolute; border-radius: 50%; animation: ft-tw 2.4s ease-in-out infinite; }
+  @keyframes ft-tw { 0%, 100% { opacity: .15; transform: scale(.6); } 50% { opacity: 1; transform: scale(1); } }
+  .spark { position: absolute; border-radius: 50%; pointer-events: none; }
+  @keyframes ft-spark { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.3); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .tw, .spark { animation: none; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"><b>Tap for a little magic</b><span class="cap">GlitterBurst · save confirmations & flower taps</span></div>
+<script>
+  const stage = document.getElementById("stage");
+  const cols = ["var(--flower-center)", "var(--primary)", "#fff", "var(--primary-strong)"];
+  // ambient twinkles
+  for (let i = 0; i < 14; i++) {
+    const t = document.createElement("span");
+    t.className = "tw";
+    const sz = 4 + Math.random() * 7;
+    t.style.width = sz + "px"; t.style.height = sz + "px";
+    t.style.left = (6 + Math.random() * 88) + "%";
+    t.style.top = (10 + Math.random() * 80) + "%";
+    t.style.background = cols[i % cols.length];
+    t.style.animationDelay = (-Math.random() * 2.4) + "s";
+    stage.appendChild(t);
+  }
+  function burst(x, y) {
+    for (let i = 0; i < 18; i++) {
+      const s = document.createElement("span");
+      s.className = "spark";
+      const ang = (i / 18) * Math.PI * 2 + Math.random() * 0.5;
+      const dist = 40 + Math.random() * 75;
+      const sz = 5 + Math.random() * 7;
+      s.style.left = x + "px"; s.style.top = y + "px";
+      s.style.width = sz + "px"; s.style.height = sz + "px";
+      s.style.background = cols[i % cols.length];
+      s.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+      s.style.setProperty("--dy", (Math.sin(ang) * dist + 18) + "px");
+      s.style.animation = (700 + Math.random() * 400) + "ms cubic-bezier(.2,.7,.3,1) forwards ft-spark";
+      stage.appendChild(s);
+      setTimeout(() => s.remove(), 1200);
+    }
+  }
+  stage.addEventListener("pointerdown", (e) => {
+    const r = stage.getBoundingClientRect();
+    burst(e.clientX - r.left, e.clientY - r.top);
+  });
+</script>
+</body>
+</html>

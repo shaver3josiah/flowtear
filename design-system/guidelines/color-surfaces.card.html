@@ -1,0 +1,19 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Surfaces & background" subtitle="Page, card, soft panels & accent fills" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); padding: 20px; }
+  .sw { display: flex; gap: 14px; flex-wrap: wrap; }
+  .chip { display: flex; flex-direction: column; gap: 7px; }
+  .box { width: 150px; height: 74px; border-radius: var(--radius-md); border: 1px solid var(--line); }
+  .n { font-size: 12px; font-weight: 600; color: var(--text); }
+  .v { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip"><div class="box" style="background:var(--bg)"></div><div class="n">--bg · Page</div><div class="v">#FDF2F7</div></div>
+  <div class="chip"><div class="box" style="background:var(--surface)"></div><div class="n">--surface · Card</div><div class="v">#FFFFFF</div></div>
+  <div class="chip"><div class="box" style="background:var(--surface-soft)"></div><div class="n">--surface-soft</div><div class="v">#FBE4EE</div></div>
+  <div class="chip"><div class="box" style="background:var(--surface-2)"></div><div class="n">--surface-2 · Accent</div><div class="v">#FDF0F5</div></div>
+</div>
+</body></html>

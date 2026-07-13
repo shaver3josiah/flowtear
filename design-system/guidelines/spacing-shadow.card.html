@@ -1,0 +1,18 @@
+<!-- @dsCard group="Spacing" viewport="700x200" name="Elevation & shadow" subtitle="Rose-tinted shadow ladder — sh-1 · card · sh-2 · sh-3" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); padding: 30px 24px; font-family: var(--font-body); }
+  .sw { display: flex; gap: 26px; flex-wrap: wrap; }
+  .chip { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .box { width: 120px; height: 74px; background: var(--surface); border-radius: var(--radius); }
+  .n { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip"><div class="box" style="box-shadow:var(--sh-1)"></div><div class="n">--sh-1</div></div>
+  <div class="chip"><div class="box" style="box-shadow:var(--shadow-card)"></div><div class="n">--shadow-card</div></div>
+  <div class="chip"><div class="box" style="box-shadow:var(--sh-2)"></div><div class="n">--sh-2</div></div>
+  <div class="chip"><div class="box" style="box-shadow:var(--sh-3)"></div><div class="n">--sh-3 · float</div></div>
+</div>
+</body></html>

@@ -1,0 +1,114 @@
+<!-- @dsCard group="Flowtier app" viewport="470x860" name="Calendar screen" subtitle="The full month calendar page — cycle summary, grid, legend & day detail" -->
+<!-- @startingPoint section="Flowtier" subtitle="Cycle calendar screen" viewport="384x832" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flowtier · Calendar</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; font-family: var(--font-body);
+    background: radial-gradient(60% 50% at 20% 8%, #FFE3EF, transparent 60%), radial-gradient(60% 55% at 88% 18%, #FBD5E8, transparent 62%), linear-gradient(150deg, #FDECF4, #FBDCEC 55%, #F7C9E1); }
+  .ft-device { padding: 11px; border-radius: 63px; background: linear-gradient(155deg, #4a333f, #241019 60%, #180a11); box-shadow: 0 54px 120px -36px var(--shadow), inset 0 0 0 2px rgba(255,255,255,.07); }
+  .ft-screen { position: relative; width: 384px; height: min(832px, 100vh - 64px); border-radius: 52px; overflow: hidden; background: var(--bg); display: flex; flex-direction: column; isolation: isolate; }
+  .ft-island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 122px; height: 35px; background: #0a0407; border-radius: 20px; z-index: 60; }
+  .ft-island::after { content: ""; position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: #17222b; box-shadow: inset 0 0 0 1.5px #0a0f14; }
+  .ft-status { height: 54px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 15px 30px 0; font-weight: 600; font-size: 16px; color: var(--deep); }
+  .ft-status-ic { display: inline-flex; gap: 6px; align-items: center; }
+  .ft-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; z-index: 2; }
+  .ft-scroll::-webkit-scrollbar { width: 0; }
+  .ft-nav { flex: none; height: 68px; display: flex; align-items: flex-start; justify-content: space-around; padding-top: 8px; background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px); border-top: 1px solid var(--line); position: relative; z-index: 10; }
+  .ft-navitem { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: 10px; font-weight: 600; }
+  .ft-navitem.is-active { color: var(--primary-strong); }
+  .ft-home { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 138px; height: 5px; border-radius: 999px; background: var(--deep); opacity: .45; z-index: 40; }
+  .ft-ico { display: inline-flex; align-items: center; justify-content: center; color: inherit; flex: none; }
+  .ft-ico svg { width: 100%; height: 100%; display: block; stroke-width: 2; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel" data-presets="react">
+const NS = window.FlowtierDesignSystem_6b3d0d;
+const { Card, Button, IconButton, SegmentedTabs, DayCell, PhaseBadge, Badge, CycleRing } = NS;
+
+const length = 28, period = 5, day = 12, ovDay = 14, fertileStart = 9, daysToPeriod = 16;
+const phaseOf = (d) => d <= 0 ? "luteal" : d <= period ? "menstrual" : d < fertileStart ? "follicular" : d < ovDay ? "fertile" : d <= ovDay + 1 ? "ovulation" : "luteal";
+const flowByCycleDay = { 1: "light", 2: "medium", 3: "heavy", 4: "medium", 5: "light" };
+const weekHeads = ["M", "T", "W", "T", "F", "S", "S"];
+const M = { label: "July 2026", days: 31, offset: 2, todayDate: 13 };
+const Ico = ({ name, size = 20 }) => { const ref = React.useRef(null); React.useEffect(() => { const e = ref.current; if (!e) return; e.innerHTML = '<i data-lucide="' + name + '"></i>'; if (window.lucide) window.lucide.createIcons(); }, [name, size]); return <span ref={ref} className="ft-ico" style={{ width: size, height: size }} />; };
+const stateFor = (cd) => cd >= 1 && cd <= period ? "period" : cd >= 29 ? "predicted" : cd === ovDay ? "ovulation" : cd >= fertileStart && cd < ovDay ? "fertile" : null;
+
+function Calendar() {
+  const [sel, setSel] = React.useState(M.todayDate);
+  const cells = [];
+  for (let i = 0; i < M.offset; i++) cells.push(null);
+  for (let d = 1; d <= M.days; d++) cells.push(d);
+  const selCd = sel - 1, selState = stateFor(selCd), selFlow = selCd >= 1 && selCd <= period ? flowByCycleDay[selCd] : null;
+  const detail = selState === "period" ? "Period day · " + (selFlow || "logged") + " flow" : selState === "ovulation" ? "Ovulation day · highest chance of pregnancy" : selState === "fertile" ? "Fertile window · higher chance of pregnancy" : selState === "predicted" ? "Predicted period day" : "No period expected today";
+  return (
+    <div style={{ padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
+        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-2xl)", color: "var(--deep)" }}>Calendar</h1>
+        <SegmentedTabs value="month" onChange={() => {}} options={[{ value: "month", label: "Month" }, { value: "year", label: "Year" }]} />
+      </div>
+      <Card variant="soft" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <CycleRing cycleDay={day} cycleLength={length} periodLength={period} size={74}>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 22, color: "var(--deep)", lineHeight: 1 }}>{day}</span>
+        </CycleRing>
+        <div style={{ flex: 1 }}>
+          <PhaseBadge phase={phaseOf(day)} subtitle={"Day " + day} />
+          <div style={{ fontSize: "var(--text-sm)", color: "var(--muted)", marginTop: 6 }}>Next bloom in <b style={{ color: "var(--deep)" }}>{daysToPeriod} days</b> · Fri, Jul 29</div>
+        </div>
+      </Card>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <IconButton label="Previous month" variant="ghost" size="sm"><Ico name="chevron-left" size={18} /></IconButton>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>{M.label}</span>
+          <IconButton label="Next month" variant="ghost" size="sm"><Ico name="chevron-right" size={18} /></IconButton>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, textAlign: "center" }}>
+          {weekHeads.map((h, i) => <div key={i} style={{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--muted)", padding: "2px 0 6px" }}>{h}</div>)}
+          {cells.map((d, i) => <div key={i} style={{ display: "grid", placeItems: "center", padding: "1px 0" }}>{d && <DayCell day={d} size={36} state={stateFor(d - 1)} flow={d - 1 >= 1 && d - 1 <= period ? flowByCycleDay[d - 1] : null} today={d === M.todayDate} selected={d === sel} onClick={() => setSel(d)} />}</div>)}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px", paddingTop: 2 }}>
+          {[["Period", "var(--phase-menstrual)", false], ["Fertile", "var(--phase-fertile)", false], ["Ovulation", "var(--phase-ovulation)", false], ["Predicted", "var(--phase-menstrual-soft)", true]].map(([l, c, dash]) => (
+            <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)", color: "var(--muted)", fontWeight: 500 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: c, border: dash ? "1.5px dashed var(--phase-menstrual)" : "none" }} />{l}</span>
+          ))}
+        </div>
+      </Card>
+      <Card variant="soft" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>Jul {sel}{sel === M.todayDate ? " · Today" : ""}</div>
+          <PhaseBadge phase={phaseOf(selCd)} subtitle={"Day " + Math.max(selCd, 0)} />
+        </div>
+        <div style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>{detail}</div>
+        {selState === "period" && <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}><Badge tone="menstrual" dot>{selFlow} flow</Badge><Badge tone="neutral">Cramps</Badge><Badge tone="neutral">Fatigue</Badge><Badge tone="neutral">Sensitive</Badge></div>}
+        <Button variant="soft" block iconLeft={<Ico name="plus" size={16} />}>{selState === "period" ? "Edit this day" : "Log this day"}</Button>
+      </Card>
+    </div>
+  );
+}
+
+function Screen() {
+  const tabs = [["today", "house", "Today"], ["calendar", "calendar-days", "Calendar"], ["insights", "chart-column", "Insights"], ["reminders", "bell", "Reminders"]];
+  return (
+    <div className="ft-device"><div className="ft-screen" data-ft-root>
+      <div className="ft-island" />
+      <div className="ft-status"><span>9:41</span><span className="ft-status-ic"><Ico name="signal" size={16} /><Ico name="wifi" size={16} /><Ico name="battery-full" size={20} /></span></div>
+      <div className="ft-scroll"><Calendar /><div style={{ height: 24 }} /></div>
+      <nav className="ft-nav">{tabs.map(([k, icon, label]) => <div key={k} className={"ft-navitem" + (k === "calendar" ? " is-active" : "")}><Ico name={icon} size={22} /><span>{label}</span></div>)}</nav>
+      <div className="ft-home" />
+    </div></div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Screen />);
+</script>
+</body>
+</html>

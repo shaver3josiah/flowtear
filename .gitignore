@@ -1,0 +1,28 @@
+# Xcode / XcodeGen (project is generated in CI via `xcodegen generate`)
+*.xcodeproj
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+Generated-Info.plist
+
+# macOS
+.DS_Store
+
+# fastlane artifacts
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+
+# Secrets / signing — NEVER commit these
+*.p8
+AuthKey_*.p8
+*.mobileprovision
+*.cer
+*.p12
+*.certSigningRequest
+
+# Design system delivered as a zip; the extracted design-system/ folder is tracked
+*.zip

@@ -1,0 +1,20 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Upload the exported .ipa to TestFlight using an App Store Connect API key"
+  lane :upload_testflight do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_filepath: ENV.fetch("ASC_KEY_FILEPATH"),
+      in_house: false
+    )
+
+    pilot(
+      api_key: api_key,
+      ipa: ENV.fetch("IPA_PATH"),
+      skip_submission: true,                    # upload only; do not submit for review
+      skip_waiting_for_build_processing: true   # don't burn runner minutes waiting
+    )
+  end
+end

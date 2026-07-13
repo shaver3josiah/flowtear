@@ -1,0 +1,19 @@
+<!-- @dsCard group="Brand" viewport="700x230" name="Iconography — Lucide" subtitle="Rounded 2px line icons from Lucide (CDN); recolor via currentColor" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); padding: 22px; font-family: var(--font-body); }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px 10px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--deep); }
+  .cell svg { width: 26px; height: 26px; }
+  .cap { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+</style></head>
+<body>
+<div class="grid" id="g"></div>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script>
+  const names = ["droplet","calendar-heart","bell","moon","sparkles","flower-2","activity","pill","chart-column","smile","cloud-rain","thermometer","heart","clock","plus","chevron-right","settings","brain"];
+  document.getElementById("g").innerHTML = names.map(n => `<div class="cell"><i data-lucide="${n}"></i><span class="cap">${n}</span></div>`).join("");
+  lucide.createIcons();
+</script>
+</body></html>

@@ -1,0 +1,110 @@
+<!-- @dsCard group="Components" viewport="700x900" name="Tracking — cycle, flow, symptoms, charts" subtitle="CycleRing, phases, flow, symptoms, calendar days, stats & bars" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); color: var(--text); padding: 24px; }
+  .wrap { display: flex; flex-direction: column; gap: 24px; max-width: 640px; }
+  .sec { display: flex; flex-direction: column; gap: 12px; }
+  .sec > .lbl { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .cal { display: grid; grid-template-columns: repeat(7, 40px); gap: 6px; }
+  .ico svg { width: 100%; height: 100%; display: block; }
+  .ico { display: inline-flex; align-items: center; justify-content: center; }
+  .panel { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-card); padding: 18px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const NS = window.FlowtierDesignSystem_6b3d0d;
+const { CycleRing, PhaseBadge, FlowScale, SymptomChip, SYMPTOMS, DayCell, StatTile, IntensityBar } = NS;
+const Ico = ({ name, size = 16 }) => {
+  const ref = React.useRef(null);
+  React.useEffect(() => { const el = ref.current; if (!el) return; el.innerHTML = '<i data-lucide="' + name + '"></i>'; if (window.lucide) window.lucide.createIcons(); }, [name, size]);
+  return <span ref={ref} className="ico" style={{ width: size, height: size }} />;
+};
+
+function Demo() {
+  const [flow, setFlow] = React.useState("medium");
+  const [picked, setPicked] = React.useState(new Set(["cramps", "fatigue"]));
+  const toggle = (k) => setPicked((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  // a demo month row set
+  const days = [];
+  for (let d = 10; d <= 16; d++) {
+    let state = null, f = null;
+    if (d <= 12) { state = "period"; f = d === 10 ? "light" : d === 11 ? "heavy" : "medium"; }
+    if (d === 15) state = "fertile";
+    days.push({ d, state, f, today: d === 14 });
+  }
+  return (
+    <div className="wrap">
+      <div className="row" style={{ gap: 24, alignItems: "center" }}>
+        <CycleRing cycleDay={14} cycleLength={28} periodLength={5} size={220} />
+        <div className="sec" style={{ gap: 14 }}>
+          <span className="lbl">PhaseBadge</span>
+          <div className="row">
+            <PhaseBadge phase="menstrual" subtitle="Day 2" />
+            <PhaseBadge phase="fertile" subtitle="Day 13" />
+          </div>
+          <div className="row">
+            <PhaseBadge phase="ovulation" subtitle="Peak" />
+            <PhaseBadge phase="luteal" subtitle="Day 22" />
+          </div>
+        </div>
+      </div>
+
+      <div className="sec">
+        <span className="lbl">FlowScale — daily log</span>
+        <div className="panel"><FlowScale value={flow} onChange={setFlow} /></div>
+      </div>
+
+      <div className="sec">
+        <span className="lbl">SymptomChip</span>
+        <div className="row" style={{ gap: 8 }}>
+          {SYMPTOMS.slice(0, 8).map((s) => (
+            <SymptomChip key={s.key} symptom={s.key} selected={picked.has(s.key)} onClick={() => toggle(s.key)} icon={<Ico name={s.icon} />} />
+          ))}
+        </div>
+      </div>
+
+      <div className="sec">
+        <span className="lbl">DayCell — calendar</span>
+        <div className="cal">
+          {days.map((x) => <DayCell key={x.d} day={x.d} state={x.state} flow={x.f} today={x.today} onClick={() => {}} />)}
+        </div>
+      </div>
+
+      <div className="sec">
+        <span className="lbl">StatTile</span>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <StatTile value="28" unit="days" label="Average cycle" />
+          <StatTile value="5" unit="days" label="Average period" tone="accent" />
+          <StatTile value="9" label="Cycles tracked" tone="card" />
+        </div>
+      </div>
+
+      <div className="sec">
+        <span className="lbl">IntensityBar — flow breakdown</span>
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <IntensityBar label="Light" value={0.25} color="var(--flow-light)" meta="1 day" />
+          <IntensityBar label="Medium" value={0.6} color="var(--flow-medium)" meta="3 days" />
+          <IntensityBar label="Heavy" value={0.4} color="var(--flow-heavy)" meta="2 days" />
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+setTimeout(() => window.lucide && window.lucide.createIcons(), 30);
+</script>
+</body>
+</html>

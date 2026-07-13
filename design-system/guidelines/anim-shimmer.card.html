@@ -1,0 +1,27 @@
+<!-- @dsCard group="Animations" viewport="700x200" name="Shimmer sweep" subtitle="A slow ambient glint across the hero CTA & cards" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); padding: 28px 24px; }
+  .row { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .shine { position: relative; overflow: hidden; }
+  .shine::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 32%, rgba(255,255,255,.55) 50%, transparent 68%); background-size: 250% 100%; animation: flowtier-shimmer 2.6s linear infinite; }
+  .pill { display: inline-flex; align-items: center; justify-content: center; height: 52px; padding: 0 30px; border-radius: var(--radius-pill);
+    background: var(--primary-strong); color: #fff; font-weight: 600; font-size: 16px; box-shadow: 0 10px 24px -10px var(--shadow); }
+  .card { width: 190px; height: 84px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-card);
+    display: flex; align-items: center; padding: 0 18px; }
+  .card .n { font-family: var(--font-display); font-size: 30px; color: var(--deep); }
+  .card .l { font-size: 12px; color: var(--muted); margin-left: 10px; }
+  @media (prefers-reduced-motion: reduce) { .shine::after { animation: none; } }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="pill shine">Log today</div>
+    <div class="card shine"><span class="n">16</span><span class="l">days to<br />your bloom</span></div>
+  </div>
+</body>
+</html>

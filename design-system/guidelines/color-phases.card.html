@@ -1,0 +1,21 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Cycle phases" subtitle="Menstrual → Follicular → Fertile → Ovulation → Luteal" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); padding: 20px; }
+  .sw { display: flex; gap: 12px; flex-wrap: wrap; }
+  .chip { display: flex; flex-direction: column; gap: 7px; }
+  .box { width: 118px; height: 74px; border-radius: var(--radius-md); box-shadow: var(--sh-1); position: relative; overflow: hidden; }
+  .box i { position: absolute; left: 0; right: 0; bottom: 0; height: 28px; }
+  .n { font-size: 12px; font-weight: 600; color: var(--text); }
+  .v { font-size: 11px; color: var(--muted); }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip"><div class="box" style="background:var(--phase-menstrual)"><i style="background:var(--phase-menstrual-soft)"></i></div><div class="n">Menstrual</div><div class="v">--phase-menstrual</div></div>
+  <div class="chip"><div class="box" style="background:var(--phase-follicular)"><i style="background:var(--phase-follicular-soft)"></i></div><div class="n">Follicular</div><div class="v">--phase-follicular</div></div>
+  <div class="chip"><div class="box" style="background:var(--phase-fertile)"><i style="background:var(--phase-fertile-soft)"></i></div><div class="n">Fertile</div><div class="v">--phase-fertile</div></div>
+  <div class="chip"><div class="box" style="background:var(--phase-ovulation)"><i style="background:var(--phase-ovulation-soft)"></i></div><div class="n">Ovulation</div><div class="v">--phase-ovulation</div></div>
+  <div class="chip"><div class="box" style="background:var(--phase-luteal)"><i style="background:var(--phase-luteal-soft)"></i></div><div class="n">Luteal</div><div class="v">--phase-luteal</div></div>
+</div>
+</body></html>

@@ -1,0 +1,475 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/brand/**",
+              "components/core/**",
+              "components/tracking/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Great Vibes|Playfair Display|Quicksand))/i]",
+        "message": "Font not provided by the design system. Available: Great Vibes, Playfair Display, Quicksand."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Badge'] > JSXAttribute > JSXIdentifier[name!=/^(?:tone|dot|key|ref|className|style|children)$/]",
+        "message": "<Badge> doesn't accept that prop. Declared props: tone, dot."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Badge'] > JSXAttribute[name.name='tone'] > Literal[value!=/^(?:neutral|menstrual|follicular|fertile|ovulation|luteal|good)$/]",
+        "message": "<Badge> tone must be one of 'neutral' | 'menstrual' | 'follicular' | 'fertile' | 'ovulation' | 'luteal' | 'good'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|size|block|iconLeft|iconRight|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: variant, size, block, iconLeft, iconRight."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:primary|deep|soft|ghost)$/]",
+        "message": "<Button> variant must be one of 'primary' | 'deep' | 'soft' | 'ghost'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:sm|md|lg)$/]",
+        "message": "<Button> size must be one of 'sm' | 'md' | 'lg'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|interactive|as|padding|key|ref|className|style|children)$/]",
+        "message": "<Card> doesn't accept that prop. Declared props: variant, interactive, as, padding."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:plain|soft|accent|outline)$/]",
+        "message": "<Card> variant must be one of 'plain' | 'soft' | 'accent' | 'outline'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Chip'] > JSXAttribute > JSXIdentifier[name!=/^(?:selected|size|icon|key|ref|className|style|children)$/]",
+        "message": "<Chip> doesn't accept that prop. Declared props: selected, size, icon."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Chip'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:sm|md)$/]",
+        "message": "<Chip> size must be one of 'sm' | 'md'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='CycleRing'] > JSXAttribute > JSXIdentifier[name!=/^(?:cycleDay|cycleLength|periodLength|size|spinnable|children|key|ref|className|style|children)$/]",
+        "message": "<CycleRing> doesn't accept that prop. Declared props: cycleDay, cycleLength, periodLength, size, spinnable, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='DayCell'] > JSXAttribute > JSXIdentifier[name!=/^(?:day|state|flow|today|selected|muted|size|onClick|key|ref|className|style|children)$/]",
+        "message": "<DayCell> doesn't accept that prop. Declared props: day, state, flow, today, selected, muted, size, onClick."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='DayCell'] > JSXAttribute[name.name='state'] > Literal[value!=/^(?:period|predicted|fertile|ovulation)$/]",
+        "message": "<DayCell> state must be one of 'period' | 'predicted' | 'fertile' | 'ovulation'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='FlowerMark'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|spin|breathe|title|key|ref|className|style|children)$/]",
+        "message": "<FlowerMark> doesn't accept that prop. Declared props: size, spin, breathe, title."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='FlowScale'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|onChange|block|key|ref|className|style|children)$/]",
+        "message": "<FlowScale> doesn't accept that prop. Declared props: value, onChange, block."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='FlowtierLogo'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|title|key|ref|className|style|children)$/]",
+        "message": "<FlowtierLogo> doesn't accept that prop. Declared props: size, title."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='IconButton'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|size|label|children|key|ref|className|style|children)$/]",
+        "message": "<IconButton> doesn't accept that prop. Declared props: variant, size, label, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='IconButton'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:soft|ghost|primary)$/]",
+        "message": "<IconButton> variant must be one of 'soft' | 'ghost' | 'primary'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='IconButton'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:sm|md|lg)$/]",
+        "message": "<IconButton> size must be one of 'sm' | 'md' | 'lg'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='IntensityBar'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|value|color|meta|key|ref|className|style|children)$/]",
+        "message": "<IntensityBar> doesn't accept that prop. Declared props: label, value, color, meta."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ListRow'] > JSXAttribute > JSXIdentifier[name!=/^(?:icon|title|subtitle|trailing|onClick|key|ref|className|style|children)$/]",
+        "message": "<ListRow> doesn't accept that prop. Declared props: icon, title, subtitle, trailing, onClick."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='PetalRain'] > JSXAttribute > JSXIdentifier[name!=/^(?:count|zIndex|key|ref|className|style|children)$/]",
+        "message": "<PetalRain> doesn't accept that prop. Declared props: count, zIndex."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='PhaseBadge'] > JSXAttribute > JSXIdentifier[name!=/^(?:phase|subtitle|key|ref|className|style|children)$/]",
+        "message": "<PhaseBadge> doesn't accept that prop. Declared props: phase, subtitle."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='SegmentOption'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|label|icon|key|ref|className|style|children)$/]",
+        "message": "<SegmentOption> doesn't accept that prop. Declared props: value, label, icon."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='StatTile'] > JSXAttribute > JSXIdentifier[name!=/^(?:value|unit|label|icon|tone|key|ref|className|style|children)$/]",
+        "message": "<StatTile> doesn't accept that prop. Declared props: value, unit, label, icon, tone."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='StatTile'] > JSXAttribute[name.name='tone'] > Literal[value!=/^(?:soft|accent|card)$/]",
+        "message": "<StatTile> tone must be one of 'soft' | 'accent' | 'card'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Switch'] > JSXAttribute > JSXIdentifier[name!=/^(?:checked|onChange|label|key|ref|className|style|children)$/]",
+        "message": "<Switch> doesn't accept that prop. Declared props: checked, onChange, label."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='SymptomChip'] > JSXAttribute > JSXIdentifier[name!=/^(?:symptom|label|selected|onClick|icon|size|key|ref|className|style|children)$/]",
+        "message": "<SymptomChip> doesn't accept that prop. Declared props: symptom, label, selected, onClick, icon, size."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='SymptomChip'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:sm|md)$/]",
+        "message": "<SymptomChip> size must be one of 'sm' | 'md'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Toast'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|message|icon|key|ref|className|style|children)$/]",
+        "message": "<Toast> doesn't accept that prop. Declared props: title, message, icon."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Wordmark'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|size|showMark|text|key|ref|className|style|children)$/]",
+        "message": "<Wordmark> doesn't accept that prop. Declared props: variant, size, showMark, text."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Wordmark'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:display|script)$/]",
+        "message": "<Wordmark> variant must be one of 'display' | 'script'."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "Badge": {
+        "replaces": []
+      },
+      "Button": {
+        "replaces": []
+      },
+      "Card": {
+        "replaces": []
+      },
+      "Chip": {
+        "replaces": []
+      },
+      "CycleRing": {
+        "replaces": []
+      },
+      "DayCell": {
+        "replaces": []
+      },
+      "FlowerMark": {
+        "replaces": []
+      },
+      "FlowScale": {
+        "replaces": []
+      },
+      "FlowtierLogo": {
+        "replaces": []
+      },
+      "IconButton": {
+        "replaces": []
+      },
+      "IntensityBar": {
+        "replaces": []
+      },
+      "ListRow": {
+        "replaces": []
+      },
+      "PetalRain": {
+        "replaces": []
+      },
+      "PhaseBadge": {
+        "replaces": []
+      },
+      "SegmentOption": {
+        "replaces": []
+      },
+      "StatTile": {
+        "replaces": []
+      },
+      "Switch": {
+        "replaces": []
+      },
+      "SymptomChip": {
+        "replaces": []
+      },
+      "Toast": {
+        "replaces": []
+      },
+      "Wordmark": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--accent",
+      "--accent-strong",
+      "--bg",
+      "--blur-lg",
+      "--blur-md",
+      "--blur-sm",
+      "--border-hairline",
+      "--border-strong",
+      "--deep",
+      "--dur-base",
+      "--dur-fast",
+      "--dur-slow",
+      "--dur-slower",
+      "--ease-in-out",
+      "--ease-out",
+      "--ease-signature",
+      "--flow-heavy",
+      "--flow-light",
+      "--flow-medium",
+      "--flow-none",
+      "--flow-spotting",
+      "--flower-center",
+      "--focus-ring",
+      "--font-body",
+      "--font-display",
+      "--font-script",
+      "--gap-card",
+      "--gap-inline",
+      "--gap-section",
+      "--good",
+      "--hover-lift",
+      "--leading-normal",
+      "--leading-relaxed",
+      "--leading-snug",
+      "--leading-tight",
+      "--line",
+      "--muted",
+      "--phase-fertile",
+      "--phase-fertile-soft",
+      "--phase-follicular",
+      "--phase-follicular-soft",
+      "--phase-luteal",
+      "--phase-luteal-soft",
+      "--phase-menstrual",
+      "--phase-menstrual-soft",
+      "--phase-ovulation",
+      "--phase-ovulation-soft",
+      "--press-scale",
+      "--primary",
+      "--primary-strong",
+      "--radius",
+      "--radius-lg",
+      "--radius-md",
+      "--radius-pill",
+      "--radius-sm",
+      "--ring",
+      "--ring-width",
+      "--ripple",
+      "--screen-max",
+      "--scrim",
+      "--sh-1",
+      "--sh-2",
+      "--sh-3",
+      "--shadow",
+      "--shadow-card",
+      "--shadow-float",
+      "--space-0",
+      "--space-1",
+      "--space-10",
+      "--space-11",
+      "--space-2",
+      "--space-3",
+      "--space-4",
+      "--space-5",
+      "--space-6",
+      "--space-7",
+      "--space-8",
+      "--space-9",
+      "--spring",
+      "--surface",
+      "--surface-2",
+      "--surface-accent",
+      "--surface-card",
+      "--surface-page",
+      "--surface-panel",
+      "--surface-soft",
+      "--tap-min",
+      "--text",
+      "--text-2xl",
+      "--text-2xs",
+      "--text-3xl",
+      "--text-4xl",
+      "--text-5xl",
+      "--text-base",
+      "--text-body",
+      "--text-heading",
+      "--text-lg",
+      "--text-md",
+      "--text-muted",
+      "--text-on-accent",
+      "--text-on-primary",
+      "--text-sm",
+      "--text-xl",
+      "--text-xs",
+      "--tracking-label",
+      "--tracking-normal",
+      "--tracking-tight",
+      "--tracking-wide",
+      "--weight-bold",
+      "--weight-medium",
+      "--weight-regular",
+      "--weight-semibold"
+    ],
+    "tokenKinds": {
+      "--bg": "color",
+      "--surface": "color",
+      "--surface-soft": "color",
+      "--surface-2": "color",
+      "--primary": "color",
+      "--primary-strong": "color",
+      "--deep": "color",
+      "--text": "font",
+      "--muted": "color",
+      "--line": "color",
+      "--flower-center": "color",
+      "--good": "color",
+      "--shadow": "shadow",
+      "--ripple": "color",
+      "--phase-menstrual": "color",
+      "--phase-follicular": "color",
+      "--phase-fertile": "color",
+      "--phase-ovulation": "color",
+      "--phase-luteal": "color",
+      "--phase-menstrual-soft": "color",
+      "--phase-follicular-soft": "color",
+      "--phase-fertile-soft": "color",
+      "--phase-ovulation-soft": "color",
+      "--phase-luteal-soft": "color",
+      "--flow-spotting": "color",
+      "--flow-light": "color",
+      "--flow-medium": "color",
+      "--flow-heavy": "color",
+      "--flow-none": "color",
+      "--text-body": "font",
+      "--text-muted": "font",
+      "--text-heading": "font",
+      "--text-on-primary": "font",
+      "--text-on-accent": "font",
+      "--surface-page": "color",
+      "--surface-card": "color",
+      "--surface-panel": "color",
+      "--surface-accent": "color",
+      "--accent": "color",
+      "--accent-strong": "color",
+      "--border-hairline": "color",
+      "--border-strong": "color",
+      "--focus-ring": "color",
+      "--font-body": "font",
+      "--font-display": "font",
+      "--font-script": "font",
+      "--weight-regular": "font",
+      "--weight-medium": "font",
+      "--weight-semibold": "font",
+      "--weight-bold": "font",
+      "--text-2xs": "font",
+      "--text-xs": "font",
+      "--text-sm": "font",
+      "--text-base": "font",
+      "--text-md": "font",
+      "--text-lg": "font",
+      "--text-xl": "font",
+      "--text-2xl": "font",
+      "--text-3xl": "font",
+      "--text-4xl": "font",
+      "--text-5xl": "font",
+      "--leading-tight": "font",
+      "--leading-snug": "font",
+      "--leading-normal": "font",
+      "--leading-relaxed": "font",
+      "--tracking-tight": "font",
+      "--tracking-normal": "font",
+      "--tracking-wide": "font",
+      "--tracking-label": "font",
+      "--space-0": "spacing",
+      "--space-1": "spacing",
+      "--space-2": "spacing",
+      "--space-3": "spacing",
+      "--space-4": "spacing",
+      "--space-5": "spacing",
+      "--space-6": "spacing",
+      "--space-7": "spacing",
+      "--space-8": "spacing",
+      "--space-9": "spacing",
+      "--space-10": "spacing",
+      "--space-11": "spacing",
+      "--gap-card": "spacing",
+      "--gap-section": "spacing",
+      "--gap-inline": "spacing",
+      "--radius-sm": "radius",
+      "--radius-md": "radius",
+      "--radius": "radius",
+      "--radius-lg": "radius",
+      "--radius-pill": "radius",
+      "--screen-max": "spacing",
+      "--tap-min": "spacing",
+      "--sh-1": "shadow",
+      "--sh-2": "color",
+      "--sh-3": "color",
+      "--shadow-card": "shadow",
+      "--shadow-float": "shadow",
+      "--ring": "color",
+      "--ring-width": "spacing",
+      "--blur-sm": "spacing",
+      "--blur-md": "spacing",
+      "--blur-lg": "spacing",
+      "--scrim": "color",
+      "--ease-signature": "other",
+      "--ease-out": "other",
+      "--ease-in-out": "other",
+      "--spring": "other",
+      "--dur-fast": "other",
+      "--dur-base": "other",
+      "--dur-slow": "other",
+      "--dur-slower": "other",
+      "--press-scale": "other",
+      "--hover-lift": "spacing"
+    },
+    "fontFamilies": [
+      "Great Vibes",
+      "Playfair Display",
+      "Quicksand"
+    ]
+  }
+}

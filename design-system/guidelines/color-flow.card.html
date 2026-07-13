@@ -1,0 +1,20 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Flow intensity" subtitle="Spotting → Light → Medium → Heavy, plus logged-no-flow" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); padding: 20px; }
+  .sw { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .chip { display: flex; flex-direction: column; gap: 7px; align-items: center; }
+  .drop { filter: drop-shadow(0 3px 5px var(--shadow)); }
+  .n { font-size: 12px; font-weight: 600; color: var(--text); }
+  .v { font-size: 11px; color: var(--muted); }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip"><svg class="drop" width="40" height="40" viewBox="0 0 24 24"><path d="M12 2.4c0 0-6.6 7.5-6.6 12.3a6.6 6.6 0 0 0 13.2 0C18.6 9.9 12 2.4 12 2.4Z" fill="var(--flow-spotting)"/></svg><div class="n">Spotting</div><div class="v">--flow-spotting</div></div>
+  <div class="chip"><svg class="drop" width="48" height="48" viewBox="0 0 24 24"><path d="M12 2.4c0 0-6.6 7.5-6.6 12.3a6.6 6.6 0 0 0 13.2 0C18.6 9.9 12 2.4 12 2.4Z" fill="var(--flow-light)"/></svg><div class="n">Light</div><div class="v">--flow-light</div></div>
+  <div class="chip"><svg class="drop" width="56" height="56" viewBox="0 0 24 24"><path d="M12 2.4c0 0-6.6 7.5-6.6 12.3a6.6 6.6 0 0 0 13.2 0C18.6 9.9 12 2.4 12 2.4Z" fill="var(--flow-medium)"/></svg><div class="n">Medium</div><div class="v">--flow-medium</div></div>
+  <div class="chip"><svg class="drop" width="64" height="64" viewBox="0 0 24 24"><path d="M12 2.4c0 0-6.6 7.5-6.6 12.3a6.6 6.6 0 0 0 13.2 0C18.6 9.9 12 2.4 12 2.4Z" fill="var(--flow-heavy)"/></svg><div class="n">Heavy</div><div class="v">--flow-heavy</div></div>
+  <div class="chip"><svg class="drop" width="40" height="40" viewBox="0 0 24 24"><path d="M12 2.4c0 0-6.6 7.5-6.6 12.3a6.6 6.6 0 0 0 13.2 0C18.6 9.9 12 2.4 12 2.4Z" fill="var(--flow-none)"/></svg><div class="n">None</div><div class="v">--flow-none</div></div>
+</div>
+</body></html>

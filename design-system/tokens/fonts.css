@@ -1,0 +1,9 @@
+/* Flowtier webfonts — the exact three families the Bloom family ships:
+   Quicksand (body/UI), Playfair Display (display + numerals, incl. italic),
+   Great Vibes (script wordmark & affectionate accents).
+
+   Loaded from the Google Fonts CDN — identical sources to the original Bloom
+   Calculator app, which requests the same families (see README → Typography).
+   To self-host instead, drop the OFL .ttf files into assets/fonts/ and swap this
+   @import for local @font-face rules; the design tokens do not change. */
+@import url("https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Quicksand:wght@400;500;600;700&display=swap");

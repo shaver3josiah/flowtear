@@ -1,0 +1,71 @@
+<!-- @dsCard group="Brand" viewport="700x400" name="Logo — the Flowtier clock" subtitle="A smiling pink clock on a flowing, flower-flecked field" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-body); }
+  .field { position: relative; height: 400px; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    background:
+      radial-gradient(70% 55% at 18% 12%, #FFE3EF 0%, transparent 60%),
+      radial-gradient(65% 60% at 88% 22%, #FBD5E8 0%, transparent 62%),
+      radial-gradient(90% 70% at 50% 118%, #F6BCD8 0%, transparent 60%),
+      linear-gradient(150deg, #FDECF4 0%, #FBDCEC 52%, #F7C9E1 100%); }
+  .flowers { position: absolute; inset: 0; pointer-events: none; }
+  .logo { position: relative; z-index: 2; filter: drop-shadow(0 18px 30px rgba(176,27,88,.28)); }
+  .name { position: relative; z-index: 2; font-family: var(--font-script); font-size: 58px; color: var(--deep); line-height: 1; margin-top: 6px; }
+  .tag { position: relative; z-index: 2; font-size: 13px; letter-spacing: .06em; color: var(--primary-strong); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="field">
+  <svg class="flowers" viewBox="0 0 700 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+  <svg class="logo" id="clock" width="170" height="170" viewBox="0 0 100 100" role="img" aria-label="Flowtier"></svg>
+  <div class="name">Flowtier</div>
+  <div class="tag">bloom with your body</div>
+</div>
+<script>
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+  // ---- the smiling alarm clock ----
+  const s = document.getElementById("clock");
+  const cx = 50, cy = 55;
+  const defs = el("defs");
+  defs.innerHTML = '<linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F58FBB"/><stop offset="1" stop-color="#E2417F"/></linearGradient>';
+  s.appendChild(defs);
+  // bells
+  [["30","22","-26"],["70","22","26"]].forEach(([x,y,r])=>s.appendChild(el("ellipse",{cx:x,cy:y,rx:12,ry:9.5,fill:"#D8356F",transform:`rotate(${r} ${x} ${y})`})));
+  s.appendChild(el("rect",{x:47,y:9,width:6,height:10,rx:3,fill:"#D8356F"}));
+  // feet
+  s.appendChild(el("rect",{x:28,y:85,width:14,height:9,rx:4.5,fill:"#D8356F",transform:"rotate(26 35 90)"}));
+  s.appendChild(el("rect",{x:58,y:85,width:14,height:9,rx:4.5,fill:"#D8356F",transform:"rotate(-26 65 90)"}));
+  // body + rim + dial
+  s.appendChild(el("circle",{cx,cy,r:38,fill:"url(#body)"}));
+  s.appendChild(el("circle",{cx,cy,r:38,fill:"none",stroke:"#B01B58",["stroke-opacity"]:.15,["stroke-width"]:1.5}));
+  s.appendChild(el("circle",{cx,cy,r:30.5,fill:"#fff"}));
+  // ticks
+  for (let i=0;i<12;i++){ const a=i*30*Math.PI/180, r1=27.5, r2=i%3===0?23:25.2;
+    s.appendChild(el("line",{x1:cx+r1*Math.sin(a),y1:cy-r1*Math.cos(a),x2:cx+r2*Math.sin(a),y2:cy-r2*Math.cos(a),stroke:"#F49BBD",["stroke-width"]:i%3===0?2.6:1.8,["stroke-linecap"]:"round"})); }
+  // cheeks
+  s.appendChild(el("ellipse",{cx:cx-13.5,cy:cy+7,rx:4.6,ry:3,fill:"#F7A8C6"}));
+  s.appendChild(el("ellipse",{cx:cx+13.5,cy:cy+7,rx:4.6,ry:3,fill:"#F7A8C6"}));
+  // eyes (with a tiny highlight)
+  [[cx-10.5,cy-2],[cx+10.5,cy-2]].forEach(([x,y])=>{ s.appendChild(el("circle",{cx:x,cy:y,r:3,fill:"#8E1550"})); s.appendChild(el("circle",{cx:x+1,cy:y-1,r:.9,fill:"#fff"})); });
+  // smile
+  s.appendChild(el("path",{d:`M ${cx-8.5} ${cy+2.5} Q ${cx} ${cy+13} ${cx+8.5} ${cy+2.5}`,fill:"none",stroke:"#8E1550",["stroke-width"]:2.8,["stroke-linecap"]:"round"}));
+
+  // ---- scattered tiny flowers in the field ----
+  const fl = document.querySelector(".flowers");
+  function flower(x, y, r, col, op) {
+    const g = el("g", { transform: `translate(${x} ${y})`, opacity: op });
+    for (let i=0;i<5;i++){ const a=i*72*Math.PI/180; g.appendChild(el("ellipse",{cx:Math.cos(a)*r*0.9,cy:Math.sin(a)*r*0.9,rx:r*0.62,ry:r*0.42,transform:`rotate(${i*72} ${Math.cos(a)*r*0.9} ${Math.sin(a)*r*0.9})`,fill:col})); }
+    g.appendChild(el("circle",{cx:0,cy:0,r:r*0.45,fill:"#FFC966"}));
+    fl.appendChild(g);
+  }
+  const spots = [[70,70,11],[180,320,9],[300,60,8],[620,90,12],[560,320,10],[660,250,8],[120,200,7],[400,350,9],[500,150,7]];
+  spots.forEach(([x,y,r],i)=>flower(x,y,r,i%2?"#F191B8":"#F7B8D2",0.55));
+</script>
+</body>
+</html>

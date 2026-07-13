@@ -1,0 +1,82 @@
+/* ============================================================================
+   Flowtier — Effects: shadow, ring, blur, motion
+   Shadow ladder and the signature easing curve are verbatim from the Bloom
+   theme contract. Motion is soft and springy: gentle fades, one signature
+   ease-out bezier, and the occasional petal/glitter delight (opt-in, and
+   always disabled under prefers-reduced-motion).
+   ============================================================================ */
+
+:root {
+  /* ---- Shadows ----
+     sh-1 is static across every preset; sh-2 / sh-3 scale off the per-preset
+     --shadow tint so cards warm up with the theme. */
+  --sh-1: 0 1px 2px rgba(66, 21, 39, .10), 0 1px 1px rgba(66, 21, 39, .06);
+  --sh-2: 0 10px 26px -14px var(--shadow);
+  --sh-3: 0 26px 60px -24px var(--shadow);
+
+  /* The Card in the source uses a soft directional drop — kept as a named token */
+  --shadow-card: 0 8px 24px -12px var(--shadow);
+  --shadow-float: 0 16px 40px -16px var(--shadow);
+
+  /* Focus / selection ring — primary-strong mixed toward transparent */
+  --ring: color-mix(in srgb, var(--primary-strong) 28%, transparent);
+  --ring-width: 3px;
+
+  /* ---- Blur (frosted overlays, sheet scrims) ---- */
+  --blur-sm: 6px;
+  --blur-md: 14px;
+  --blur-lg: 24px;
+  --scrim: color-mix(in srgb, var(--deep) 28%, transparent);
+
+  /* ---- Motion ----
+     One signature ease used across entrances (the Bloom "viewIn" curve).
+     --spring gives a gentle overshoot for taps. */
+  --ease-signature: cubic-bezier(.22, 1, .36, 1); /* @kind other */
+  --ease-out: cubic-bezier(.2, .7, .3, 1); /* @kind other */
+  --ease-in-out: ease-in-out; /* @kind other */
+  --spring: cubic-bezier(.34, 1.56, .64, 1); /* @kind other */
+
+  --dur-fast: .18s; /* @kind other */
+  --dur-base: .3s; /* @kind other */
+  --dur-slow: .45s; /* @kind other */
+  --dur-slower: .85s; /* @kind other */
+
+  /* Interaction deltas — hover lightens, press shrinks (from the keypad) */
+  --press-scale: .96; /* @kind other */
+  --hover-lift: -2px; /* @kind spacing */
+}
+
+/* Shared keyframes consumers can reference by name */
+@keyframes flowtier-view-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes flowtier-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+@keyframes flowtier-bloom-in {
+  from { opacity: 0; transform: scale(.86) rotate(-8deg); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes flowtier-shimmer {
+  from { background-position: -150% 0; }
+  to   { background-position: 250% 0; }
+}
+@keyframes flowtier-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes flowtier-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: .001s; /* @kind other */
+    --dur-base: .001s; /* @kind other */
+    --dur-slow: .001s; /* @kind other */
+    --dur-slower: .001s; /* @kind other */
+  }
+}

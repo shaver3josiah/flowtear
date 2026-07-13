@@ -1,0 +1,512 @@
+<!-- @dsCard group="Flowtier app" viewport="470x860" name="Flowtier — cycle tracker (iOS 18)" subtitle="iPhone 16 · Today, Calendar, Insights, Log flow & Reminders" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flowtier</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; font-family: var(--font-body);
+    background: radial-gradient(60% 50% at 20% 8%, #FFE3EF, transparent 60%), radial-gradient(60% 55% at 88% 18%, #FBD5E8, transparent 62%), linear-gradient(150deg, #FDECF4, #FBDCEC 55%, #F7C9E1); }
+  /* iPhone 16 / iOS 18 */
+  .ft-device { padding: 11px; border-radius: 63px; background: linear-gradient(155deg, #4a333f, #241019 60%, #180a11);
+    box-shadow: 0 54px 120px -36px var(--shadow), inset 0 0 0 2px rgba(255,255,255,.07); }
+  .ft-screen { position: relative; width: 384px; height: min(832px, 100vh - 64px); border-radius: 52px; overflow: hidden;
+    background: var(--bg); display: flex; flex-direction: column; isolation: isolate; }
+  .ft-island { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 122px; height: 35px;
+    background: #0a0407; border-radius: 20px; z-index: 60; }
+  .ft-island::after { content: ""; position: absolute; right: 13px; top: 50%; transform: translateY(-50%); width: 9px; height: 9px; border-radius: 50%; background: #17222b; box-shadow: inset 0 0 0 1.5px #0a0f14; }
+  .ft-status { height: 54px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 15px 30px 0;
+    font-weight: 600; font-size: 16px; color: var(--deep); z-index: 55; }
+  .ft-status .t { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  .ft-status-ic { display: inline-flex; gap: 6px; align-items: center; }
+  .ft-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; z-index: 2; }
+  .ft-scroll::-webkit-scrollbar { width: 0; }
+  .ft-nav { flex: none; height: 68px; display: flex; align-items: flex-start; justify-content: space-around; padding-top: 8px;
+    background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(18px); border-top: 1px solid var(--line); position: relative; z-index: 10; }
+  .ft-navitem { flex: 1; border: none; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    color: var(--muted); font-family: var(--font-body); font-size: 10px; font-weight: 600; transition: color .2s var(--ease-out); }
+  .ft-navitem.is-active { color: var(--primary-strong); }
+  .ft-home { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 138px; height: 5px; border-radius: 999px; background: var(--deep); opacity: .45; z-index: 40; }
+  .ft-fab { position: absolute; left: 50%; transform: translateX(-50%); bottom: 80px; width: 58px; height: 58px; border-radius: 50%;
+    border: 3px solid var(--surface); background: var(--primary-strong); color: #fff; box-shadow: 0 14px 28px -8px var(--shadow); display: grid; place-items: center; cursor: pointer; z-index: 20; transition: transform .18s var(--spring); }
+  .ft-fab:active { transform: translateX(-50%) scale(.9); }
+  .ft-toast-host { position: absolute; top: 60px; left: 0; right: 0; display: flex; justify-content: center; padding: 0 16px; z-index: 50; animation: ft-drop .3s var(--ease-signature); }
+  @keyframes ft-drop { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .ft-sheet-scrim { position: absolute; inset: 0; background: var(--scrim); backdrop-filter: blur(3px); display: flex; align-items: flex-end; z-index: 45; animation: ft-fade .2s ease; }
+  .ft-sheet { width: 100%; max-height: 92%; background: var(--surface); border-radius: 30px 30px 0 0; box-shadow: 0 -24px 60px -20px var(--shadow); display: flex; flex-direction: column; animation: ft-up .34s var(--ease-signature); }
+  .ft-grab { width: 40px; height: 5px; border-radius: 999px; background: var(--line); margin: 10px auto 4px; flex: none; }
+  @keyframes ft-up { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes ft-fade { from { opacity: 0; } to { opacity: 1; } }
+  .ft-ico { display: inline-flex; align-items: center; justify-content: center; color: inherit; flex: none; }
+  .ft-ico svg { width: 100%; height: 100%; display: block; stroke-width: 2; }
+  .ft-note { width: 100%; box-sizing: border-box; border: 1.5px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); padding: 12px 14px; font-family: var(--font-body); font-size: 14px; color: var(--text); resize: none; }
+  .ft-note:focus { outline: none; border-color: var(--primary); }
+  .ft-note::placeholder { color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel" data-presets="react">
+const NS = window.FlowtierDesignSystem_6b3d0d;
+const {
+  Toast, Button, IconButton, Card, Chip, Badge, SegmentedTabs, Switch, ListRow,
+  CycleRing, PhaseBadge, FlowScale, SymptomChip, SYMPTOMS, DayCell, StatTile, IntensityBar,
+} = NS;
+const PetalRain = NS.PetalRain || (() => null);
+const FlowerMark = NS.FlowerMark || (() => null);
+const FlowtierLogo = NS.FlowtierLogo || (() => null);
+
+const length = 28, period = 5, day = 12;
+const ovDay = length - 14, fertileStart = ovDay - 5, daysToPeriod = length - day;
+const phaseOf = (d) => {
+  if (d <= 0) return "luteal";
+  if (d <= period) return "menstrual";
+  if (d < fertileStart) return "follicular";
+  if (d < ovDay) return "fertile";
+  if (d <= ovDay + 1) return "ovulation";
+  return "luteal";
+};
+const F = {
+  length, period, day, ovDay, fertileStart, daysToPeriod, phaseOf,
+  todayLabel: "Monday, July 13", nextPeriodLabel: "Fri, Jul 29",
+  month: { label: "July 2026", days: 31, offset: 2, todayDate: 13 },
+  weekHeads: ["M", "T", "W", "T", "F", "S", "S"],
+  flowByCycleDay: { 1: "light", 2: "medium", 3: "heavy", 4: "medium", 5: "light" },
+  cyclesTrend: [27, 29, 28, 26, 30, 28],
+  stats: { avgCycle: 28, avgPeriod: 5, tracked: 9 },
+  flowBreakdown: [
+    { label: "Light", v: 0.2, c: "var(--flow-light)", meta: "1 day" },
+    { label: "Medium", v: 0.6, c: "var(--flow-medium)", meta: "3 days" },
+    { label: "Heavy", v: 0.2, c: "var(--flow-heavy)", meta: "1 day" },
+  ],
+  symptomFreq: [
+    { label: "Cramps", v: 1.0, meta: "8 days" },
+    { label: "Fatigue", v: 0.75, meta: "6 days" },
+    { label: "Bloating", v: 0.5, meta: "4 days" },
+    { label: "Headache", v: 0.38, meta: "3 days" },
+  ],
+  moods: ["Happy", "Calm", "Sensitive", "Low", "Irritable", "Anxious"],
+  painLevels: ["None", "Mild", "Moderate", "Severe"],
+  energy: ["Low", "Okay", "High"],
+  sleep: ["Poor", "Okay", "Great"],
+  logDates: [["Fri", 10], ["Sat", 11], ["Sun", 12], ["Mon", 13]],
+};
+
+const Ico = ({ name, size = 20, style }) => {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const el = ref.current; if (!el) return;
+    el.innerHTML = '<i data-lucide="' + name + '"></i>';
+    if (window.lucide) window.lucide.createIcons();
+  }, [name, size]);
+  return <span ref={ref} className="ft-ico" style={{ width: size, height: size, ...style }} />;
+};
+const SectionLabel = ({ children, style }) => (
+  <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--muted)", ...style }}>{children}</div>
+);
+const LogSection = ({ icon, title, children }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--deep)" }}>
+      <span style={{ color: "var(--primary-strong)", display: "inline-flex" }}><Ico name={icon} size={17} /></span>
+      <span style={{ fontFamily: "var(--font-body)", fontWeight: 700, fontSize: "var(--text-sm)", letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)" }}>{title}</span>
+    </div>
+    {children}
+  </div>
+);
+
+/* ---------- Today ---------- */
+function TodayScreen({ ctx }) {
+  const phase = F.phaseOf(F.day);
+  return (
+    <div style={{ padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <FlowtierLogo size={40} />
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-xl)", fontWeight: 600, color: "var(--deep)", lineHeight: 1.05 }}>Good morning, love</div>
+            <div style={{ color: "var(--muted)", fontSize: "var(--text-xs)", marginTop: 2 }}>{F.todayLabel}</div>
+          </div>
+        </div>
+        <IconButton label="Settings" variant="ghost" onClick={() => ctx.setTab("reminders")}><Ico name="settings" size={19} /></IconButton>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, margin: "2px 0" }}>
+        <CycleRing cycleDay={F.day} cycleLength={F.length} periodLength={F.period} size={244} spinnable>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--text-xs)", fontWeight: 600, letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--muted)" }}>next bloom in</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 62, lineHeight: 1, color: "var(--deep)", margin: "2px 0" }}>{F.daysToPeriod}</span>
+          <span style={{ fontFamily: "var(--font-body)", fontSize: "var(--text-sm)", color: "var(--muted)" }}>days</span>
+        </CycleRing>
+        <PhaseBadge phase={phase} subtitle={"Day " + F.day} />
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "var(--text-xs)", color: "var(--muted)", opacity: .85 }}>
+          <Ico name="rotate-cw" size={12} /> drag the dial to give it a spin
+        </div>
+      </div>
+
+      <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <SectionLabel>Your predictions</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: "var(--phase-ovulation)", display: "inline-flex" }}><Ico name="sparkles" size={20} /></span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, color: "var(--text)" }}>Ovulation in 2 days</div>
+            <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>Your fertile window is open now</div>
+          </div>
+          <Badge tone="fertile" dot>High</Badge>
+        </div>
+        <div style={{ height: 1, background: "var(--line)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ color: "var(--phase-menstrual)", display: "inline-flex" }}><Ico name="droplet" size={20} /></span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, color: "var(--text)" }}>Next period</div>
+            <div style={{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>Estimated · {F.nextPeriodLabel}</div>
+          </div>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", color: "var(--deep)" }}>{F.daysToPeriod}d</span>
+        </div>
+      </Card>
+
+      <Card variant="soft" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, color: "var(--deep)" }}>How are you feeling today?</div>
+          <div style={{ color: "var(--muted)", fontSize: "var(--text-sm)", marginTop: 2 }}>Log flow, symptoms &amp; mood in a tap.</div>
+        </div>
+        <Button onClick={ctx.openLog} iconLeft={<Ico name="plus" size={16} />}>Log</Button>
+      </Card>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <StatTile value={F.stats.avgCycle} unit="days" label="Average cycle" />
+        <StatTile value={F.stats.avgPeriod} unit="days" label="Average period" tone="accent" />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Calendar (developed page) ---------- */
+function stateFor(cd) {
+  if (cd >= 1 && cd <= F.period) return "period";
+  if (cd >= 29) return "predicted";
+  if (cd === F.ovDay) return "ovulation";
+  if (cd >= F.fertileStart && cd < F.ovDay) return "fertile";
+  return null;
+}
+function YearView() {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const cells = Array.from({ length: 30 }, (_, i) => i + 1);
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+      {months.map((mo, mi) => {
+        const start = ((mi * 5) % 22) + 2;
+        return (
+          <div key={mo} style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", padding: "10px 10px 12px", boxShadow: "var(--sh-1)" }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: "var(--text-xs)", fontWeight: 700, color: mi === 6 ? "var(--primary-strong)" : "var(--muted)", marginBottom: 6 }}>{mo}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+              {cells.map((d) => {
+                const isP = d >= start && d < start + 5;
+                const isToday = mi === 6 && d === 13;
+                return <span key={d} style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: "50%", background: isP ? "var(--phase-menstrual)" : "var(--surface-soft)", boxShadow: isToday ? "0 0 0 1.5px var(--surface), 0 0 0 3px var(--primary-strong)" : "none" }} />;
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function CalendarScreen({ ctx }) {
+  const M = F.month;
+  const [sel, setSel] = React.useState(M.todayDate);
+  const [view, setView] = React.useState("month");
+  const cells = [];
+  for (let i = 0; i < M.offset; i++) cells.push(null);
+  for (let d = 1; d <= M.days; d++) cells.push(d);
+  const selCd = sel - 1, selPhase = F.phaseOf(selCd), selState = stateFor(selCd);
+  const selFlow = selCd >= 1 && selCd <= F.period ? F.flowByCycleDay[selCd] : null;
+  const detailText = selState === "period" ? "Period day · " + (selFlow || "logged") + " flow"
+    : selState === "ovulation" ? "Ovulation day · highest chance of pregnancy"
+    : selState === "fertile" ? "Fertile window · higher chance of pregnancy"
+    : selState === "predicted" ? "Predicted period day" : "No period expected today";
+  return (
+    <div style={{ padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
+        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-2xl)", color: "var(--deep)" }}>Calendar</h1>
+        <SegmentedTabs value={view} onChange={setView} options={[{ value: "month", label: "Month" }, { value: "year", label: "Year" }]} />
+      </div>
+
+      {view === "year" ? <YearView /> : <>
+        {/* cycle summary strip */}
+        <Card variant="soft" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ position: "relative", flex: "none" }}>
+            <CycleRing cycleDay={F.day} cycleLength={F.length} periodLength={F.period} size={74}>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 22, color: "var(--deep)", lineHeight: 1 }}>{F.day}</span>
+            </CycleRing>
+          </div>
+          <div style={{ flex: 1 }}>
+            <PhaseBadge phase={F.phaseOf(F.day)} subtitle={"Day " + F.day} />
+            <div style={{ fontSize: "var(--text-sm)", color: "var(--muted)", marginTop: 6 }}>Next bloom in <b style={{ color: "var(--deep)" }}>{F.daysToPeriod} days</b> · {F.nextPeriodLabel}</div>
+          </div>
+        </Card>
+
+        <Card style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <IconButton label="Previous month" variant="ghost" size="sm"><Ico name="chevron-left" size={18} /></IconButton>
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>{M.label}</span>
+            <IconButton label="Next month" variant="ghost" size="sm"><Ico name="chevron-right" size={18} /></IconButton>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, textAlign: "center" }}>
+            {F.weekHeads.map((h, i) => <div key={i} style={{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--muted)", padding: "2px 0 6px" }}>{h}</div>)}
+            {cells.map((d, i) => (
+              <div key={i} style={{ display: "grid", placeItems: "center", padding: "1px 0" }}>
+                {d && <DayCell day={d} size={36} state={stateFor(d - 1)} flow={d - 1 >= 1 && d - 1 <= F.period ? F.flowByCycleDay[d - 1] : null} today={d === M.todayDate} selected={d === sel} onClick={() => setSel(d)} />}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px", paddingTop: 2 }}>
+            {[["Period", "var(--phase-menstrual)", false], ["Fertile", "var(--phase-fertile)", false], ["Ovulation", "var(--phase-ovulation)", false], ["Predicted", "var(--phase-menstrual-soft)", true]].map(([l, c, dash]) => (
+              <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "var(--text-xs)", color: "var(--muted)", fontWeight: 500 }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: c, border: dash ? "1.5px dashed var(--phase-menstrual)" : "none" }} />{l}
+              </span>
+            ))}
+          </div>
+        </Card>
+
+        {/* selected-day detail */}
+        <Card variant="soft" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>{M.label.split(" ")[0]} {sel}{sel === M.todayDate ? " · Today" : ""}</div>
+            <PhaseBadge phase={selPhase} subtitle={"Day " + Math.max(selCd, 0)} />
+          </div>
+          <div style={{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>{detailText}</div>
+          {selState === "period" && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <Badge tone="menstrual" dot>{selFlow} flow</Badge>
+              <Badge tone="neutral">Cramps</Badge>
+              <Badge tone="neutral">Fatigue</Badge>
+              <Badge tone="neutral">Sensitive</Badge>
+            </div>
+          )}
+          <Button variant="soft" block onClick={ctx.openLog} iconLeft={<Ico name="plus" size={16} />}>{selState === "period" ? "Edit this day" : "Log this day"}</Button>
+        </Card>
+      </>}
+    </div>
+  );
+}
+
+/* ---------- Insights ---------- */
+function InsightsScreen() {
+  const [range, setRange] = React.useState("6m");
+  const trend = F.cyclesTrend;
+  const barH = (v) => Math.round(((v - 20) / 12) * 100);
+  return (
+    <div style={{ padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
+        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-2xl)", color: "var(--deep)" }}>Insights</h1>
+        <SegmentedTabs value={range} onChange={setRange} options={[{ value: "6m", label: "6 mo" }, { value: "1y", label: "Year" }]} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <StatTile value={F.stats.avgCycle} unit="days" label="Average cycle" />
+        <StatTile value={F.stats.avgPeriod} unit="days" label="Average period" tone="accent" />
+        <StatTile value={F.stats.tracked} label="Cycles tracked" />
+        <StatTile value={F.day} label="Current cycle day" tone="accent" />
+      </div>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>Cycle length trend</div>
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, height: 128 }}>
+          {trend.map((v, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, height: "100%", justifyContent: "flex-end" }}>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-sm)", color: "var(--deep)" }}>{v}</span>
+              <div style={{ width: "72%", height: barH(v) + "%", background: i === trend.length - 1 ? "var(--primary-strong)" : "var(--primary)", borderRadius: "var(--radius-sm)", opacity: i === trend.length - 1 ? 1 : 0.55 }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-2xs)", color: "var(--muted)", fontWeight: 600 }}>
+          <span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span>
+        </div>
+      </Card>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>Flow this cycle</div>
+        {F.flowBreakdown.map((r) => <IntensityBar key={r.label} label={r.label} value={r.v} color={r.c} meta={r.meta} />)}
+      </Card>
+      <Card style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>Most common symptoms</div>
+        {F.symptomFreq.map((r) => <IntensityBar key={r.label} label={r.label} value={r.v} color="var(--primary)" meta={r.meta} />)}
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- Reminders ---------- */
+function ThemeRow() {
+  const [theme, setTheme] = React.useState("cherry");
+  const themes = [["cherry", "Cherry"], ["rose", "Rose"], ["peony", "Peony"], ["soft", "Soft"]];
+  React.useEffect(() => {
+    const root = document.querySelector("[data-ft-root]");
+    if (root) theme === "cherry" ? root.removeAttribute("data-theme") : root.setAttribute("data-theme", theme);
+  }, [theme]);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <ListRow icon={<Ico name="palette" size={18} />} title="Theme" subtitle="Tap a preset — the whole app re-tints" />
+      <div style={{ display: "flex", gap: 10, paddingLeft: 4 }}>
+        {themes.map(([k, label]) => (
+          <button key={k} onClick={() => setTheme(k)} data-theme={k === "cherry" ? null : k}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "10px 4px", borderRadius: "var(--radius-md)", cursor: "pointer",
+              background: theme === k ? "var(--surface-2)" : "transparent", border: theme === k ? "1.5px solid var(--primary)" : "1.5px solid var(--line)" }}>
+            <span style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--primary)", boxShadow: "inset 0 0 0 4px var(--primary-strong)" }} />
+            <span style={{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--deep)" }}>{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+function RemindersScreen({ ctx }) {
+  const [s, setS] = React.useState({ period: true, fertile: true, ovulation: false, overdue: false, pill: true, hygiene: true, log: false });
+  const set = (k) => (v) => setS((p) => ({ ...p, [k]: v }));
+  const sw = (k, label) => <Switch checked={s[k]} onChange={set(k)} label={label} />;
+  return (
+    <div style={{ padding: "6px 20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <h1 style={{ margin: 0, paddingTop: 4, fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-2xl)", color: "var(--deep)" }}>Reminders</h1>
+      <div>
+        <SectionLabel style={{ marginBottom: 8, paddingLeft: 4 }}>Cycle</SectionLabel>
+        <Card style={{ padding: 8 }}>
+          <ListRow icon={<Ico name="droplet" size={18} />} title="Period reminder" subtitle="2 days before · 9:00 AM" trailing={sw("period", "Period reminder")} />
+          <ListRow icon={<Ico name="sparkles" size={18} />} title="Fertile window" subtitle="When your window opens" trailing={sw("fertile", "Fertile window")} />
+          <ListRow icon={<Ico name="egg" size={18} />} title="Ovulation day" subtitle="On your predicted peak" trailing={sw("ovulation", "Ovulation day")} />
+          <ListRow icon={<Ico name="calendar-clock" size={18} />} title="Period overdue" subtitle="If it hasn't arrived" trailing={sw("overdue", "Period overdue")} />
+        </Card>
+      </div>
+      <div>
+        <SectionLabel style={{ marginBottom: 8, paddingLeft: 4 }}>Daily</SectionLabel>
+        <Card style={{ padding: 8 }}>
+          <ListRow icon={<Ico name="pill" size={18} />} title="Pill reminder" subtitle="Every day · 9:00 AM" trailing={sw("pill", "Pill reminder")} />
+          <ListRow icon={<Ico name="clock" size={18} />} title="Hygiene reminder" subtitle="Change product · every 4 hours" trailing={sw("hygiene", "Hygiene reminder")} />
+          <ListRow icon={<Ico name="pencil" size={18} />} title="Daily log nudge" subtitle="A gentle nudge · 8:00 PM" trailing={sw("log", "Daily log nudge")} />
+        </Card>
+      </div>
+      <div>
+        <SectionLabel style={{ marginBottom: 8, paddingLeft: 4 }}>Appearance</SectionLabel>
+        <Card style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          <ThemeRow />
+          <div style={{ height: 1, background: "var(--line)", margin: "4px 0" }} />
+          <ListRow icon={<Ico name="wand-sparkles" size={18} />} title="Petals & motion" subtitle="Delightful animations" trailing={<Switch checked={ctx.petals} onChange={ctx.setPetals} label="Petals and motion" />} />
+        </Card>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--muted)", fontSize: "var(--text-xs)", padding: "4px 0" }}>
+        <Ico name="lock" size={13} /> <span>Everything stays private, on your device.</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Log entry (the data-recording screen) ---------- */
+function LogSheet({ ctx }) {
+  const [date, setDate] = React.useState(13);
+  const [flow, setFlow] = React.useState(null);
+  const [sym, setSym] = React.useState(new Set());
+  const [mood, setMood] = React.useState(null);
+  const [pain, setPain] = React.useState("None");
+  const [energy, setEnergy] = React.useState("Okay");
+  const [sleep, setSleep] = React.useState("Okay");
+  const toggle = (k) => setSym((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  return (
+    <div className="ft-sheet-scrim" onClick={ctx.closeLog}>
+      <div className="ft-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="ft-grab" />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 20px 10px" }}>
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-xl)", color: "var(--deep)" }}>Log entry</div>
+          <IconButton label="Close" variant="soft" size="sm" onClick={ctx.closeLog}><Ico name="x" size={18} /></IconButton>
+        </div>
+        {/* date strip */}
+        <div style={{ display: "flex", gap: 8, padding: "0 20px 12px", overflowX: "auto" }}>
+          {F.logDates.map(([wd, n]) => {
+            const on = date === n;
+            return (
+              <button key={n} onClick={() => setDate(n)} style={{ flex: "none", width: 52, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 0", borderRadius: "var(--radius-md)", cursor: "pointer",
+                border: on ? "1.5px solid transparent" : "1.5px solid var(--line)", background: on ? "var(--primary-strong)" : "transparent", color: on ? "#fff" : "var(--muted)" }}>
+                <span style={{ fontSize: "var(--text-2xs)", fontWeight: 600 }}>{wd}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", fontWeight: 600 }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "4px 20px 8px", display: "flex", flexDirection: "column", gap: 20 }}>
+          <LogSection icon="droplet" title="Flow"><FlowScale value={flow} onChange={setFlow} /></LogSection>
+          <LogSection icon="activity" title="Symptoms">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {SYMPTOMS.map((sm) => <SymptomChip key={sm.key} symptom={sm.key} size="sm" selected={sym.has(sm.key)} onClick={() => toggle(sm.key)} icon={<Ico name={sm.icon} size={14} />} />)}
+            </div>
+          </LogSection>
+          <LogSection icon="smile" title="Mood">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {F.moods.map((m) => <Chip key={m} size="sm" selected={mood === m} onClick={() => setMood(mood === m ? null : m)}>{m}</Chip>)}
+            </div>
+          </LogSection>
+          <LogSection icon="zap" title="Pain"><SegmentedTabs block value={pain} onChange={setPain} options={F.painLevels.map((p) => ({ value: p, label: p }))} /></LogSection>
+          <LogSection icon="battery-medium" title="Energy"><SegmentedTabs block value={energy} onChange={setEnergy} options={F.energy.map((p) => ({ value: p, label: p }))} /></LogSection>
+          <LogSection icon="moon" title="Sleep"><SegmentedTabs block value={sleep} onChange={setSleep} options={F.sleep.map((p) => ({ value: p, label: p }))} /></LogSection>
+          <LogSection icon="pencil" title="Notes"><textarea className="ft-note" rows="3" placeholder="Anything you'd like to remember about today…"></textarea></LogSection>
+        </div>
+        <div style={{ padding: "12px 20px calc(14px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--line)" }}>
+          <Button block onClick={ctx.saveLog} iconLeft={<Ico name="check" size={17} />}>Save entry</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Shell (iPhone 16 / iOS 18) ---------- */
+function App() {
+  const [tab, setTab] = React.useState("today");
+  const [logOpen, setLogOpen] = React.useState(false);
+  const [toast, setToast] = React.useState(null);
+  const [petals, setPetals] = React.useState(true);
+  const [celebrate, setCelebrate] = React.useState(false);
+  const showToast = (t, m) => { setToast({ t, m }); clearTimeout(window.__ftT); window.__ftT = setTimeout(() => setToast(null), 2800); };
+  const ctx = {
+    tab, setTab, petals, setPetals,
+    openLog: () => setLogOpen(true),
+    closeLog: () => setLogOpen(false),
+    saveLog: () => { setLogOpen(false); showToast("Logged, love.", "Saved to your journal."); if (petals) { setCelebrate(true); clearTimeout(window.__ftC); window.__ftC = setTimeout(() => setCelebrate(false), 2000); } },
+    showToast,
+  };
+  const Screens = { today: TodayScreen, calendar: CalendarScreen, insights: InsightsScreen, reminders: RemindersScreen };
+  const Current = Screens[tab];
+  const tabs = [["today", "house", "Today"], ["calendar", "calendar-days", "Calendar"], ["insights", "chart-column", "Insights"], ["reminders", "bell", "Reminders"]];
+  return (
+    <div className="ft-device">
+      <div className="ft-screen" data-ft-root>
+        <div className="ft-island" />
+        <div className="ft-status">
+          <span className="t">9:41</span>
+          <span className="ft-status-ic"><Ico name="signal" size={16} /><Ico name="wifi" size={16} /><Ico name="battery-full" size={20} /></span>
+        </div>
+        {petals && tab === "today" && <PetalRain count={12} zIndex={1} style={{ top: 54 }} />}
+        {toast && <div className="ft-toast-host"><Toast title={toast.t} message={toast.m} /></div>}
+        <div className="ft-scroll" key={tab}>
+          <Current ctx={ctx} />
+          <div style={{ height: 40 }} />
+        </div>
+        <button className="ft-fab" onClick={ctx.openLog} aria-label="Log entry"><Ico name="plus" size={26} /></button>
+        <nav className="ft-nav">
+          {tabs.map(([k, icon, label]) => (
+            <button key={k} className={"ft-navitem" + (tab === k ? " is-active" : "")} onClick={() => setTab(k)}>
+              <Ico name={icon} size={22} /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="ft-home" />
+        {celebrate && <PetalRain count={28} zIndex={48} />}
+        {logOpen && <LogSheet ctx={ctx} />}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

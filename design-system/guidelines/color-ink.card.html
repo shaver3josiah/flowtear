@@ -1,0 +1,19 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Text & ink" subtitle="Plum body text, soft muted, deep headings, hairlines" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--bg); font-family: var(--font-body); padding: 20px; }
+  .sw { display: flex; gap: 14px; flex-wrap: wrap; }
+  .chip { display: flex; flex-direction: column; gap: 7px; }
+  .box { width: 150px; height: 74px; border-radius: var(--radius-md); box-shadow: var(--sh-1); display: grid; place-items: center; font-weight: 700; font-size: 20px; }
+  .n { font-size: 12px; font-weight: 600; color: var(--text); }
+  .v { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip"><div class="box" style="background:#fff;color:var(--text)">Aa</div><div class="n">--text · Body</div><div class="v">#421527</div></div>
+  <div class="chip"><div class="box" style="background:#fff;color:var(--muted)">Aa</div><div class="n">--muted · Soft</div><div class="v">#885B6D</div></div>
+  <div class="chip"><div class="box" style="background:#fff;color:var(--deep)">Aa</div><div class="n">--deep · Heading</div><div class="v">#B01B58</div></div>
+  <div class="chip"><div class="box" style="background:#fff;border:2px solid var(--line);color:var(--line)">—</div><div class="n">--line · Border</div><div class="v">#F2CEDF</div></div>
+</div>
+</body></html>

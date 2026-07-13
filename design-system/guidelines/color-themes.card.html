@@ -1,0 +1,20 @@
+<!-- @dsCard group="Colors" viewport="700x175" name="Theme presets" subtitle="Cherry (default), Rose, Peony, Soft — set data-theme" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: #fafafa; font-family: var(--font-body); padding: 20px; }
+  .sw { display: flex; gap: 14px; flex-wrap: wrap; }
+  .chip { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--radius-md); box-shadow: var(--sh-1); width: 138px; }
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 26px; height: 26px; border-radius: 50%; }
+  .n { font-size: 12px; font-weight: 700; }
+  .v { font-size: 10.5px; }
+</style></head>
+<body>
+<div class="sw">
+  <div class="chip" style="background:var(--bg)"><div class="dots"><span class="dot" style="background:var(--primary)"></span><span class="dot" style="background:var(--primary-strong)"></span><span class="dot" style="background:var(--deep)"></span><span class="dot" style="background:var(--flower-center)"></span></div><div class="n" style="color:var(--deep)">Cherry</div><div class="v" style="color:var(--muted)">default · :root</div></div>
+  <div class="chip" data-theme="rose" style="background:var(--bg)"><div class="dots"><span class="dot" style="background:var(--primary)"></span><span class="dot" style="background:var(--primary-strong)"></span><span class="dot" style="background:var(--deep)"></span><span class="dot" style="background:var(--flower-center)"></span></div><div class="n" style="color:var(--deep)">Rose</div><div class="v" style="color:var(--muted)">data-theme="rose"</div></div>
+  <div class="chip" data-theme="peony" style="background:var(--bg)"><div class="dots"><span class="dot" style="background:var(--primary)"></span><span class="dot" style="background:var(--primary-strong)"></span><span class="dot" style="background:var(--deep)"></span><span class="dot" style="background:var(--flower-center)"></span></div><div class="n" style="color:var(--deep)">Peony</div><div class="v" style="color:var(--muted)">data-theme="peony"</div></div>
+  <div class="chip" data-theme="soft" style="background:var(--bg)"><div class="dots"><span class="dot" style="background:var(--primary)"></span><span class="dot" style="background:var(--primary-strong)"></span><span class="dot" style="background:var(--deep)"></span><span class="dot" style="background:var(--flower-center)"></span></div><div class="n" style="color:var(--deep)">Soft</div><div class="v" style="color:var(--muted)">data-theme="soft"</div></div>
+</div>
+</body></html>
