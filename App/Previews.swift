@@ -26,6 +26,8 @@ extension View {
 #Preview("Calendar") { CalendarView(onLog: { _ in }).previewEnv() }
 #Preview("Log") { LogPreviewHost().previewEnv() }
 #Preview("Insights") { InsightsView().previewEnv() }
+#Preview("Stretch coach") { StretchCoachView().previewEnv() }
+#Preview("Stretch card (Today)") { StretchPlanCard().previewEnv().padding() }
 
 // LogView takes a Date binding; give it one for the preview.
 private struct LogPreviewHost: View {

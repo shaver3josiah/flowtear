@@ -20,6 +20,7 @@ struct TodayView: View {
                     hero
                     quickLog
                     statsGrid
+                    StretchPlanCard()
                     FertileWindowCard()
                 } else {
                     emptyState

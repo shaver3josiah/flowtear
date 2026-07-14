@@ -55,6 +55,15 @@ final class CycleStore {
             .map { (date: $0.0, celsius: $0.1) }
     }
 
+    func stretchDone(on date: Date) -> Bool { log(for: date)?.stretchDone ?? false }
+
+    func setStretchDone(_ done: Bool, on date: Date) {
+        let k = key(for: date)
+        var l = logs[k] ?? DayLog(dateKey: k)
+        l.stretchDone = done ? true : nil
+        upsert(l)
+    }
+
     func toggleFlow(_ flow: Flow, on date: Date) {
         let k = key(for: date)
         var l = logs[k] ?? DayLog(dateKey: k)

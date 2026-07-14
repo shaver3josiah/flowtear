@@ -36,12 +36,13 @@ struct DayLog: Codable, Identifiable, Equatable {
     var symptoms: Set<Symptom> = []
     var note: String = ""
     var temperatureC: Double?      // optional BBT
+    var stretchDone: Bool?         // marked the day's cramp-ease stretch session complete
 
     var id: String { dateKey }
     var isPeriod: Bool { flow != nil }
     var isEmpty: Bool {
         flow == nil && moods.isEmpty && symptoms.isEmpty
-            && note.isEmpty && temperatureC == nil
+            && note.isEmpty && temperatureC == nil && (stretchDone ?? false) == false
     }
 }
 
