@@ -12,7 +12,7 @@ struct Wordmark: View {
     var showMark: Bool
     var text: String
 
-    init(script: Bool = false, size: CGFloat = 28, showMark: Bool = true, text: String = "Flowtear") {
+    init(script: Bool = false, size: CGFloat = 28, showMark: Bool = true, text: String = "Uncorked") {
         self.script = script
         self.size = size
         self.showMark = showMark

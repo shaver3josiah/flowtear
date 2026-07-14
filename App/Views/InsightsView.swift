@@ -46,9 +46,9 @@ struct InsightsView: View {
     }
 
     private var subtitle: String {
-        guard p.hasHistory else { return "Let's find your rhythm, love." }
+        guard p.hasHistory else { return "Let's find your rhythm." }
         if let d = p.daysUntilNextPeriod, d >= 0 {
-            return "Your next bloom is about \(d) \(d == 1 ? "day" : "days") away."
+            return "Your next period is about \(d) \(d == 1 ? "day" : "days") away."
         }
         return "The patterns behind your cycle, gathered gently."
     }
@@ -115,7 +115,7 @@ struct InsightsView: View {
         FFCard(variant: .soft) {
             VStack(alignment: .leading, spacing: FFSpace.s3) {
                 cardTitle("What's ahead")
-                aheadRow("Next bloom", p.nextPeriodStart, .phaseFollicular)
+                aheadRow("Next period", p.nextPeriodStart, .phaseFollicular)
                 aheadRow("Fertile window opens", p.fertileStart, .phaseFertile)
                 aheadRow("Ovulation, estimated", p.ovulationDate, .phaseOvulation)
             }
@@ -146,10 +146,10 @@ struct InsightsView: View {
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 26))
                     .foregroundStyle(theme.color(.primary))
-                Text("Your patterns will bloom here")
+                Text("Your patterns will appear here")
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
-                Text("Log a few cycles and Flowtear will show your average rhythm, the symptoms you feel most, and when your next bloom is due.")
+                Text("Log a few cycles and Uncorked will show your average rhythm, the symptoms you feel most, and when your next period is due.")
                     .font(ffBody(FFType.sm))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)

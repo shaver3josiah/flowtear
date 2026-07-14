@@ -1,9 +1,9 @@
 import SwiftUI
 
-// Today — the warm home screen: a time-of-day greeting, the CycleRing hero with
-// a drifting-petal accent, the current phase, a "next bloom" countdown, a quick
-// flow log, and the cycle-day / next-bloom / phase stat tiles. Empty state is
-// just the bloom + a no-pressure nudge. Composed entirely from DS components.
+// Today — the home screen: the CycleRing hero with a drifting-petal accent, the
+// current phase, a next-period countdown, a quick flow log, the cycle-day /
+// next-period / phase stat tiles, and the fertile-window + basal-temperature
+// section. Composed entirely from DS components.
 struct TodayView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
@@ -20,6 +20,7 @@ struct TodayView: View {
                     hero
                     quickLog
                     statsGrid
+                    FertileWindowCard()
                 } else {
                     emptyState
                 }
@@ -30,16 +31,16 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Header (weekday + date — no greeting)
 
     private var header: some View {
         HStack(spacing: 11) {
             FlowerMark(size: 38).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(greeting)
+                Text(today.formatted(.dateTime.weekday(.wide)))
                     .font(ffDisplay(FFType.xl, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
-                Text(today.formatted(.dateTime.weekday(.wide).month().day()))
+                Text(today.formatted(.dateTime.month().day()))
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
             }
@@ -48,16 +49,7 @@ struct TodayView: View {
         .padding(.top, 2)
     }
 
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: today) {
-        case 5..<12:  "Good morning, love"
-        case 12..<17: "Good afternoon, love"
-        case 17..<22: "Good evening, love"
-        default:      "Hello, love"
-        }
-    }
-
-    // MARK: Hero (ring + petal accent + phase + next-bloom line)
+    // MARK: Hero (ring + petal accent + phase + next-period line)
 
     private var hero: some View {
         ZStack {
@@ -69,7 +61,7 @@ struct TodayView: View {
             VStack(spacing: 10) {
                 CycleRing(prediction: p, size: 244)
                 PhaseBadge(phase: p.phase)
-                Text(nextBloomLine)
+                Text(nextPeriodLine)
                     .font(ffBody(FFType.sm, weight: .medium))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)
@@ -78,13 +70,13 @@ struct TodayView: View {
         .padding(.vertical, 2)
     }
 
-    private var nextBloomLine: String {
+    private var nextPeriodLine: String {
         guard let d = p.daysUntilNextPeriod else { return "" }
         switch d {
-        case let n where n > 1: return "Your next bloom is in \(n) days"
-        case 1:                 return "Your next bloom is tomorrow"
-        case 0:                 return "Your next bloom is expected today"
-        default:                return "Gentle heads-up — your bloom is \(abs(d)) \(abs(d) == 1 ? "day" : "days") late"
+        case let n where n > 1: return "Your next period is in \(n) days"
+        case 1:                 return "Your next period is tomorrow"
+        case 0:                 return "Your next period is expected today"
+        default:                return "Your period is \(abs(d)) \(abs(d) == 1 ? "day" : "days") late"
         }
     }
 
@@ -123,9 +115,9 @@ struct TodayView: View {
             StatTile(title: "Cycle day",
                      value: p.cycleDay.map(String.init) ?? "–",
                      tint: .primary)
-            StatTile(title: "Next bloom",
-                     value: nextBloomValue,
-                     unit: nextBloomUnit,
+            StatTile(title: "Next period",
+                     value: nextPeriodValue,
+                     unit: nextPeriodUnit,
                      tint: .phaseMenstrual)
             StatTile(title: "Phase",
                      value: p.phase?.label ?? "–",
@@ -133,11 +125,11 @@ struct TodayView: View {
         }
     }
 
-    private var nextBloomValue: String {
+    private var nextPeriodValue: String {
         guard let d = p.daysUntilNextPeriod else { return "–" }
         return String(abs(d))
     }
-    private var nextBloomUnit: String? {
+    private var nextPeriodUnit: String? {
         guard let d = p.daysUntilNextPeriod else { return nil }
         return d < 0 ? "late" : "days"
     }
@@ -160,7 +152,7 @@ struct TodayView: View {
                 Text("Nothing logged yet")
                     .font(ffDisplay(FFType.lg, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
-                Text("Tap the bloom to start. No pressure.")
+                Text("Tap to log your first period.")
                     .font(ffBody(FFType.sm))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)

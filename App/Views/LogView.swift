@@ -146,7 +146,7 @@ struct LogView: View {
 
     @ViewBuilder private var toastOverlay: some View {
         if showToast {
-            FFToast(message: "Logged, love.")
+            FFToast(message: "Logged.")
                 .padding(.top, FFSpace.s2)
                 .allowsHitTesting(false)
                 .transition(reduceMotion

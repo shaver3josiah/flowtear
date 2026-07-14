@@ -16,7 +16,7 @@ struct FlowerMark: View {
     var breathe: Bool
     var title: String
 
-    init(size: CGFloat, spin: Bool = false, breathe: Bool = false, title: String = "Flowtear") {
+    init(size: CGFloat, spin: Bool = false, breathe: Bool = false, title: String = "Uncorked") {
         self.size = size
         self.spin = spin
         self.breathe = breathe

@@ -35,6 +35,26 @@ final class CycleStore {
         save()
     }
 
+    /// Set (or clear, with nil) a day's basal body temperature in °C.
+    func setTemperatureC(_ celsius: Double?, on date: Date) {
+        let k = key(for: date)
+        var l = logs[k] ?? DayLog(dateKey: k)
+        l.temperatureC = celsius
+        upsert(l)
+    }
+
+    /// Recent basal temperatures as (date, °C), oldest→newest, up to `limit`.
+    func recentTemperatures(limit: Int = 14) -> [(date: Date, celsius: Double)] {
+        logsSnapshot
+            .compactMap { log -> (Date, Double)? in
+                guard let c = log.temperatureC, let d = Self.dateFmt.date(from: log.dateKey) else { return nil }
+                return (d, c)
+            }
+            .sorted { $0.0 < $1.0 }
+            .suffix(limit)
+            .map { (date: $0.0, celsius: $0.1) }
+    }
+
     func toggleFlow(_ flow: Flow, on date: Date) {
         let k = key(for: date)
         var l = logs[k] ?? DayLog(dateKey: k)

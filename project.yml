@@ -35,7 +35,7 @@ targets:
     info:
       path: Generated-Info.plist
       properties:
-        CFBundleDisplayName: Flowtear
+        CFBundleDisplayName: Uncorked
         ITSAppUsesNonExemptEncryption: false
         # Fonts: drop the OFL .ttf files into App/Resources/Fonts/ to activate.
         # Until then Font.custom falls back to the system font (see Theme.swift).
