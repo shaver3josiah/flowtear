@@ -1,9 +1,8 @@
 default_platform(:ios)
 
 APP_ID  = "com.shaver.flowtear"
-PROFILE = "match AppStore com.shaver.flowtear"   # the profile name match creates
+PROFILE = "match AppStore com.shaver.flowtear"   # used only by the match lanes
 
-# App Store Connect API key, read from the env the workflows set.
 def asc_api_key
   app_store_connect_api_key(
     key_id: ENV.fetch("ASC_KEY_ID"),
@@ -14,23 +13,33 @@ def asc_api_key
 end
 
 platform :ios do
-  # BOOTSTRAP — run once (the bootstrap-signing workflow, or locally). Creates the
-  # shared Apple Distribution cert + App Store profile and pushes them, encrypted
-  # with MATCH_PASSWORD, to the match repo. readonly:false = allowed to create.
+  # ── ACTIVE (cloud-signed pipeline) ──────────────────────────────────────────
+  # The workflow archives + exports with xcodebuild automatic signing; this lane
+  # just uploads the finished .ipa (path in IPA_PATH) to TestFlight.
+  desc "Upload an already-exported .ipa to TestFlight."
+  lane :upload_testflight do
+    pilot(
+      api_key: asc_api_key,
+      ipa: ENV.fetch("IPA_PATH"),
+      skip_submission: true,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  # ── FUTURE (fastlane match) — unused by the cloud-signed flow. Bootstrap the
+  #    signing repo first (bootstrap-signing.yml → `certs`), then point
+  #    testflight.yml at `beta` to stop the certificate-cap churn. ─────────────
   desc "Create/refresh the shared App Store signing assets in the match repo."
   lane :certs do
     setup_ci
     match(type: "appstore", app_identifier: APP_ID, api_key: asc_api_key, readonly: false)
   end
 
-  # RELEASE — fetch the shared signing assets (never creates), build, upload.
   desc "Build with match signing and upload to TestFlight."
   lane :beta do
-    setup_ci                                   # ephemeral keychain for match on CI
+    setup_ci
     key = asc_api_key
     match(type: "appstore", app_identifier: APP_ID, api_key: key, readonly: true)
-
-    # Point the freshly xcodegen'd project at the match profile (manual signing).
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Flowtear.xcodeproj",
@@ -39,7 +48,6 @@ platform :ios do
       code_sign_identity: "Apple Distribution",
       profile_name: PROFILE
     )
-
     build_app(
       project: "Flowtear.xcodeproj",
       scheme: "Flowtear",
@@ -47,7 +55,6 @@ platform :ios do
       output_directory: ENV.fetch("RUNNER_TEMP", "."),
       output_name: "Flowtear.ipa",
       export_method: "app-store",
-      # unique, increasing build number from the CI run number
       xcargs: "BUILD_NUMBER=#{ENV.fetch('BUILD_NUMBER', '1')}",
       export_options: {
         signingStyle: "manual",
@@ -55,7 +62,6 @@ platform :ios do
         provisioningProfiles: { APP_ID => PROFILE }
       }
     )
-
     pilot(
       api_key: key,
       ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
