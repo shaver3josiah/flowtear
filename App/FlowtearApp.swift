@@ -43,7 +43,7 @@ struct RootView: View {
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(theme.isDarkMode ? .dark : .light)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  DESIGN SYSTEM — Flowtear
@@ -8,28 +9,73 @@ import SwiftUI
 //  Every view resolves through `Theme` — no view holds a literal hex or size.
 //
 //  Palette derives from Bloom: a single rose family + one gold + one green,
-//  plus two purpose-built ramps (cycle-phase, flow-intensity). Four presets ship
-//  (Cherry default, Rose, Peony, Soft), swapped at runtime like the source app.
+//  plus two purpose-built ramps (cycle-phase, flow-intensity). Presets ship as
+//  full palettes swapped at runtime — light accents (Pink, Cherry, Rose, Peony,
+//  Soft, Light) plus a full Dark palette — exactly like the source calculator.
+//
+//  On top of any preset, an optional CUSTOM ACCENT (a user-picked color) recolors
+//  the brand ramp (primary / primaryStrong / deep) so the whole app is fully
+//  colour-customizable. The cycle-phase and flow ramps stay fixed: menstrual-red
+//  and fertile-gold carry *meaning*, so they are never recolored by a whim pick.
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Observable
 final class Theme {
-    var presetName: String { didSet { UserDefaults.standard.set(presetName, forKey: Self.key) } }
+    /// Named full-palette preset (see `presetNames`). Persisted.
+    var presetName: String { didSet { persist() } }
+    /// Optional user-picked accent, overriding the preset's brand ramp. Persisted.
+    var customAccentHex: String? { didSet { persist() } }
+
     private var tokens: [String: String]
 
-    private static let key = "flowtear.theme.preset"
+    private static let presetKey = "flowtear.theme.preset"
+    private static let accentKey = "flowtear.theme.accent"
 
-    init(preset: String = UserDefaults.standard.string(forKey: Theme.key) ?? "cherry") {
-        presetName = preset
-        tokens = Theme.tokens(for: preset)
+    init() {
+        let p = UserDefaults.standard.string(forKey: Theme.presetKey) ?? "cherry"
+        let a = UserDefaults.standard.string(forKey: Theme.accentKey)
+        presetName = p
+        customAccentHex = a
+        tokens = Theme.buildTokens(preset: p, accentHex: a)
     }
 
-    func setPreset(_ name: String) {
-        presetName = name
-        tokens = Theme.tokens(for: name)
+    // MARK: mutation (property observers do the persist + rebuild)
+
+    func setPreset(_ name: String) { presetName = name }
+    func setCustomAccent(_ color: Color?) { customAccentHex = color.map(Theme.hex(from:)) }
+    func resetCustomAccent() { customAccentHex = nil }
+
+    private func persist() {
+        UserDefaults.standard.set(presetName, forKey: Theme.presetKey)
+        if let a = customAccentHex { UserDefaults.standard.set(a, forKey: Theme.accentKey) }
+        else { UserDefaults.standard.removeObject(forKey: Theme.accentKey) }
+        tokens = Theme.buildTokens(preset: presetName, accentHex: customAccentHex)
     }
 
-    static let presetNames = ["cherry", "rose", "peony", "soft"]
+    // MARK: presets
+
+    static let lightPresets = ["cherry", "pink", "rose", "peony", "soft", "light"]
+    static let darkPresets  = ["dark"]
+    static let presetNames  = lightPresets + darkPresets
+
+    static func label(for preset: String) -> String {
+        switch preset {
+        case "cherry": "Cherry"; case "pink": "Pink";  case "rose": "Rose"
+        case "peony":  "Peony";  case "soft": "Soft";  case "light": "Light"
+        case "dark":   "Dark";   default: preset.capitalized
+        }
+    }
+
+    static func isDark(_ preset: String) -> Bool { darkPresets.contains(preset) }
+    var isDarkMode: Bool { Theme.isDark(presetName) }
+
+    /// The active accent color (custom pick if set, else the preset's primary).
+    var customAccent: Color? { customAccentHex.flatMap { Color(hex: $0) } }
+
+    /// A swatch color for the preset chip in Settings (its primary brand color).
+    static func swatch(for preset: String) -> Color {
+        Color(hex: buildTokens(preset: preset, accentHex: nil)["primary"] ?? "#F06FA7") ?? .pink
+    }
 
     // MARK: color access
 
@@ -46,13 +92,14 @@ final class Theme {
     /// Typed lookup — prefer this in new code.
     func color(_ t: Tok) -> Color { color(t.rawValue) }
 
-    /// Per-preset warm rose shadow color (used by `.ffCardShadow()`).
+    /// Per-scheme card shadow color (warm rose on light, deep ink on dark).
     var shadow: Color {
+        if isDarkMode { return Color(.sRGB, red: 0, green: 0, blue: 0, opacity: 0.5) }
         switch presetName {
-        case "rose":  return Color(.sRGB, red: 161/255, green: 28/255,  blue: 65/255,  opacity: 0.16)
-        case "peony": return Color(.sRGB, red: 142/255, green: 21/255,  blue: 96/255,  opacity: 0.16)
-        case "soft":  return Color(.sRGB, red: 176/255, green: 66/255,  blue: 102/255, opacity: 0.14)
-        default:      return Color(.sRGB, red: 176/255, green: 27/255,  blue: 88/255,  opacity: 0.16)
+        case "rose":  return Color(.sRGB, red: 161/255, green: 28/255, blue: 65/255, opacity: 0.16)
+        case "peony": return Color(.sRGB, red: 142/255, green: 21/255, blue: 96/255, opacity: 0.16)
+        case "soft":  return Color(.sRGB, red: 176/255, green: 66/255, blue: 102/255, opacity: 0.14)
+        default:      return Color(.sRGB, red: 176/255, green: 27/255, blue: 88/255, opacity: 0.16)
         }
     }
 
@@ -84,26 +131,82 @@ final class Theme {
         "luteal": "#C98BC7",
     ]
 
-    private static func tokens(for preset: String) -> [String: String] {
-        let overrides: [String: String]
-        switch preset {
-        case "rose":
-            overrides = ["bg": "#FDF2F1", "surfaceSoft": "#FADDE0", "surface2": "#FCEBEC",
-                         "primary": "#E56A87", "primaryStrong": "#CE3E63", "deep": "#A11C41",
-                         "text": "#431B23", "muted": "#835862", "line": "#F1CBD1", "flowerCenter": "#FFC878"]
-        case "peony":
-            overrides = ["bg": "#FDF1F8", "surfaceSoft": "#F9DCEC", "surface2": "#FCEAF3",
-                         "primary": "#E15BA4", "primaryStrong": "#C22E85", "deep": "#8E1560",
-                         "text": "#3B1030", "muted": "#815571", "line": "#EFC8E0", "flowerCenter": "#FFC966"]
-        case "soft":
-            overrides = ["bg": "#FEF7F9", "surfaceSoft": "#FBE7ED", "surface2": "#FDF1F4",
-                         "primary": "#EE9DBB", "primaryStrong": "#DB6E93", "deep": "#B04266",
-                         "text": "#4A2533", "muted": "#82606D", "line": "#F4D8E1", "flowerCenter": "#FFD488"]
-        default:
-            overrides = [:]
+    private static func buildTokens(preset: String, accentHex: String?) -> [String: String] {
+        var t = base.merging(overrides(for: preset)) { _, new in new }
+        if let hex = accentHex, let ramp = accentRamp(baseHex: hex, isDark: isDark(preset)) {
+            t.merge(ramp) { _, new in new }
         }
-        return base.merging(overrides) { _, new in new }
+        return t
     }
+
+    private static func overrides(for preset: String) -> [String: String] {
+        switch preset {
+        case "pink":
+            // A brighter, bubble-gum pink — the explicit "pink mode".
+            return ["bg": "#FEF0F6", "surfaceSoft": "#FDDCEB", "surface2": "#FEEAF3",
+                    "primary": "#FF5FA8", "primaryStrong": "#F42C88", "deep": "#C21567",
+                    "text": "#43132C", "muted": "#8C526F", "line": "#FBCDE1", "flowerCenter": "#FFC24E"]
+        case "rose":
+            return ["bg": "#FDF2F1", "surfaceSoft": "#FADDE0", "surface2": "#FCEBEC",
+                    "primary": "#E56A87", "primaryStrong": "#CE3E63", "deep": "#A11C41",
+                    "text": "#431B23", "muted": "#835862", "line": "#F1CBD1", "flowerCenter": "#FFC878"]
+        case "peony":
+            return ["bg": "#FDF1F8", "surfaceSoft": "#F9DCEC", "surface2": "#FCEAF3",
+                    "primary": "#E15BA4", "primaryStrong": "#C22E85", "deep": "#8E1560",
+                    "text": "#3B1030", "muted": "#815571", "line": "#EFC8E0", "flowerCenter": "#FFC966"]
+        case "soft":
+            return ["bg": "#FEF7F9", "surfaceSoft": "#FBE7ED", "surface2": "#FDF1F4",
+                    "primary": "#EE9DBB", "primaryStrong": "#DB6E93", "deep": "#B04266",
+                    "text": "#4A2533", "muted": "#82606D", "line": "#F4D8E1", "flowerCenter": "#FFD488"]
+        case "light":
+            // Airy near-neutral light: crisp white surfaces, cool-neutral text,
+            // rose accent kept for the semantic ramps.
+            return ["bg": "#FBFAFB", "surface": "#FFFFFF", "surfaceSoft": "#F3EEF1", "surface2": "#F8F5F7",
+                    "primary": "#E75C93", "primaryStrong": "#CE3B76", "deep": "#8A2A54",
+                    "text": "#2A2430", "muted": "#726A75", "line": "#E9E2E8", "flowerCenter": "#F5B342"]
+        case "dark":
+            // Full dark palette. Overrides every scheme + soft-ramp key; the vivid
+            // phase/flow tints read fine on dark so they carry through from base.
+            return [
+                "bg": "#141017", "surface": "#1E1822", "surfaceSoft": "#2B2130", "surface2": "#241C2A",
+                "primary": "#F58FB8", "primaryStrong": "#F06FA7", "deep": "#F7C9DD",
+                "text": "#F6E9EF", "muted": "#BFA1B0", "line": "#3A2E38",
+                "flowerCenter": "#FFC966", "good": "#4FBE86",
+                // dark soft-washes for phase cells/badges (light tints would glow)
+                "phaseMenstrualSoft": "#3A2230", "phaseFollicularSoft": "#33202B",
+                "phaseFertileSoft": "#382C1E", "phaseOvulationSoft": "#382A1A", "phaseLutealSoft": "#2E2338",
+                "flowNone": "#5A4A52",
+                // aliases that point at soft washes
+                "flowSoft": "#3A2230",
+            ]
+        default: // cherry
+            return [:]
+        }
+    }
+
+    // MARK: custom-accent ramp
+
+    /// Derive primary / primaryStrong / deep from one user-picked color, scaled by
+    /// scheme. On light: strong is darker, deep darker still (contrast on white).
+    /// On dark: strong is brighter, deep light (contrast on near-black).
+    private static func accentRamp(baseHex: String, isDark: Bool) -> [String: String]? {
+        guard let ui = UIColor(hex: baseHex) else { return nil }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard ui.getHue(&h, saturation: &s, brightness: &b, alpha: &a) else { return nil }
+        func mk(_ ss: CGFloat, _ bb: CGFloat) -> String {
+            UIColor(hue: h, saturation: min(max(ss, 0), 1), brightness: min(max(bb, 0), 1), alpha: 1).hexString
+        }
+        if isDark {
+            return ["primary": mk(s * 0.95, min(b * 1.05, 1.0)),
+                    "primaryStrong": mk(s * 0.90, min(b * 1.18, 1.0)),
+                    "deep": mk(max(s * 0.55, 0.18), max(b * 1.40, 0.82))]
+        }
+        return ["primary": mk(min(s * 1.02, 1.0), b),
+                "primaryStrong": mk(min(s * 1.14, 1.0), b * 0.84),
+                "deep": mk(min(s * 1.18, 1.0), min(b * 0.55, 0.48))]
+    }
+
+    static func hex(from color: Color) -> String { UIColor(color).hexString }
 }
 
 // MARK: - Typed tokens
@@ -169,6 +272,8 @@ enum FFMotion {
     static let slow      = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.45)
     /// gentle overshoot for taps (cubic-bezier(.34,1.56,.64,1))
     static let spring    = Animation.spring(response: 0.35, dampingFraction: 0.7)
+    /// satisfying, longer overshoot for the ring's tap-spin.
+    static let ringSpin  = Animation.spring(response: 0.7, dampingFraction: 0.62)
     static let pressScale: CGFloat = 0.96
 }
 
@@ -205,5 +310,26 @@ extension Color {
             green: Double((v >> 8) & 0xFF) / 255,
             blue:  Double(v & 0xFF) / 255
         )
+    }
+}
+
+extension UIColor {
+    convenience init?(hex: String) {
+        var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt64(s, radix: 16) else { return nil }
+        self.init(
+            red:   CGFloat((v >> 16) & 0xFF) / 255,
+            green: CGFloat((v >> 8) & 0xFF) / 255,
+            blue:  CGFloat(v & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+    /// "#RRGGBB" (sRGB, alpha dropped). Used to persist a picked accent.
+    var hexString: String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: &a)
+        func clamp(_ v: CGFloat) -> Int { min(max(Int((v * 255).rounded()), 0), 255) }
+        return String(format: "#%02X%02X%02X", clamp(r), clamp(g), clamp(b))
     }
 }

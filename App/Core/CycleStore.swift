@@ -113,5 +113,58 @@ final class CycleStore {
         }
         save()
     }
+
+    /// A store preloaded with realistic sample data — for SwiftUI previews.
+    static func preview() -> CycleStore {
+        let s = CycleStore()
+        s.loadSampleData()
+        return s
+    }
+
+    /// 3 cycles of flow + symptoms + moods + a basal-temperature curve with a
+    /// post-ovulation rise. Positioned so "today" sits in the luteal (PMS) phase.
+    /// Sets `logs` directly (no persistence) so previews never touch real data.
+    func loadSampleData() {
+        let today = cal.startOfDay(for: Date())
+        var out: [String: DayLog] = [:]
+
+        func put(_ offset: Int, _ build: (inout DayLog) -> Void) {
+            guard let d = cal.date(byAdding: .day, value: offset, to: today), d <= today else { return }
+            let k = key(for: d)
+            var l = out[k] ?? DayLog(dateKey: k)
+            build(&l)
+            out[k] = l
+        }
+
+        // Three cycles of bleeding (starts at -18, -46, -74), 5-day period.
+        let flows: [Flow] = [.medium, .heavy, .medium, .light, .spotting]
+        for startOffset in [-18, -46, -74] {
+            for (i, f) in flows.enumerated() {
+                put(startOffset + i) { l in
+                    l.flow = f
+                    if i <= 1 { l.symptoms.insert(.cramps); l.symptoms.insert(.fatigue) }
+                    if i == 0 { l.moods.insert(.sad) }
+                }
+            }
+        }
+
+        // Follicular upswing, then luteal / PMS this cycle.
+        put(-12) { l in l.moods.insert(.energized); l.moods.insert(.happy) }
+        put(-10) { l in l.moods.insert(.calm) }
+        put(-4)  { l in l.symptoms.insert(.bloating); l.moods.insert(.irritable) }
+        put(-3)  { l in l.symptoms.insert(.cravings); l.symptoms.insert(.tenderBreasts); l.moods.insert(.anxious) }
+        put(-2)  { l in l.symptoms.insert(.cramps); l.symptoms.insert(.headache); l.moods.insert(.sensitive) }
+        put(-1)  { l in l.symptoms.insert(.bloating); l.moods.insert(.tired) }
+        put(0)   { l in l.symptoms.insert(.cravings); l.moods.insert(.calm) }
+
+        // Basal temps (°F), last 16 days, with a sustained rise after ovulation.
+        let tempsF: [Double] = [97.3, 97.4, 97.3, 97.5, 97.4, 97.5, 97.4, 97.6,
+                                97.5, 97.4, 97.9, 98.0, 97.9, 98.1, 98.0, 98.1]
+        for (i, f) in tempsF.enumerated() {
+            put(-16 + i) { l in l.temperatureC = (f - 32) * 5 / 9 }
+        }
+
+        logs = out
+    }
     #endif
 }
