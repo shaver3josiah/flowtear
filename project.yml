@@ -44,6 +44,10 @@ targets:
           - PlayfairDisplay.ttf
           - PlayfairDisplay-Italic.ttf
           - GreatVibes-Regular.ttf
+        # Portrait-only, phone-first. UIRequiresFullScreen opts out of iPad
+        # multitasking, which is what lets a universal (iPhone+iPad) app ship
+        # without supporting all 4 orientations (App Store validation 409 otherwise).
+        UIRequiresFullScreen: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchScreen:
