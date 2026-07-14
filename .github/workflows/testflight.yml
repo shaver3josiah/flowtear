@@ -71,13 +71,17 @@ jobs:
         run: |
           IPA_PATH=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
           echo "Uploading $IPA_PATH"
-          # altool sometimes delivers the binary, then a follow-up status poll hits a
-          # transient App Store Connect 500 and fastlane exits nonzero. If the binary
-          # WAS delivered ("UPLOAD SUCCEEDED"), treat the run as a success. A genuine
-          # rejection (e.g. a validation 409) has no such marker and still fails hard.
-          IPA_PATH="$IPA_PATH" fastlane upload_testflight 2>&1 | tee "$RUNNER_TEMP/upload.log" || true
-          if grep -qE "UPLOAD SUCCEEDED with no errors|No errors uploading archive" "$RUNNER_TEMP/upload.log"; then
-            echo "Binary delivered to App Store Connect (ignoring any transient post-upload 500)."
+          set +e
+          IPA_PATH="$IPA_PATH" fastlane upload_testflight 2>&1 | tee "$RUNNER_TEMP/upload.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          # fastlane itself reported success — done.
+          if [ "$status" -eq 0 ]; then echo "Upload succeeded."; exit 0; fi
+          # fastlane exited nonzero, but the binary may have been delivered before a
+          # transient post-upload error (Apple 500 on a status poll). Accept the known
+          # delivery markers; a genuine rejection (validation 409) has none of them.
+          if grep -qE "Successfully uploaded package to App Store Connect|UPLOAD SUCCEEDED with no errors|No errors uploading archive" "$RUNNER_TEMP/upload.log"; then
+            echo "Binary delivered to App Store Connect (ignoring transient post-upload error)."
             exit 0
           fi
           echo "::error::TestFlight upload did not report success — see the log above."
