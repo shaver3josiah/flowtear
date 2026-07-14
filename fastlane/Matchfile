@@ -1,0 +1,8 @@
+# fastlane match — App Store signing (Apple Distribution cert + App Store
+# provisioning profile) stored encrypted in a private git repo and reused by
+# every build. No per-runner certificate creation, so the account's certificate
+# cap is never hit again, and the same distribution cert can be shared with Bloom.
+git_url("https://github.com/shaver3josiah/flowtear-certs.git")
+storage_mode("git")
+type("appstore")
+app_identifier(["com.shaver.flowtear"])

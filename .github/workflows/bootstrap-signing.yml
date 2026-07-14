@@ -1,0 +1,37 @@
+name: bootstrap-signing
+# Run this ONCE (Actions tab → bootstrap-signing → Run workflow) to create the
+# shared Apple Distribution certificate + App Store provisioning profile and store
+# them, encrypted, in the match repo. Every "testflight" run afterwards fetches
+# these read-only, so no new certificate is ever created and the cert cap is never
+# hit again.
+#
+# Requires MATCH_PASSWORD + MATCH_GIT_BASIC_AUTHORIZATION secrets, and a FREE
+# distribution-certificate slot in the account (revoke the throwaway cloud-signed
+# cert from the earlier build first — its private key was discarded on the runner).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  create-signing-assets:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write App Store Connect API key
+        run: |
+          echo "${{ secrets.ASC_KEY_P8_BASE64 }}" | openssl base64 -d -A > "$RUNNER_TEMP/asc.p8"
+          test -s "$RUNNER_TEMP/asc.p8" || { echo "Decoded .p8 is empty"; exit 1; }
+
+      - name: Create & store signing assets (match, read-write)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_FILEPATH: ${{ runner.temp }}/asc.p8
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+        run: fastlane certs
+
+      - name: Remove API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc.p8"

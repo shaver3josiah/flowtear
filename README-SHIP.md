@@ -1,16 +1,19 @@
 # Shipping Flowtear to TestFlight (no Mac)
 
 This repo builds, signs, and uploads Flowtear to TestFlight entirely on a GitHub
-Actions **macOS runner**. You never touch a Mac. Signing is fully cloud-managed
-(Xcode automatic signing + an App Store Connect API key), so no certificates or
-provisioning profiles live on your machine.
+Actions **macOS runner**. You never touch a Mac.
+
+Signing uses **fastlane match**: one Apple Distribution certificate + App Store
+provisioning profile are created once and stored, encrypted, in a private `flowtear-certs`
+repo. Every build fetches them read-only — so the runner never creates a new certificate
+and the account **certificate cap is never hit again** (and the same cert can be shared
+with Bloom). See §1.5 to bootstrap it once.
 
 Pipeline: `.github/workflows/testflight.yml` → select newest Xcode →
-`xcodegen generate` → `xcodebuild archive` (cloud-signed) → `xcodebuild -exportArchive`
-(`App/Support/ExportOptions.plist`) → `fastlane pilot` → TestFlight.
+`xcodegen generate` → `fastlane beta` (`match` fetch → `build_app` → `pilot`) → TestFlight.
 
-The build number (`CURRENT_PROJECT_VERSION`) comes from `github.run_number`, so every
-upload gets a unique, increasing build number automatically.
+The build number comes from `github.run_number`, so every upload gets a unique, increasing
+build number automatically.
 
 ---
 
@@ -67,6 +70,8 @@ required:
 | `ASC_KEY_ID` | The API key's **Key ID**. |
 | `ASC_ISSUER_ID` | The **Issuer ID** (shared by all team keys). |
 | `ASC_KEY_P8_BASE64` | The `AuthKey_*.p8` contents, **base64-encoded** (see below). |
+| `MATCH_PASSWORD` | A passphrase **you choose** — it encrypts the certs in the match repo. Keep it safe; you need the same value to bootstrap and to build. |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | base64 of `githubuser:PAT` so CI can read the `flowtear-certs` repo (see §1.5). |
 
 ### Generating `ASC_KEY_P8_BASE64` on Windows
 
@@ -85,6 +90,45 @@ If you rotate the key, update **both** `ASC_KEY_ID` and `ASC_KEY_P8_BASE64`.
 > Note: some pipelines store the `.p8` raw. Raw only works if it is a clean PEM with
 > `-----BEGIN PRIVATE KEY-----` intact and no base64 wrapping — a base64 blob echoed raw
 > gives `invalidPEMDocument`. This workflow expects the **base64** form and decodes it.
+
+---
+
+## 2.5 One-time: bootstrap match signing
+
+Do this once. After it, every release just works and never touches certificates again.
+
+1. **Create the private storage repo** (empty is fine — match fills it):
+   ```powershell
+   gh repo create flowtear-certs --private
+   ```
+   *(If you name it differently, update `git_url` in `fastlane/Matchfile`.)*
+
+2. **Free a distribution-cert slot.** The earlier cloud-signed build left a throwaway
+   Apple Distribution certificate in your account whose private key was discarded — it's
+   dead weight against the cap. Revoke it at
+   https://developer.apple.com/account/resources/certificates/list so match can create the
+   one permanent cert it will keep. (Don't revoke a cert Bloom actively uses.)
+
+3. **Add the two match secrets** (PowerShell, from the `flowtear` folder):
+   ```powershell
+   gh secret set MATCH_PASSWORD --body "<choose-a-strong-passphrase>"
+
+   # PAT with 'repo' scope so CI can read flowtear-certs; base64 "user:PAT":
+   $pair = "shaver3josiah:<your-PAT>"
+   [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pair)) `
+     | gh secret set MATCH_GIT_BASIC_AUTHORIZATION
+   ```
+   Create the PAT at https://github.com/settings/tokens (classic, `repo` scope).
+
+4. **Run the bootstrap workflow once** — it creates + stores the cert & profile:
+   ```powershell
+   gh workflow run bootstrap-signing.yml
+   ```
+   Watch it green in the Actions tab. When done, `flowtear-certs` holds the encrypted
+   certificate + profile. You never do this step again (until certs expire in ~1 year,
+   when you re-run it).
+
+From then on, every `testflight` run fetches these read-only — no cert creation, no cap.
 
 ---
 

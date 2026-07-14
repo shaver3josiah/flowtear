@@ -1,10 +1,12 @@
 name: testflight
-# Build, sign (cloud-managed) and upload Flowtear to TestFlight from a hosted
-# macOS runner. No Mac required on the developer's side.
+# Build, sign, and upload Flowtear to TestFlight from a hosted macOS runner.
+# Signing uses fastlane MATCH — the Apple Distribution cert + App Store profile
+# are fetched (read-only) from the match repo, so this never creates a per-runner
+# certificate and never hits the account's certificate cap.
 #
-# Fires on a pushed v* tag (the release trigger) or a manual dispatch. Secrets are
-# read at run time, so a corrected secret takes effect on a plain "Re-run" of the
-# same tag — no new commit needed.
+# PREREQ: run the "bootstrap-signing" workflow ONCE first to populate the match repo.
+# Fires on a pushed v* tag or a manual dispatch. Secrets are read at run time, so a
+# corrected secret takes effect on a plain "Re-run".
 on:
   push:
     tags: ["v*"]
@@ -16,13 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Apple enforces a minimum build SDK (e.g. "must be built with the iOS 26
-      # SDK"). Hosted runners default to an older Xcode, so pick the newest.
       - name: Select newest Xcode
         run: |
           set -e
           latest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
-          if [ -z "$latest" ]; then echo "No Xcode found"; exit 1; fi
+          [ -n "$latest" ] || { echo "No Xcode found"; exit 1; }
           echo "Selecting $latest"
           sudo xcode-select -s "$latest/Contents/Developer"
           xcodebuild -version
@@ -33,54 +33,21 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      # The secret is stored base64-encoded (avoids CRLF/whitespace mangling of the
-      # PEM when it is created on Windows). Decode it back to a raw .p8 here.
       - name: Write App Store Connect API key
         run: |
-          # openssl base64 -d is portable across every macOS runner version
-          # (the stock `base64` decode flag differs by macOS release).
           echo "${{ secrets.ASC_KEY_P8_BASE64 }}" | openssl base64 -d -A > "$RUNNER_TEMP/asc.p8"
           test -s "$RUNNER_TEMP/asc.p8" || { echo "Decoded .p8 is empty"; exit 1; }
-          head -1 "$RUNNER_TEMP/asc.p8" | grep -q "BEGIN PRIVATE KEY" \
-            || { echo "Decoded .p8 is not a PEM private key"; exit 1; }
 
-      # CURRENT_PROJECT_VERSION=github.run_number gives every upload a unique,
-      # monotonically increasing build number, which TestFlight requires.
-      - name: Archive
-        run: |
-          xcodebuild archive \
-            -project Flowtear.xcodeproj -scheme Flowtear -configuration Release \
-            -destination "generic/platform=iOS" \
-            -archivePath "$RUNNER_TEMP/Flowtear.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
-
-      - name: Export .ipa
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Flowtear.xcarchive" \
-            -exportOptionsPlist App/Support/ExportOptions.plist \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
-
-      - name: Upload to TestFlight (fastlane pilot)
+      - name: Build & upload to TestFlight (fastlane match + pilot)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_FILEPATH: ${{ runner.temp }}/asc.p8
-        run: |
-          # exportArchive names the .ipa after the product (Flowtear.ipa); glob so
-          # a product rename never breaks this step.
-          IPA_PATH=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
-          echo "Uploading $IPA_PATH"
-          IPA_PATH="$IPA_PATH" fastlane upload_testflight
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: fastlane beta
 
       - name: Remove API key
         if: always()
