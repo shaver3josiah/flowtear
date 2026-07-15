@@ -29,15 +29,19 @@ struct FFPickerSlider<Option: Hashable>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FFSpace.s2) {
-            HStack {
-                Text(title)
-                    .font(ffBody(FFType.md, weight: .semibold))
-                    .foregroundStyle(theme.color(.deep))
-                Spacer()
-                Text(selection.map(label) ?? noneLabel)
-                    .font(ffBody(FFType.sm, weight: .bold))
-                    .foregroundStyle(selection == nil ? theme.color(.muted) : theme.color(tint))
-                    .contentTransition(.opacity)
+            // Headerless when embedded in chrome that already names + reads out
+            // the value (e.g. LogSection) — avoids a doubled label row.
+            if !title.isEmpty {
+                HStack {
+                    Text(title)
+                        .font(ffBody(FFType.md, weight: .semibold))
+                        .foregroundStyle(theme.color(.deep))
+                    Spacer()
+                    Text(selection.map(label) ?? noneLabel)
+                        .font(ffBody(FFType.sm, weight: .bold))
+                        .foregroundStyle(selection == nil ? theme.color(.muted) : theme.color(tint))
+                        .contentTransition(.opacity)
+                }
             }
             Slider(value: sliderValue, in: 0...Double(options.count), step: 1)
                 .tint(theme.color(tint))

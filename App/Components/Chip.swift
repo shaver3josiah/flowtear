@@ -8,25 +8,38 @@ struct FFChip: View {
     private let title: String
     private let selected: Bool
     private let icon: String?
+    private let tint: Tok
     private let action: () -> Void
 
-    init(_ title: String, selected: Bool, icon: String? = nil, action: @escaping () -> Void) {
-        self.title = title; self.selected = selected; self.icon = icon; self.action = action
+    init(_ title: String, selected: Bool, icon: String? = nil,
+         tint: Tok = .primaryStrong, action: @escaping () -> Void) {
+        self.title = title; self.selected = selected; self.icon = icon
+        self.tint = tint; self.action = action
     }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                if let icon { Image(systemName: icon) }
+                if let icon {
+                    Image(systemName: icon)
+                        .symbolEffect(.bounce, value: selected)
+                }
                 Text(title)
             }
             .font(ffBody(FFType.sm, weight: .semibold))
             .foregroundStyle(selected ? .white : theme.color(.muted))
             .frame(height: 40)
             .padding(.horizontal, 16)
-            .background(selected ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
+            .background(selected ? theme.color(tint) : theme.color(.surfaceSoft), in: Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    selected ? .clear : theme.color(.line), lineWidth: 1)
+            )
+            .scaleEffect(selected ? 1.0 : 0.98)
+            .animation(FFMotion.spring, value: selected)
         }
-        .buttonStyle(FFPressButtonStyle(scale: 0.95))
+        .buttonStyle(FFPressButtonStyle(scale: 0.93))
+        .sensoryFeedback(.selection, trigger: selected)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

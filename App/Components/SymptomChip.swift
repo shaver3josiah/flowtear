@@ -7,16 +7,18 @@ import SwiftUI
 struct SymptomChip: View {
     private let symptom: Symptom
     private let selected: Bool
+    private let tint: Tok
     private let action: () -> Void
 
-    init(_ symptom: Symptom, selected: Bool, action: @escaping () -> Void) {
+    init(_ symptom: Symptom, selected: Bool, tint: Tok = .primaryStrong, action: @escaping () -> Void) {
         self.symptom = symptom
         self.selected = selected
+        self.tint = tint
         self.action = action
     }
 
     var body: some View {
-        FFChip(symptom.label, selected: selected, icon: symptom.sfSymbol, action: action)
+        FFChip(symptom.label, selected: selected, icon: symptom.sfSymbol, tint: tint, action: action)
     }
 }
 
