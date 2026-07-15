@@ -21,6 +21,7 @@ struct LogView: View {
             VStack(spacing: FFSpace.card) {
                 datePicker
                 flowSection
+                dischargeSection
                 moodSection
                 symptomSection
                 noteSection
@@ -78,13 +79,31 @@ struct LogView: View {
 
     private var flowSection: some View {
         FFCard {
-            VStack(alignment: .leading, spacing: FFSpace.s3) {
-                sectionTitle("Flow")
-                FlowScale(selection: Binding(
+            FFPickerSlider(
+                title: "Flow",
+                options: Flow.allCases,
+                label: { $0.label },
+                selection: Binding(
                     get: { draft.flow },
                     set: { draft.flow = $0; save() }
-                ))
-            }
+                ),
+                tint: .phaseMenstrual
+            )
+        }
+    }
+
+    private var dischargeSection: some View {
+        FFCard {
+            FFPickerSlider(
+                title: "Discharge",
+                options: Discharge.allCases,
+                label: { $0.label },
+                selection: Binding(
+                    get: { draft.discharge },
+                    set: { draft.discharge = $0; save() }
+                ),
+                tint: .phaseFertile
+            )
         }
     }
 

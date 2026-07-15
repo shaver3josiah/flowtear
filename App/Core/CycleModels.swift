@@ -29,6 +29,18 @@ enum Symptom: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+// Cervical fluid / discharge — ordered dry → egg-white (the fertility signal).
+enum Discharge: String, Codable, CaseIterable, Identifiable {
+    case dry, sticky, creamy, watery, eggWhite
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .eggWhite: "Egg white"
+        default: rawValue.capitalized
+        }
+    }
+}
+
 struct DayLog: Codable, Identifiable, Equatable {
     var dateKey: String            // "yyyy-MM-dd"
     var flow: Flow?                // nil = no bleeding recorded that day
@@ -37,12 +49,14 @@ struct DayLog: Codable, Identifiable, Equatable {
     var note: String = ""
     var temperatureC: Double?      // optional BBT
     var stretchDone: Bool?         // marked the day's cramp-ease stretch session complete
+    var discharge: Discharge?      // cervical fluid (optional decodes keep old data valid)
 
     var id: String { dateKey }
     var isPeriod: Bool { flow != nil }
     var isEmpty: Bool {
         flow == nil && moods.isEmpty && symptoms.isEmpty
             && note.isEmpty && temperatureC == nil && (stretchDone ?? false) == false
+            && discharge == nil
     }
 }
 

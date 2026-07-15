@@ -61,6 +61,15 @@ private struct LogPreviewHost: View {
     FlowScale(selection: .constant(.medium)).previewEnv().padding()
 }
 
+#Preview("Picker sliders") {
+    VStack(spacing: 24) {
+        FFPickerSlider(title: "Flow", options: Flow.allCases, label: { $0.label },
+                       selection: .constant(.medium), tint: .phaseMenstrual)
+        FFPickerSlider(title: "Discharge", options: Discharge.allCases, label: { $0.label },
+                       selection: .constant(.eggWhite), tint: .phaseFertile)
+    }.previewEnv().padding()
+}
+
 #Preview("Day cells") {
     HStack(spacing: 4) {
         DayCell(day: 2, isToday: false, isPeriod: true, isPredicted: false, isFertile: false, isOvulation: false, flow: .heavy) {}

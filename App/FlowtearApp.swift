@@ -11,9 +11,9 @@ struct FlowtearApp: App {
                 .environment(theme)
                 .environment(store)
                 .task {
-                    #if DEBUG
-                    store.seedSampleIfEmpty()
-                    #endif
+                    // First open: seed 3 months of lived-in sample data so every
+                    // screen previews rich. One-shot, clearable from Insights.
+                    store.seedSampleIfFirstLaunch()
                 }
         }
     }

@@ -24,6 +24,10 @@ struct InsightsView: View {
                 } else {
                     emptyCard
                 }
+
+                if store.sampleActive {
+                    sampleDataCard
+                }
             }
             .padding(.horizontal, FFSpace.s4)
             .padding(.top, FFSpace.s2)
@@ -43,6 +47,24 @@ struct InsightsView: View {
                 .foregroundStyle(theme.color(.muted))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // Shown only while the first-launch demo data is active: a gentle way to
+    // wipe it and start tracking for real. Never re-seeds after clearing.
+    private var sampleDataCard: some View {
+        FFCard(variant: .outline) {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                Text("You're looking at sample data")
+                    .font(ffBody(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                Text("Everything here is a 3-month preview so you can explore. When you're ready to track for real, clear it.")
+                    .font(ffBody(FFType.sm))
+                    .foregroundStyle(theme.color(.muted))
+                FFButton("Clear sample data & start fresh", style: .soft, size: .sm, icon: "sparkles") {
+                    store.clearSampleData()
+                }
+            }
+        }
     }
 
     private var subtitle: String {

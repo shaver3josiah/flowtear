@@ -104,12 +104,15 @@ struct FertileWindowCard: View {
             }
 
             if let f = tempF {
-                Stepper(value: tempBinding, in: 96.0...100.0, step: 0.05) {
-                    Text(String(format: "%.2f °F", f))
-                        .font(ffNumber(FFType.xl, weight: .semibold))
-                        .foregroundStyle(theme.color(.deep))
-                }
-                .tint(theme.color(.primaryStrong))
+                Text(String(format: "%.2f °F", f))
+                    .font(ffNumber(FFType.xl, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                    .contentTransition(.numericText())
+                Slider(value: tempBinding, in: 96.0...100.0, step: 0.05)
+                    .tint(theme.color(.phaseFertile))
+                    .sensoryFeedback(.selection, trigger: tempF)
+                    .accessibilityLabel("Basal temperature")
+                    .accessibilityValue(String(format: "%.2f degrees Fahrenheit", f))
 
                 let temps = store.recentTemperatures()
                 if temps.count >= 2 { sparkline(temps) }

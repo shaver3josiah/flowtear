@@ -86,10 +86,13 @@ struct TodayView: View {
     private var quickLog: some View {
         FFCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text("How's your flow today?")
-                    .font(ffBody(FFType.md, weight: .semibold))
-                    .foregroundStyle(theme.color(.deep))
-                FlowScale(selection: flowBinding)
+                FFPickerSlider(
+                    title: "How's your flow today?",
+                    options: Flow.allCases,
+                    label: { $0.label },
+                    selection: flowBinding,
+                    tint: .phaseMenstrual
+                )
                 FFButton("Log mood & symptoms", style: .ghost, size: .sm, icon: "plus") {
                     onLog(today)
                 }

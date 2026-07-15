@@ -105,75 +105,128 @@ final class CycleStore {
         settings = snap.settings
     }
 
-    // Seed a couple of past cycles so the UI has something to show on first run in
-    // the simulator. ponytail: dev-only, gated to DEBUG + empty state.
-    #if DEBUG
-    func seedSampleIfEmpty() {
-        guard logs.isEmpty else { return }
-        let today = cal.startOfDay(for: Date())
-        // two prior period starts (~28d apart) + a current one, 4 days each
-        for cycleAgo in [56, 28, 0] {
-            for day in 0..<4 {
-                guard let d = cal.date(byAdding: .day, value: -cycleAgo + day, to: today) else { continue }
-                if d > today { continue }
-                let k = key(for: d)
-                logs[k] = DayLog(dateKey: k, flow: day == 0 ? .medium : .light)
-            }
-        }
-        save()
+    // MARK: sample data (first-launch demo)
+
+    private static let sampleSeededKey = "flowtear.sample.seeded"
+
+    /// True while the store is showing the first-launch demo data.
+    var sampleActive: Bool {
+        UserDefaults.standard.bool(forKey: Self.sampleSeededKey) && !logs.isEmpty
     }
 
-    /// A store preloaded with realistic sample data — for SwiftUI previews.
+    /// First open: seed a full, lived-in 3 months of tracking so every screen
+    /// previews with real-feeling data. Runs once (flag), only into an empty
+    /// store, and is fully clearable from Insights.
+    func seedSampleIfFirstLaunch() {
+        guard logs.isEmpty, !UserDefaults.standard.bool(forKey: Self.sampleSeededKey) else { return }
+        loadSampleData()
+        save()
+        UserDefaults.standard.set(true, forKey: Self.sampleSeededKey)
+    }
+
+    /// Wipe the demo data so real tracking starts clean. Never re-seeds.
+    func clearSampleData() {
+        logs = [:]
+        save()
+        UserDefaults.standard.set(false, forKey: Self.sampleSeededKey)
+    }
+
+    /// A store preloaded with the sample — for SwiftUI previews.
     static func preview() -> CycleStore {
         let s = CycleStore()
         s.loadSampleData()
         return s
     }
 
-    /// 3 cycles of flow + symptoms + moods + a basal-temperature curve with a
-    /// post-ovulation rise. Positioned so "today" sits in the luteal (PMS) phase.
-    /// Sets `logs` directly (no persistence) so previews never touch real data.
+    /// 3 months of realistic tracking: three ~28-day cycles (starts at −74, −46,
+    /// −18 days), 5-day periods, phase-patterned moods/symptoms/discharge, a
+    /// biphasic basal-temperature curve, notes, and luteal stretch sessions.
+    /// Today lands on cycle day 19 (luteal) so the stretch plan + PMS window and
+    /// a completed fertile window all show. Sets `logs` in memory; callers persist.
     func loadSampleData() {
         let today = cal.startOfDay(for: Date())
         var out: [String: DayLog] = [:]
-
-        func put(_ offset: Int, _ build: (inout DayLog) -> Void) {
-            guard let d = cal.date(byAdding: .day, value: offset, to: today), d <= today else { return }
-            let k = key(for: d)
-            var l = out[k] ?? DayLog(dateKey: k)
-            build(&l)
-            out[k] = l
-        }
-
-        // Three cycles of bleeding (starts at -18, -46, -74), 5-day period.
+        let starts = [-74, -46, -18]
         let flows: [Flow] = [.medium, .heavy, .medium, .light, .spotting]
-        for startOffset in [-18, -46, -74] {
-            for (i, f) in flows.enumerated() {
-                put(startOffset + i) { l in
-                    l.flow = f
-                    if i <= 1 { l.symptoms.insert(.cramps); l.symptoms.insert(.fatigue) }
-                    if i == 0 { l.moods.insert(.sad) }
-                }
-            }
+
+        // Deterministic jitter (no randomness — stable across launches/previews).
+        func j(_ offset: Int, _ mod: Int) -> Int {
+            abs((offset &* 2654435761) % max(mod, 1))
         }
 
-        // Follicular upswing, then luteal / PMS this cycle.
-        put(-12) { l in l.moods.insert(.energized); l.moods.insert(.happy) }
-        put(-10) { l in l.moods.insert(.calm) }
-        put(-4)  { l in l.symptoms.insert(.bloating); l.moods.insert(.irritable) }
-        put(-3)  { l in l.symptoms.insert(.cravings); l.symptoms.insert(.tenderBreasts); l.moods.insert(.anxious) }
-        put(-2)  { l in l.symptoms.insert(.cramps); l.symptoms.insert(.headache); l.moods.insert(.sensitive) }
-        put(-1)  { l in l.symptoms.insert(.bloating); l.moods.insert(.tired) }
-        put(0)   { l in l.symptoms.insert(.cravings); l.moods.insert(.calm) }
+        for offset in stride(from: -90, through: 0, by: 1) {
+            guard let d = cal.date(byAdding: .day, value: offset, to: today), d <= today else { continue }
+            guard let start = starts.last(where: { $0 <= offset }) else { continue }
+            let cd = offset - start + 1   // 1-based cycle day
+            let k = key(for: d)
+            var l = DayLog(dateKey: k)
 
-        // Basal temps (°F), last 16 days, with a sustained rise after ovulation.
-        let tempsF: [Double] = [97.3, 97.4, 97.3, 97.5, 97.4, 97.5, 97.4, 97.6,
-                                97.5, 97.4, 97.9, 98.0, 97.9, 98.1, 98.0, 98.1]
-        for (i, f) in tempsF.enumerated() {
-            put(-16 + i) { l in l.temperatureC = (f - 32) * 5 / 9 }
+            // Flow — period days 1…5.
+            if cd >= 1 && cd <= 5 { l.flow = flows[cd - 1] }
+
+            // Symptoms by phase.
+            switch cd {
+            case 1...2:
+                l.symptoms.insert(.cramps); l.symptoms.insert(.fatigue)
+                if j(offset, 3) == 0 { l.symptoms.insert(.backache) }
+            case 3...5:
+                if j(offset, 2) == 0 { l.symptoms.insert(.fatigue) }
+            case 17...23:
+                if j(offset, 3) != 2 { l.symptoms.insert(.bloating) }
+                if j(offset, 2) == 0 { l.symptoms.insert(.cravings) }
+                if j(offset, 4) == 1 { l.symptoms.insert(.tenderBreasts) }
+                if j(offset, 5) == 2 { l.symptoms.insert(.headache) }
+            case 24...28:
+                l.symptoms.insert(.cramps)
+                if j(offset, 2) == 0 { l.symptoms.insert(.bloating) }
+                if j(offset, 3) == 1 { l.symptoms.insert(.insomnia) }
+            default:
+                if j(offset, 7) == 3 { l.symptoms.insert(.acne) }
+            }
+
+            // Moods by phase.
+            switch cd {
+            case 1...2:   l.moods.insert(j(offset, 2) == 0 ? .sad : .tired)
+            case 3...5:   l.moods.insert(.calm)
+            case 6...11:  l.moods.insert(j(offset, 2) == 0 ? .energized : .happy)
+            case 12...15: l.moods.insert(.happy); if j(offset, 2) == 0 { l.moods.insert(.energized) }
+            case 16...21: l.moods.insert(j(offset, 3) == 0 ? .anxious : .calm)
+            default:      l.moods.insert(j(offset, 2) == 0 ? .irritable : .sensitive)
+                          if j(offset, 3) == 1 { l.moods.insert(.tired) }
+            }
+
+            // Discharge — dry after the period, creamy/watery rising, egg-white
+            // at the fertile peak (days 12–15), sticky/dry through the luteal.
+            switch cd {
+            case 1...5:   l.discharge = nil
+            case 6...8:   l.discharge = .dry
+            case 9...11:  l.discharge = j(offset, 2) == 0 ? .sticky : .creamy
+            case 12...13: l.discharge = .watery
+            case 14...15: l.discharge = .eggWhite
+            case 16...17: l.discharge = .creamy
+            default:      l.discharge = j(offset, 2) == 0 ? .sticky : .dry
+            }
+
+            // Basal temperature (°F stored as °C): ~97.3 follicular baseline,
+            // sustained ~+0.5 rise after ovulation (day 15) — a clean biphasic curve.
+            let baseF = cd <= 15 ? 97.3 : 97.9
+            let f = baseF + Double(j(offset, 3)) * 0.07
+            l.temperatureC = (f - 32) * 5 / 9
+
+            // Stretch sessions through the luteal window (~2/3 of days done).
+            if cd >= 15 && j(offset, 3) != 1 { l.stretchDone = true }
+
+            // Occasional notes.
+            switch j(offset, 11) {
+            case 0 where cd <= 2:  l.note = "Heat pack helped tonight."
+            case 1 where cd >= 24: l.note = "Cramps eased after stretching."
+            case 2 where cd >= 12 && cd <= 15: l.note = "Feeling great today."
+            default: break
+            }
+
+            out[k] = l
         }
 
         logs = out
     }
-    #endif
 }
