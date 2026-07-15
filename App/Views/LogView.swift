@@ -11,6 +11,7 @@ struct LogView: View {
     @Environment(CycleStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var date: Date
+    var onLogged: () -> Void = {}
 
     @State private var draft = DayLog(dateKey: "")
     @State private var loadedKey = ""
@@ -69,10 +70,20 @@ struct LogView: View {
                 LogSection(icon: "bolt.heart", title: "Symptoms",
                            tint: .primaryStrong, softTint: .surfaceSoft,
                            value: countText(draft.symptoms.count)) {
-                    FlowLayout(spacing: FFSpace.inline) {
-                        ForEach(Symptom.allCases) { symptom in
-                            SymptomChip(symptom, selected: draft.symptoms.contains(symptom)) {
-                                draft.symptoms.formSymmetricDifference([symptom])
+                    VStack(alignment: .leading, spacing: FFSpace.s3) {
+                        ForEach(Self.symptomGroups, id: \.0) { group in
+                            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                                Text(group.0.uppercased())
+                                    .font(ffBody(FFType.xs2, weight: .bold))
+                                    .tracking(0.8)
+                                    .foregroundStyle(theme.color(.muted))
+                                FlowLayout(spacing: FFSpace.inline) {
+                                    ForEach(group.1) { symptom in
+                                        SymptomChip(symptom, selected: draft.symptoms.contains(symptom)) {
+                                            draft.symptoms.formSymmetricDifference([symptom])
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -102,7 +113,7 @@ struct LogView: View {
         }
         // The commit gesture lives at the bottom, content scrolls beneath it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            SlideToLog(enabled: dirty) { commit() }
+            SlideToLog(enabled: dirty) { commit(); onLogged() }
                 .padding(.horizontal, FFSpace.s4)
                 .padding(.top, 6)
                 .padding(.bottom, FFSpace.s2)
@@ -292,6 +303,14 @@ struct LogView: View {
     private func countText(_ n: Int) -> String? {
         n == 0 ? nil : "\(n) picked"
     }
+
+    // Symptoms clustered the way she'd think of them, not alphabetically.
+    static let symptomGroups: [(String, [Symptom])] = [
+        ("Aches", [.cramps, .headache, .backache]),
+        ("Body", [.bloating, .tenderBreasts, .acne]),
+        ("Digestion", [.nausea, .cravings, .diarrhea, .constipation]),
+        ("Energy & sleep", [.fatigue, .insomnia]),
+    ]
 }
 
 // Small, classy faces that help her pick — one quiet emoji per mood.

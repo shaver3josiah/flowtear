@@ -24,6 +24,12 @@ struct TodayView: View {
                     quickLog
                     StretchPlanCard(action: onOpenStretch)
                     FertileWindowCard()
+                } else if store.hasAnyLogs {
+                    // She's logging (moods, temps…) but hasn't recorded a period
+                    // yet — say so honestly instead of "nothing logged yet".
+                    startedState
+                    quickLog
+                    StretchPlanCard(action: onOpenStretch)
                 } else {
                     emptyState
                 }
@@ -119,6 +125,27 @@ struct TodayView: View {
                 store.upsert(log)
             }
         )
+    }
+
+    // Logged something, but no period days yet — predictions are waiting.
+    private var startedState: some View {
+        FFCard {
+            VStack(spacing: 12) {
+                FlowerMark(size: 72, breathe: true)
+                    .frame(width: 72, height: 72)
+                    .accessibilityHidden(true)
+                Text("Your log is growing")
+                    .font(ffDisplay(FFType.lg, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                Text("Lovely start. The cycle ring and predictions appear once you log your first period days — light, medium or heavy flow.")
+                    .font(ffBody(FFType.sm))
+                    .foregroundStyle(theme.color(.muted))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, FFSpace.s3)
+        }
     }
 
     // MARK: Empty state

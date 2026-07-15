@@ -21,6 +21,7 @@ struct FlowtearApp: App {
 
 struct RootView: View {
     @Environment(Theme.self) private var theme
+    @Environment(CycleStore.self) private var store
     @State private var tab: FFTab = .today
     @State private var logDate = Date()
 
@@ -32,7 +33,7 @@ struct RootView: View {
                     switch tab {
                     case .today:    TodayView(onLog: openLog, onOpenStretch: { switchTo(.stretch) })
                     case .calendar: CalendarView(onLog: openLog)
-                    case .log:      LogView(date: $logDate)
+                    case .log:      LogView(date: $logDate, onLogged: { switchTo(.today) })
                     case .stretch:  StretchCoachView()
                     case .insights: InsightsView()
                     }
@@ -46,6 +47,11 @@ struct RootView: View {
         }
         .preferredColorScheme(theme.isDarkMode ? .dark : .light)
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        // Whichever way she lands on Insights (tab bar or programmatic), the
+        // new-insights shimmer stands down.
+        .onChange(of: tab) { _, newTab in
+            if newTab == .insights { store.markInsightsSeen() }
+        }
     }
 
     private func openLog(_ date: Date) {

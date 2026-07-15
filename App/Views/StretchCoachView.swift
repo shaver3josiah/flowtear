@@ -21,6 +21,9 @@ struct StretchCoachView: View {
         guard let d = daysUntil, d >= 1, d <= tier.totalDays else { return nil }
         return StretchPlan.session(daysUntilPeriod: d, tier: tier)
     }
+    /// Off-schedule fallback so checking off stretches is always available.
+    private var anytimeSession: StretchDay { StretchPlan.starterDays[0] }
+    private var activeSession: StretchDay { todaySession ?? anytimeSession }
 
     private func date(forPlanDay planDay: Int) -> Date? {
         guard let next = p.nextPeriodStart,
@@ -38,8 +41,15 @@ struct StretchCoachView: View {
             VStack(spacing: FFSpace.card) {
                 CoachFlower(message: coachLine)
                 SampleBanner()
-                if let s = todaySession { todayCard(s) } else { outOfWindowCard }
-                if todaySession != nil { progressStrip }
+                if let s = todaySession {
+                    todayCard(s, heading: "TODAY · DAY \(StretchPlan.planDay(s, tier: tier)) OF \(tier.totalDays)")
+                    progressStrip
+                } else {
+                    outOfWindowCard
+                    // Stretching is never locked: any day, she can run and check
+                    // off a session — it logs to today like any other.
+                    todayCard(anytimeSession, heading: "ANYTIME SESSION · NO SCHEDULE NEEDED")
+                }
                 planSwitchCard
                 scheduleCard
                 evidenceCard
@@ -50,50 +60,54 @@ struct StretchCoachView: View {
             .padding(.bottom, FFSpace.s6)
         }
         .fullScreenCover(isPresented: $playing) {
-            if let s = todaySession {
-                StretchSessionView(day: s, planDay: StretchPlan.planDay(s, tier: tier))
-            }
+            StretchSessionView(day: activeSession, finishTitle: sessionFinishTitle)
         }
+    }
+
+    private var sessionFinishTitle: String {
+        if let s = todaySession { return "Day \(StretchPlan.planDay(s, tier: tier)) done" }
+        return "Session done"
     }
 
     // MARK: the coach's voice — warm, specific, never nagging
 
     private var coachLine: String {
         let dayNumber = Calendar.current.component(.day, from: today)
+        let done = store.stretchMovesDone(on: today)
+        if store.stretchDone(on: today) {
+            return ["All done — I'm so proud I could wilt. Rest those roots.",
+                    "Beautiful work today, petal. Even the sun took notes.",
+                    "Stretches complete. Somewhere, a garden applauds."][dayNumber % 3]
+        }
+        if !done.isEmpty {
+            return ["You've started — that's the hard part. Keep going, petal.",
+                    "Look at you go. A couple more and we're done.",
+                    "Halfway feelings are the best feelings, I always say."][dayNumber % 3]
+        }
         if let s = todaySession {
-            let done = store.stretchMovesDone(on: today)
-            if store.stretchDone(on: today) {
-                return ["Day \(StretchPlan.planDay(s, tier: tier)) done — I'm so proud of you.",
-                        "All stretched. Your future self says thank you.",
-                        "Beautiful work today. Rest easy."][dayNumber % 3]
-            }
-            if !done.isEmpty {
-                return ["You've started — that's the hard part. Keep going.",
-                        "Look at you go. A couple more and we're done.",
-                        "Halfway feelings are the best feelings."][dayNumber % 3]
-            }
             return ["Ready when you are — even five gentle minutes counts.",
-                    "Just \(s.minutes) easy minutes today. I'll be right here.",
-                    "No pressure, no rush. We stretch when you're ready."][dayNumber % 3]
+                    "Just \(s.minutes) easy minutes today. I'll be right here on my stem.",
+                    "No rush, petal. We bloom on our own schedule."][dayNumber % 3]
         }
         if p.phase == .menstrual {
-            return ["Rest week. A gentle knees-to-chest still helps if cramps bite.",
+            return ["Rest week, petal. A gentle knees-to-chest still helps if cramps bite.",
                     "You made it — be soft with yourself this week."][dayNumber % 2]
         }
-        return ["I'll call you when your plan starts — enjoy the good days.",
-                "Nothing to do yet. I'll wave when it's time."][dayNumber % 2]
+        return ["No schedule today — but stretching is always in season. Care for a quick trio?",
+                "Off-plan days are my favorite: no rules, just a little reach and bend.",
+                "I'll wave when your plan starts. Meanwhile, the anytime session is right below."][dayNumber % 3]
     }
 
     // MARK: today's session — day checkbox + per-move checkboxes with bursts
 
-    private func todayCard(_ s: StretchDay) -> some View {
+    private func todayCard(_ s: StretchDay, heading: String) -> some View {
         let movesDone = store.stretchMovesDone(on: today)
         let dayDone = store.stretchDone(on: today)
         return FFCard {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("TODAY · DAY \(StretchPlan.planDay(s, tier: tier)) OF \(tier.totalDays)")
+                        Text(heading)
                             .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
                             .foregroundStyle(theme.color(.muted))
                         Text(s.focus)

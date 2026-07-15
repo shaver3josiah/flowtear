@@ -33,6 +33,7 @@ final class CycleStore {
     func upsert(_ log: DayLog) {
         if log.isEmpty { logs[log.dateKey] = nil } else { logs[log.dateKey] = log }
         save()
+        noteEdited()
     }
 
     /// Set (or clear, with nil) a day's basal body temperature in °C.
@@ -87,6 +88,25 @@ final class CycleStore {
     var fullStretchPlan: Bool = UserDefaults.standard.bool(forKey: "flowtear.stretch.fullplan") {
         didSet { UserDefaults.standard.set(fullStretchPlan, forKey: "flowtear.stretch.fullplan") }
     }
+
+    // MARK: new-insights signal (drives the Insights tab shimmer)
+
+    private var lastEditAt: Date = UserDefaults.standard.object(forKey: "flowtear.lastEdit") as? Date ?? .distantPast {
+        didSet { UserDefaults.standard.set(lastEditAt, forKey: "flowtear.lastEdit") }
+    }
+    private var insightsSeenAt: Date = UserDefaults.standard.object(forKey: "flowtear.insightsSeen") as? Date ?? .distantPast {
+        didSet { UserDefaults.standard.set(insightsSeenAt, forKey: "flowtear.insightsSeen") }
+    }
+
+    /// True when she's logged something since she last looked at Insights.
+    var hasNewInsights: Bool { lastEditAt > insightsSeenAt && !logs.isEmpty }
+
+    func markInsightsSeen() { insightsSeenAt = Date() }
+    func noteEdited() { lastEditAt = Date() }
+
+    /// Anything logged at all (even without a period yet) — Today uses this to
+    /// tell "brand new" apart from "started, but no period logged yet".
+    var hasAnyLogs: Bool { !logs.isEmpty }
 
     func toggleFlow(_ flow: Flow, on date: Date) {
         let k = key(for: date)

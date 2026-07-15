@@ -30,7 +30,7 @@ extension View {
 #Preview("Stretch card (Today)") { StretchPlanCard().previewEnv().padding() }
 #Preview("Theme editor") { ThemeEditorSheet().previewEnv() }
 #Preview("Stretch session") {
-    StretchSessionView(day: StretchPlan.days[2], planDay: 3).previewEnv()
+    StretchSessionView(day: StretchPlan.days[2], finishTitle: "Day 3 done").previewEnv()
 }
 
 #Preview("Coach flower") {

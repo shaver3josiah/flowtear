@@ -11,7 +11,7 @@ struct StretchSessionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let day: StretchDay
-    var planDay: Int = 1
+    var finishTitle: String = "Session done"
 
     @State private var index = 0            // current move
     @State private var remaining = 0        // seconds left on this move
@@ -173,7 +173,7 @@ struct StretchSessionView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 64, weight: .semibold))
                     .foregroundStyle(theme.color(.good))
-                Text("Day \(planDay) done")
+                Text(finishTitle)
                     .font(ffDisplay(FFType.xl2, weight: .bold))
                     .foregroundStyle(theme.color(.deep))
                 Text("That's \(day.minutes) gentle minutes toward an easier period.")
