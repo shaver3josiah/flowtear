@@ -30,7 +30,17 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
-        run: fastlane certs
+        run: |
+          # The Basic-auth header path failed (a stray CR from Windows secret piping
+          # corrupts it). Derive credential-in-URL auth instead — the mechanism the
+          # user verified locally — and mask the derived values out of the logs.
+          pair=$(printf '%s' "$MATCH_GIT_BASIC_AUTHORIZATION" | tr -d '\r\n ' | openssl base64 -d -A)
+          echo "::add-mask::$pair"
+          token="${pair#*:}"
+          echo "::add-mask::$token"
+          export MATCH_GIT_URL="https://x-access-token:${token}@github.com/shaver3josiah/flowtear-certs.git"
+          unset MATCH_GIT_BASIC_AUTHORIZATION
+          fastlane certs
 
       - name: Remove API key
         if: always()

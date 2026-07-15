@@ -12,6 +12,12 @@ def asc_api_key
   )
 end
 
+# CI injects MATCH_GIT_URL with embedded credentials (Basic-auth header proved
+# flaky across Windows-set secrets); fall back to the plain repo URL locally.
+def match_git_url
+  ENV["MATCH_GIT_URL"] || "https://github.com/shaver3josiah/flowtear-certs.git"
+end
+
 platform :ios do
   # ── ACTIVE (cloud-signed pipeline) ──────────────────────────────────────────
   # The workflow archives + exports with xcodebuild automatic signing; this lane
@@ -36,14 +42,16 @@ platform :ios do
   lane :certs do
     setup_ci
     ENV["MATCH_READONLY"] = "false"   # setup_ci turns readonly on; bootstrap must create/store
-    match(type: "appstore", app_identifier: APP_ID, api_key: asc_api_key, readonly: false)
+    match(type: "appstore", app_identifier: APP_ID, api_key: asc_api_key, readonly: false,
+          git_url: match_git_url)
   end
 
   desc "Build with match signing and upload to TestFlight."
   lane :beta do
     setup_ci
     key = asc_api_key
-    match(type: "appstore", app_identifier: APP_ID, api_key: key, readonly: true)
+    match(type: "appstore", app_identifier: APP_ID, api_key: key, readonly: true,
+          git_url: match_git_url)
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Flowtear.xcodeproj",
