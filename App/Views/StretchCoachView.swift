@@ -1,25 +1,30 @@
 import SwiftUI
 
-// Stretch — its own mode. Today's session with a guided interactive player,
-// a progress strip for the current 14-day window, the full schedule (each day
-// expandable, with done-checks), and the evidence + safety, honestly framed.
+// Stretch — her coach. A friendly flower cheers her on; the plan knows what day
+// she's on automatically; every stretch is a checkbox that celebrates with a
+// petal-and-sparkle burst; the whole day can be checked too. Two tiers: the
+// 3-day starter (default) and the full 14-day plan — switching either way is
+// manual and never touches her logged history (completions live on dates).
 struct StretchCoachView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
     @State private var playing = false
+    @State private var burstToken = 0
+    @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
 
     private var today: Date { Date() }
     private var p: CyclePrediction { store.prediction() }
+    private var tier: StretchTier { store.fullStretchPlan ? .full : .starter }
     private var daysUntil: Int? { p.daysUntilNextPeriod }
     private var todaySession: StretchDay? {
-        guard let d = daysUntil, d >= 1, d <= StretchPlan.totalDays else { return nil }
-        return StretchPlan.session(daysUntilPeriod: d)
+        guard let d = daysUntil, d >= 1, d <= tier.totalDays else { return nil }
+        return StretchPlan.session(daysUntilPeriod: d, tier: tier)
     }
-    /// Calendar date a given plan day falls on (nil without a prediction).
+
     private func date(forPlanDay planDay: Int) -> Date? {
         guard let next = p.nextPeriodStart,
-              let start = Calendar.current.date(byAdding: .day, value: -StretchPlan.totalDays, to: next)
+              let start = Calendar.current.date(byAdding: .day, value: -tier.totalDays, to: next)
         else { return nil }
         return Calendar.current.date(byAdding: .day, value: planDay - 1, to: start)
     }
@@ -31,10 +36,11 @@ struct StretchCoachView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
-                header
+                CoachFlower(message: coachLine)
                 SampleBanner()
                 if let s = todaySession { todayCard(s) } else { outOfWindowCard }
                 if todaySession != nil { progressStrip }
+                planSwitchCard
                 scheduleCard
                 evidenceCard
                 safetyCard
@@ -44,30 +50,50 @@ struct StretchCoachView: View {
             .padding(.bottom, FFSpace.s6)
         }
         .fullScreenCover(isPresented: $playing) {
-            if let s = todaySession { StretchSessionView(day: s) }
+            if let s = todaySession {
+                StretchSessionView(day: s, planDay: StretchPlan.planDay(s, tier: tier))
+            }
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Stretch")
-                .font(ffDisplay(FFType.xl2, weight: .bold))
-                .foregroundStyle(theme.color(.deep))
-            Text(StretchPlan.summary)
-                .font(ffBody(FFType.sm)).foregroundStyle(theme.color(.muted)).lineSpacing(3)
+    // MARK: the coach's voice — warm, specific, never nagging
+
+    private var coachLine: String {
+        let dayNumber = Calendar.current.component(.day, from: today)
+        if let s = todaySession {
+            let done = store.stretchMovesDone(on: today)
+            if store.stretchDone(on: today) {
+                return ["Day \(StretchPlan.planDay(s, tier: tier)) done — I'm so proud of you.",
+                        "All stretched. Your future self says thank you.",
+                        "Beautiful work today. Rest easy."][dayNumber % 3]
+            }
+            if !done.isEmpty {
+                return ["You've started — that's the hard part. Keep going.",
+                        "Look at you go. A couple more and we're done.",
+                        "Halfway feelings are the best feelings."][dayNumber % 3]
+            }
+            return ["Ready when you are — even five gentle minutes counts.",
+                    "Just \(s.minutes) easy minutes today. I'll be right here.",
+                    "No pressure, no rush. We stretch when you're ready."][dayNumber % 3]
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        if p.phase == .menstrual {
+            return ["Rest week. A gentle knees-to-chest still helps if cramps bite.",
+                    "You made it — be soft with yourself this week."][dayNumber % 2]
+        }
+        return ["I'll call you when your plan starts — enjoy the good days.",
+                "Nothing to do yet. I'll wave when it's time."][dayNumber % 2]
     }
 
-    // MARK: today's session
+    // MARK: today's session — day checkbox + per-move checkboxes with bursts
 
     private func todayCard(_ s: StretchDay) -> some View {
-        let done = store.stretchDone(on: today)
+        let movesDone = store.stretchMovesDone(on: today)
+        let dayDone = store.stretchDone(on: today)
         return FFCard {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("TODAY · DAY \(s.planDay) OF \(StretchPlan.totalDays)")
+                        Text("TODAY · DAY \(StretchPlan.planDay(s, tier: tier)) OF \(tier.totalDays)")
                             .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
                             .foregroundStyle(theme.color(.muted))
                         Text(s.focus)
@@ -79,45 +105,87 @@ struct StretchCoachView: View {
                         .font(ffBody(FFType.sm, weight: .semibold))
                         .foregroundStyle(theme.color(.phaseLuteal))
                 }
-                ForEach(s.moves) { moveRow($0) }
-                if done {
-                    Label("Done for today — lovely work", systemImage: "checkmark.circle.fill")
-                        .font(ffBody(FFType.sm, weight: .semibold))
-                        .foregroundStyle(theme.color(.good))
-                } else {
+
+                // Each stretch is its own little victory.
+                ForEach(Array(s.moves.enumerated()), id: \.element.id) { i, m in
+                    moveCheckRow(m, index: i, checked: movesDone.contains(i), session: s)
+                }
+
+                if !dayDone {
                     FFButton("Start guided session", style: .primary, icon: "play.fill") {
                         playing = true
                     }
-                    FFButton("Mark done without the timer", style: .ghost, size: .sm, icon: "checkmark") {
-                        store.setStretchDone(true, on: today)
-                    }
                 }
+
+                // The whole-day checkbox.
+                Button {
+                    let finishing = !dayDone
+                    store.setStretchDone(finishing, on: today)
+                    if finishing { dayBurstToken += 1 }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: dayDone ? "checkmark.square.fill" : "square")
+                            .font(.system(size: 19, weight: .medium))
+                            .foregroundStyle(theme.color(dayDone ? .good : .muted))
+                        Text(dayDone ? "Today's stretching — done" : "Mark the whole day done")
+                            .font(ffBody(FFType.sm, weight: .semibold))
+                            .foregroundStyle(theme.color(.text))
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                    .frame(minHeight: FFSpace.tapMin)
+                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.success, trigger: dayBurstToken)
+                .accessibilityAddTraits(dayDone ? .isSelected : [])
             }
+            .overlay(SparkleBurst(trigger: dayBurstToken, count: 22))
         }
     }
 
-    private func moveRow(_ m: StretchMove) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: m.icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(theme.color(.phaseLuteal))
-                .frame(width: 24)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(m.name).font(ffBody(FFType.base, weight: .semibold)).foregroundStyle(theme.color(.text))
-                    Spacer(minLength: 8)
-                    Text(m.hold).font(ffBody(FFType.xs, weight: .medium)).foregroundStyle(theme.color(.muted))
+    private func moveCheckRow(_ m: StretchMove, index: Int, checked: Bool, session: StretchDay) -> some View {
+        Button {
+            let completedDay = store.toggleStretchMove(index, on: today, totalMoves: session.moves.count)
+            if !checked { burstToken += 1 }          // checking ON celebrates
+            if completedDay { dayBurstToken += 1 }   // finishing the set celebrates louder
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(theme.color(checked ? .good : .line))
+                    .padding(.top, 1)
+                Image(systemName: m.icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(theme.color(.phaseLuteal))
+                    .frame(width: 22)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(m.name)
+                            .font(ffBody(FFType.base, weight: .semibold))
+                            .foregroundStyle(theme.color(.text))
+                            .strikethrough(checked, color: theme.color(.muted))
+                        Spacer(minLength: 8)
+                        Text(m.hold).font(ffBody(FFType.xs, weight: .medium)).foregroundStyle(theme.color(.muted))
+                    }
+                    Text(m.cue).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
                 }
-                Text(m.cue).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
+            }
+            .contentShape(Rectangle())
+            .overlay(alignment: .leading) {
+                if checked { SparkleBurst(trigger: burstToken, count: 12).offset(x: 10) }
             }
         }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: checked)
+        .accessibilityLabel(m.name)
+        .accessibilityAddTraits(checked ? .isSelected : [])
     }
 
     // MARK: window progress
 
     private var progressStrip: some View {
-        let doneCount = (1...StretchPlan.totalDays).filter { isDone(planDay: $0) }.count
+        let doneCount = (1...tier.totalDays).filter { isDone(planDay: $0) }.count
         return FFCard(variant: .soft) {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 HStack {
@@ -125,12 +193,12 @@ struct StretchCoachView: View {
                         .font(ffBody(FFType.sm, weight: .semibold))
                         .foregroundStyle(theme.color(.deep))
                     Spacer()
-                    Text("\(doneCount) of \(StretchPlan.totalDays) days")
+                    Text("\(doneCount) of \(tier.totalDays) days")
                         .font(ffBody(FFType.sm, weight: .bold))
                         .foregroundStyle(theme.color(.phaseLuteal))
                 }
                 HStack(spacing: 3) {
-                    ForEach(1...StretchPlan.totalDays, id: \.self) { d in
+                    ForEach(1...tier.totalDays, id: \.self) { d in
                         Capsule()
                             .fill(theme.color(isDone(planDay: d) ? .phaseLuteal : .surface))
                             .frame(height: 6)
@@ -139,6 +207,32 @@ struct StretchCoachView: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    // MARK: plan switcher — manual both ways, history always kept
+
+    private var planSwitchCard: some View {
+        FFCard(variant: .outline) {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                Text(tier == .starter ? "Loving it?" : "Want a lighter touch?")
+                    .font(ffBody(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                Text(tier == .starter
+                     ? "You're on the 3-day starter. When it's working for you, the full 14-day plan goes deeper — same idea, two weeks of it."
+                     : "You're on the full 14-day plan. The 3-day starter keeps just the essentials.")
+                    .font(ffBody(FFType.sm))
+                    .foregroundStyle(theme.color(.muted))
+                    .lineSpacing(2)
+                FFButton(tier == .starter ? "Switch to the full 14-day plan" : "Back to the 3-day starter",
+                         style: .soft, size: .sm,
+                         icon: tier == .starter ? "arrow.up.right" : "arrow.uturn.backward") {
+                    store.fullStretchPlan.toggle()
+                }
+                Text("Switching never erases anything — every stretch you've logged stays.")
+                    .font(ffBody(FFType.xs2))
+                    .foregroundStyle(theme.color(.muted))
+            }
+        }
     }
 
     // MARK: out of window
@@ -162,28 +256,28 @@ struct StretchCoachView: View {
 
     private var outOfWindowBody: String {
         if p.phase == .menstrual {
-            return "Gentle knees-to-chest and child's pose can still ease cramps today. The full plan picks back up after ovulation — browse the whole schedule below meanwhile."
+            return "Gentle knees-to-chest and child's pose can still ease cramps today. The plan picks back up before your next period — the schedule is below."
         }
         if daysUntil == nil {
-            return "Log a couple of cycles and the 14-day plan will time itself to the two weeks before your period."
+            return "Log a couple of cycles and the plan will time itself to the days before your period."
         }
         if let start = date(forPlanDay: 1) {
-            return "It runs the two weeks before your period — starting around \(start.formatted(.dateTime.month().day())). The full schedule is below."
+            return "The \(tier.label.lowercased()) starts around \(start.formatted(.dateTime.month().day())). The schedule is below."
         }
-        return "It runs the two weeks before your period. The full schedule is below."
+        return "It runs in the days before your period. The schedule is below."
     }
 
-    // MARK: full schedule (every day expandable, with done-state)
+    // MARK: schedule (per-tier, expandable, with done-state)
 
     private var scheduleCard: some View {
         FFCard {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
-                Text("The 14 days")
+                Text(tier == .starter ? "The 3 days" : "The 14 days")
                     .font(ffBody(FFType.md, weight: .semibold)).foregroundStyle(theme.color(.deep))
                 VStack(spacing: 0) {
-                    ForEach(StretchPlan.days) { day in
+                    ForEach(StretchPlan.days(for: tier)) { day in
                         scheduleRow(day)
-                        if day.id != StretchPlan.days.last?.id {
+                        if day.id != StretchPlan.days(for: tier).last?.id {
                             Rectangle().fill(theme.color(.line)).frame(height: 1)
                         }
                     }
@@ -193,27 +287,30 @@ struct StretchCoachView: View {
     }
 
     private func scheduleRow(_ day: StretchDay) -> some View {
-        let isToday = todaySession?.planDay == day.planDay
-        let expanded = expandedDay == day.planDay
+        let planDay = StretchPlan.planDay(day, tier: tier)
+        let isTodayRow = todaySession?.daysBeforePeriod == day.daysBeforePeriod
+        let expanded = expandedDay == planDay
         return VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(FFMotion.fast) { expandedDay = expanded ? nil : day.planDay }
+                withAnimation(FFMotion.fast) { expandedDay = expanded ? nil : planDay }
             } label: {
                 HStack(spacing: 10) {
-                    statusIcon(day)
+                    Image(systemName: isDone(planDay: planDay) ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 18))
+                        .foregroundStyle(theme.color(isDone(planDay: planDay) ? .good : .line))
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
-                            Text("Day \(day.planDay)")
+                            Text("Day \(planDay)")
                                 .font(ffBody(FFType.sm, weight: .bold))
-                                .foregroundStyle(theme.color(isToday ? .primaryStrong : .deep))
-                            if isToday {
+                                .foregroundStyle(theme.color(isTodayRow ? .primaryStrong : .deep))
+                            if isTodayRow {
                                 Text("today")
                                     .font(ffBody(FFType.xs2, weight: .bold))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 7).padding(.vertical, 2)
                                     .background(theme.color(.primaryStrong), in: Capsule())
                             }
-                            if let d = date(forPlanDay: day.planDay) {
+                            if let d = date(forPlanDay: planDay) {
                                 Text(d.formatted(.dateTime.month(.abbreviated).day()))
                                     .font(ffBody(FFType.xs2))
                                     .foregroundStyle(theme.color(.muted))
@@ -235,29 +332,32 @@ struct StretchCoachView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Day \(day.planDay), \(day.focus), \(day.minutes) minutes")
+            .accessibilityLabel("Day \(planDay), \(day.focus), \(day.minutes) minutes")
             .accessibilityHint(expanded ? "Collapses the moves" : "Shows the moves")
 
             if expanded {
                 VStack(alignment: .leading, spacing: FFSpace.s2) {
-                    ForEach(day.moves) { moveRow($0) }
+                    ForEach(day.moves) { m in
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: m.icon)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(theme.color(.phaseLuteal))
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(m.name).font(ffBody(FFType.base, weight: .semibold)).foregroundStyle(theme.color(.text))
+                                    Spacer(minLength: 8)
+                                    Text(m.hold).font(ffBody(FFType.xs, weight: .medium)).foregroundStyle(theme.color(.muted))
+                                }
+                                Text(m.cue).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
+                            }
+                        }
+                    }
                 }
                 .padding(.leading, 34)
                 .padding(.bottom, FFSpace.s3)
                 .transition(.opacity)
             }
-        }
-    }
-
-    @ViewBuilder private func statusIcon(_ day: StretchDay) -> some View {
-        if isDone(planDay: day.planDay) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(theme.color(.good))
-        } else {
-            Image(systemName: "circle")
-                .font(.system(size: 18))
-                .foregroundStyle(theme.color(.line))
         }
     }
 

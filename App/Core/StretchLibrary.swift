@@ -35,13 +35,53 @@ struct StretchDay: Identifiable {
     var planDay: Int { 15 - daysBeforePeriod }
 }
 
+// Two tiers of the same evidence base. Starter (default) is a 3-day plan on the
+// three days before the period — the lowest-commitment version that still hits
+// the core belly/pelvic work. Full is the complete 14-day luteal routine.
+// Switching tiers is presentation only: completions are stored per calendar
+// date, so history survives any number of switches, in both directions.
+enum StretchTier: String {
+    case starter, full
+    var totalDays: Int { self == .starter ? 3 : 14 }
+    var label: String { self == .starter ? "3-day starter" : "Full 14-day plan" }
+}
+
 enum StretchPlan {
     static let totalDays = 14
+
+    static func days(for tier: StretchTier) -> [StretchDay] {
+        tier == .starter ? starterDays : days
+    }
+
+    /// The session for a given days-until-period on a tier, or nil if outside
+    /// that tier's window.
+    static func session(daysUntilPeriod n: Int, tier: StretchTier) -> StretchDay? {
+        days(for: tier).first { $0.daysBeforePeriod == n }
+    }
+
+    /// 1-based "Day N of the plan" for a session within a tier.
+    static func planDay(_ day: StretchDay, tier: StretchTier) -> Int {
+        tier.totalDays + 1 - day.daysBeforePeriod
+    }
 
     /// The session for a given days-until-period, or nil if outside the window.
     static func session(daysUntilPeriod n: Int) -> StretchDay? {
         days.first { $0.daysBeforePeriod == n }
     }
+
+    // The 3-day starter: the highest-value sessions, compressed. Day 1 is the
+    // trial-backed trio, day 2 the belly/pelvic set, day 3 gentle relief.
+    static let starterDays: [StretchDay] = [
+        StretchDay(daysBeforePeriod: 3, focus: "The core trio", minutes: 10,
+                   moves: [catCow, cobra, fish, childs]),
+        StretchDay(daysBeforePeriod: 2, focus: "Belly & pelvic", minutes: 8,
+                   moves: [pelvicTilts, knees,
+                    StretchMove(name: "Standing side stretch", hold: "20s each side",
+                                cue: "Reach one arm overhead and lean gently away, both sides.", seconds: 40),
+                    childs]),
+        StretchDay(daysBeforePeriod: 1, focus: "Gentle relief & breath", minutes: 6,
+                   moves: [breathing, knees, childs]),
+    ]
 
     static let summary =
         "A gentle 14-day routine for the two weeks before your period. Across the research, "
@@ -80,19 +120,19 @@ enum StretchPlan {
         seconds: 60, icon: "figure.core.training")
     private static let catCow = StretchMove(name: "Cat-Cow", hold: "45–60s flowing",
         cue: "On all fours, alternate arching and rounding your spine, moving with your breath.",
-        seconds: 60, icon: "figure.yoga")
+        seconds: 60, icon: "figure.flexibility")
     private static let childs = StretchMove(name: "Child's pose", hold: "45–60s",
         cue: "Knees wide, sit back toward your heels, forehead down, arms long. Breathe into your back.",
-        seconds: 60, icon: "figure.mind.and.body")
+        seconds: 60, icon: "figure.cooldown")
     private static let knees = StretchMove(name: "Knees-to-chest", hold: "30–40s",
         cue: "Hug both knees to your chest and let your low back soften. Rock side to side if it feels good.",
         seconds: 40, icon: "figure.rolling")
     private static let cobra = StretchMove(name: "Cobra (gentle)", hold: "20–25s × 3",
         cue: "Face down, press up low and easy through your arms. Keep it pain-free — shoulders down.",
-        seconds: 75, icon: "figure.yoga")
+        seconds: 75, icon: "figure.flexibility")
     private static let fish = StretchMove(name: "Supported Fish", hold: "20–25s × 2",
         cue: "Lie back over a rolled towel under your upper back, chest open. Skip if it strains your neck.",
-        seconds: 50, icon: "figure.yoga")
+        seconds: 50, icon: "figure.flexibility")
     private static let restfulBreath = StretchMove(name: "Constructive rest", hold: "2 min",
         cue: "Lie down, knees bent, feet wide, and just breathe. Let your belly and hips go heavy.",
         seconds: 120, icon: "wind")

@@ -8,19 +8,25 @@ struct FFChip: View {
     private let title: String
     private let selected: Bool
     private let icon: String?
+    private let emoji: String?
     private let tint: Tok
     private let action: () -> Void
 
-    init(_ title: String, selected: Bool, icon: String? = nil,
+    init(_ title: String, selected: Bool, icon: String? = nil, emoji: String? = nil,
          tint: Tok = .primaryStrong, action: @escaping () -> Void) {
         self.title = title; self.selected = selected; self.icon = icon
-        self.tint = tint; self.action = action
+        self.emoji = emoji; self.tint = tint; self.action = action
     }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                if let icon {
+                if let emoji {
+                    // A small, quiet face — a picking aid, not a decoration parade.
+                    Text(emoji)
+                        .font(.system(size: 14))
+                        .accessibilityHidden(true)
+                } else if let icon {
                     Image(systemName: icon)
                         .symbolEffect(.bounce, value: selected)
                 }

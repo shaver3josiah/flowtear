@@ -64,6 +64,30 @@ final class CycleStore {
         upsert(l)
     }
 
+    func stretchMovesDone(on date: Date) -> Set<Int> { log(for: date)?.stretchMovesDone ?? [] }
+
+    /// Toggle one move's checkbox; when every move of the session is checked the
+    /// whole day auto-completes. Returns true when this toggle finished the day.
+    @discardableResult
+    func toggleStretchMove(_ index: Int, on date: Date, totalMoves: Int) -> Bool {
+        let k = key(for: date)
+        var l = logs[k] ?? DayLog(dateKey: k)
+        var done = l.stretchMovesDone ?? []
+        if done.contains(index) { done.remove(index) } else { done.insert(index) }
+        l.stretchMovesDone = done.isEmpty ? nil : done
+        let dayComplete = done.count >= totalMoves && totalMoves > 0
+        l.stretchDone = dayComplete ? true : (l.stretchDone == true && done.isEmpty ? nil : l.stretchDone)
+        upsert(l)
+        return dayComplete
+    }
+
+    /// Which stretch plan she's on. Starter (3-day) is the default; switching is
+    /// always manual and NEVER touches logged data — completions are stored per
+    /// calendar date, so both plans read the same history.
+    var fullStretchPlan: Bool = UserDefaults.standard.bool(forKey: "flowtear.stretch.fullplan") {
+        didSet { UserDefaults.standard.set(fullStretchPlan, forKey: "flowtear.stretch.fullplan") }
+    }
+
     func toggleFlow(_ flow: Flow, on date: Date) {
         let k = key(for: date)
         var l = logs[k] ?? DayLog(dateKey: k)
@@ -93,16 +117,27 @@ final class CycleStore {
 
     private func save() {
         let snap = Snapshot(logs: Array(logs.values), settings: settings)
-        if let data = try? JSONEncoder().encode(snap) {
-            UserDefaults.standard.set(data, forKey: defaultsKey)
+        guard let data = try? JSONEncoder().encode(snap) else { return }
+        // Keep the previous good blob as a backup before overwriting, so a bad
+        // write or a future model change can never silently destroy her history.
+        if let previous = UserDefaults.standard.data(forKey: defaultsKey) {
+            UserDefaults.standard.set(previous, forKey: defaultsKey + ".backup")
         }
+        UserDefaults.standard.set(data, forKey: defaultsKey)
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
-              let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
-        logs = Dictionary(uniqueKeysWithValues: snap.logs.map { ($0.dateKey, $0) })
-        settings = snap.settings
+        // New fields are all optional, so blobs written by older builds decode
+        // cleanly. If the main blob is ever unreadable, fall back to the backup
+        // rather than starting empty (which the next save would make permanent).
+        for key in [defaultsKey, defaultsKey + ".backup"] {
+            if let data = UserDefaults.standard.data(forKey: key),
+               let snap = try? JSONDecoder().decode(Snapshot.self, from: data) {
+                logs = Dictionary(uniqueKeysWithValues: snap.logs.map { ($0.dateKey, $0) })
+                settings = snap.settings
+                return
+            }
+        }
     }
 
     // MARK: sample data (first-launch demo)

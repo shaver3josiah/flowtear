@@ -1,13 +1,11 @@
 import SwiftUI
 
-// LogView — the daily log, redesigned as clustered, color-coded sections in the
-// iOS inset-group manner with an old-money finish: serif headers, hairlines, a
-// gold-touched at-a-glance row, and gentle spring motion everywhere. Each
-// cluster carries one hue family so the eye groups it instantly:
-//   Flow rose · Discharge gold · Temperature amber · Mood lavender ·
-//   Symptoms brand rose · Note ink.
-// Discrete taps autosave; the note saves on focus loss; temperature saves when
-// the slider settles.
+// LogView — the daily log. Clustered, color-coded sections (Flow rose ·
+// Discharge gold · Temperature amber · Mood lavender · Symptoms brand rose ·
+// Note ink) under a serif date header. The at-a-glance progress row stays
+// PINNED while she scrolls, and the day commits with the slide-to-log flower
+// at the bottom — no toast. Edits live in a draft; switching day or leaving
+// the tab silently commits as a safety net, so nothing she typed is ever lost.
 struct LogView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
@@ -15,27 +13,26 @@ struct LogView: View {
     @Binding var date: Date
 
     @State private var draft = DayLog(dateKey: "")
-    @State private var showToast = false
-    @State private var toastToken = 0
+    @State private var loadedKey = ""
     @FocusState private var noteFocused: Bool
 
     private let cal = Calendar.current
     private var isToday: Bool { cal.isDateInToday(date) }
+    private var stored: DayLog { store.logs[loadedKey] ?? DayLog(dateKey: loadedKey) }
+    private var dirty: Bool { draft != stored }
 
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
                 SampleBanner()
                 header
-                glanceRow
 
                 LogSection(icon: "drop.fill", title: "Flow",
                            tint: .phaseMenstrual, softTint: .phaseMenstrualSoft,
                            value: draft.flow?.label) {
                     FFPickerSlider(
                         title: "", options: Flow.allCases, label: { $0.label },
-                        selection: Binding(get: { draft.flow },
-                                           set: { draft.flow = $0; save() }),
+                        selection: $draft.flow,
                         tint: .phaseMenstrual
                     )
                 }
@@ -45,15 +42,14 @@ struct LogView: View {
                            value: draft.discharge?.label) {
                     FFPickerSlider(
                         title: "", options: Discharge.allCases, label: { $0.label },
-                        selection: Binding(get: { draft.discharge },
-                                           set: { draft.discharge = $0; save() }),
+                        selection: $draft.discharge,
                         tint: .phaseFertile
                     )
                 }
 
                 LogSection(icon: "thermometer.medium", title: "Temperature",
                            tint: .phaseOvulation, softTint: .phaseOvulationSoft,
-                           value: tempF.map { String(format: "%.2f°", $0) }) {
+                           value: tempValueText) {
                     temperatureContent
                 }
 
@@ -62,9 +58,9 @@ struct LogView: View {
                            value: countText(draft.moods.count)) {
                     FlowLayout(spacing: FFSpace.inline) {
                         ForEach(Mood.allCases) { mood in
-                            FFChip(mood.label, selected: draft.moods.contains(mood), tint: .phaseLuteal) {
+                            FFChip(mood.label, selected: draft.moods.contains(mood),
+                                   emoji: mood.emoji, tint: .phaseLuteal) {
                                 draft.moods.formSymmetricDifference([mood])
-                                save()
                             }
                         }
                     }
@@ -77,7 +73,6 @@ struct LogView: View {
                         ForEach(Symptom.allCases) { symptom in
                             SymptomChip(symptom, selected: draft.symptoms.contains(symptom)) {
                                 draft.symptoms.formSymmetricDifference([symptom])
-                                save()
                             }
                         }
                     }
@@ -93,20 +88,35 @@ struct LogView: View {
                         .tint(theme.color(.primaryStrong))
                         .focused($noteFocused)
                 }
-                .onChange(of: noteFocused) { _, focused in
-                    if !focused { save() }
-                }
             }
             .padding(.horizontal, FFSpace.s4)
             .padding(.top, FFSpace.s2)
-            .padding(.bottom, FFSpace.section)
+            .padding(.bottom, FFSpace.s4)
         }
-        .overlay(alignment: .top) { toastOverlay }
+        // The progress row rides above the scroll — always visible.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            glanceRow
+                .padding(.horizontal, FFSpace.s4)
+                .padding(.vertical, 6)
+                .background(theme.color(.bg).opacity(0.97))
+        }
+        // The commit gesture lives at the bottom, content scrolls beneath it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SlideToLog(enabled: dirty) { commit() }
+                .padding(.horizontal, FFSpace.s4)
+                .padding(.top, 6)
+                .padding(.bottom, FFSpace.s2)
+                .background(theme.color(.bg).opacity(0.97))
+        }
         .onAppear(perform: reload)
-        .onChange(of: date) { _, _ in reload() }
+        .onChange(of: date) { _, _ in
+            commitIfDirty()   // draft still carries the previous day's key
+            reload()
+        }
+        .onDisappear { commitIfDirty() }
     }
 
-    // MARK: header — serif date with day-stepping, iOS-native compact picker
+    // MARK: header — serif date with day-stepping
 
     private var header: some View {
         HStack(spacing: FFSpace.s2) {
@@ -137,18 +147,20 @@ struct LogView: View {
         date = d
     }
 
-    // MARK: at-a-glance — one gold-hairlined row of section dots that fill in
+    // MARK: pinned at-a-glance row
 
     private var glanceRow: some View {
         HStack(spacing: 0) {
             glanceDot("drop.fill", filled: draft.flow != nil, tint: .phaseMenstrual)
             glanceDot("humidity.fill", filled: draft.discharge != nil, tint: .phaseFertile)
-            glanceDot("thermometer.medium", filled: draft.temperatureC != nil, tint: .phaseOvulation)
+            glanceDot("thermometer.medium",
+                      filled: draft.temperatureC != nil || draft.tempSkipped == true,
+                      tint: .phaseOvulation)
             glanceDot("face.smiling", filled: !draft.moods.isEmpty, tint: .phaseLuteal)
             glanceDot("bolt.heart", filled: !draft.symptoms.isEmpty, tint: .primaryStrong)
             glanceDot("text.quote", filled: !draft.note.isEmpty, tint: .deep)
         }
-        .padding(.vertical, FFSpace.s2)
+        .padding(.vertical, FFSpace.s1)
         .overlay(alignment: .bottom) {
             Rectangle().fill(theme.color(.flowerCenter).opacity(0.6)).frame(height: 1)
         }
@@ -170,108 +182,136 @@ struct LogView: View {
         if draft.flow != nil { parts.append("flow") }
         if draft.discharge != nil { parts.append("discharge") }
         if draft.temperatureC != nil { parts.append("temperature") }
+        if draft.tempSkipped == true { parts.append("temperature skipped") }
         if !draft.moods.isEmpty { parts.append("mood") }
         if !draft.symptoms.isEmpty { parts.append("symptoms") }
         if !draft.note.isEmpty { parts.append("a note") }
         return parts.isEmpty ? "nothing yet" : parts.joined(separator: ", ")
     }
 
-    // MARK: temperature — big serif numeral + settling slider
+    // MARK: temperature — slider ready by default; a checkbox if she skipped
 
     private var tempF: Double? { draft.temperatureC.map { $0 * 9 / 5 + 32 } }
 
+    private var tempValueText: String? {
+        if draft.tempSkipped == true { return "Not today" }
+        return tempF.map { String(format: "%.2f°", $0) }
+    }
+
+    /// Sensible slider start: her last reading, else a typical 97.8.
+    private var suggestedF: Double {
+        store.recentTemperatures().last.map { $0.celsius * 9 / 5 + 32 } ?? 97.8
+    }
+
     @ViewBuilder private var temperatureContent: some View {
-        if let f = tempF {
+        if draft.tempSkipped == true {
+            checkboxRow(checked: true, label: "Didn't take it this morning") {
+                draft.tempSkipped = nil
+            }
+        } else {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(String(format: "%.2f", f))
+                    Text(String(format: "%.2f", tempF ?? suggestedF))
                         .font(ffNumber(FFType.xl2, weight: .semibold))
-                        .foregroundStyle(theme.color(.deep))
+                        .foregroundStyle(theme.color(tempF == nil ? .muted : .deep))
                         .contentTransition(.numericText())
                     Text("°F")
                         .font(ffBody(FFType.sm, weight: .semibold))
                         .foregroundStyle(theme.color(.muted))
-                    Spacer()
-                    Button {
-                        draft.temperatureC = nil
-                        save()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
+                    if tempF == nil {
+                        Text("slide to set")
+                            .font(ffBody(FFType.xs))
                             .foregroundStyle(theme.color(.muted))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Remove temperature")
+                    Spacer()
                 }
                 Slider(
                     value: Binding(
-                        get: { tempF ?? 97.8 },
+                        get: { tempF ?? suggestedF },
                         set: { draft.temperatureC = ($0 - 32) * 5 / 9 }
                     ),
-                    in: 96.0...100.0, step: 0.05,
-                    onEditingChanged: { editing in if !editing { save() } }
+                    in: 96.0...100.0, step: 0.05
                 )
                 .tint(theme.color(.phaseOvulation))
                 .accessibilityLabel("Basal temperature")
-                .accessibilityValue(String(format: "%.2f degrees Fahrenheit", f))
+                .accessibilityValue(String(format: "%.2f degrees Fahrenheit", tempF ?? suggestedF))
                 HStack {
                     Text("96°"); Spacer(); Text("100°")
                 }
                 .font(ffBody(FFType.xs2, weight: .medium))
                 .foregroundStyle(theme.color(.muted))
-            }
-        } else {
-            FFButton("Add this morning's temp", style: .soft, size: .sm, icon: "plus") {
-                draft.temperatureC = (97.8 - 32) * 5 / 9
-                save()
+
+                checkboxRow(checked: false, label: "Didn't take it this morning") {
+                    draft.tempSkipped = true
+                    draft.temperatureC = nil
+                }
             }
         }
     }
 
-    // MARK: state
+    private func checkboxRow(checked: Bool, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: checked ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(theme.color(checked ? .phaseOvulation : .muted))
+                Text(label)
+                    .font(ffBody(FFType.sm, weight: .medium))
+                    .foregroundStyle(theme.color(.text))
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .frame(minHeight: 32)
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: checked)
+        .accessibilityAddTraits(checked ? .isSelected : [])
+    }
+
+    // MARK: state — draft in, slide (or safety net) out
 
     private func reload() {
-        draft = store.log(for: date) ?? DayLog(dateKey: store.key(for: date))
+        loadedKey = store.key(for: date)
+        draft = store.log(for: date) ?? DayLog(dateKey: loadedKey)
+        draft.dateKey = loadedKey
     }
 
-    private func save() {
-        draft.dateKey = store.key(for: date)
+    private func commit() {
+        noteFocused = false
+        draft.dateKey = loadedKey
         store.upsert(draft)
-        flash()
     }
 
-    private func flash() {
-        toastToken += 1
-        let token = toastToken
-        withAnimation(reduceMotion ? nil : FFMotion.spring) { showToast = true }
-        Task {
-            try? await Task.sleep(for: .seconds(1.6))
-            if token == toastToken {
-                withAnimation(reduceMotion ? nil : FFMotion.fast) { showToast = false }
-            }
-        }
+    /// Safety net: leaving the day or the tab commits silently, so edits never
+    /// vanish just because she didn't swipe.
+    private func commitIfDirty() {
+        guard !loadedKey.isEmpty, dirty else { return }
+        commit()
     }
 
     private func countText(_ n: Int) -> String? {
         n == 0 ? nil : "\(n) picked"
     }
+}
 
-    @ViewBuilder private var toastOverlay: some View {
-        if showToast {
-            FFToast(message: "Logged.")
-                .padding(.top, FFSpace.s2)
-                .allowsHitTesting(false)
-                .transition(reduceMotion
-                    ? .opacity
-                    : .move(edge: .top).combined(with: .opacity))
+// Small, classy faces that help her pick — one quiet emoji per mood.
+extension Mood {
+    var emoji: String {
+        switch self {
+        case .happy:     "😊"
+        case .calm:      "😌"
+        case .sensitive: "🥺"
+        case .sad:       "😢"
+        case .irritable: "😤"
+        case .anxious:   "😟"
+        case .energized: "🤩"
+        case .tired:     "😴"
         }
     }
 }
 
 // MARK: - LogSection — the shared cluster chrome that keeps every section aligned
 
-// One consistent anatomy for every cluster: a tinted icon medallion, a serif
-// title, a live value readout on the trailing edge, then the content on a
-// shared inset. Alignment lives here once, so sections can't drift apart.
 private struct LogSection<Content: View>: View {
     @Environment(Theme.self) private var theme
     let icon: String

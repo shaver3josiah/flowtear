@@ -50,13 +50,16 @@ struct DayLog: Codable, Identifiable, Equatable {
     var temperatureC: Double?      // optional BBT
     var stretchDone: Bool?         // marked the day's cramp-ease stretch session complete
     var discharge: Discharge?      // cervical fluid (optional decodes keep old data valid)
+    var tempSkipped: Bool?         // she noted she didn't take her temperature today
+    var stretchMovesDone: Set<Int>?  // indices of the day's session moves she checked off
 
     var id: String { dateKey }
     var isPeriod: Bool { flow != nil }
     var isEmpty: Bool {
         flow == nil && moods.isEmpty && symptoms.isEmpty
             && note.isEmpty && temperatureC == nil && (stretchDone ?? false) == false
-            && discharge == nil
+            && discharge == nil && (tempSkipped ?? false) == false
+            && (stretchMovesDone?.isEmpty ?? true)
     }
 }
 

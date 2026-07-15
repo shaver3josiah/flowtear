@@ -10,9 +10,10 @@ struct StretchPlanCard: View {
     var action: () -> Void = {}
 
     private var p: CyclePrediction { store.prediction() }
+    private var tier: StretchTier { store.fullStretchPlan ? .full : .starter }
     private var session: StretchDay? {
-        guard let d = p.daysUntilNextPeriod, d >= 1, d <= StretchPlan.totalDays else { return nil }
-        return StretchPlan.session(daysUntilPeriod: d)
+        guard let d = p.daysUntilNextPeriod, d >= 1, d <= tier.totalDays else { return nil }
+        return StretchPlan.session(daysUntilPeriod: d, tier: tier)
     }
 
     var body: some View {
@@ -43,17 +44,17 @@ struct StretchPlanCard: View {
 
     private var subtitle: String {
         if let s = session {
-            return "Day \(s.planDay) of \(StretchPlan.totalDays) · \(s.focus) · \(s.minutes) min"
+            return "Day \(StretchPlan.planDay(s, tier: tier)) of \(tier.totalDays) · \(s.focus) · \(s.minutes) min"
         }
         if p.phase == .menstrual {
             return "On your period — plan resumes after ovulation"
         }
         if let start = p.nextPeriodStart,
-           let planStart = Calendar.current.date(byAdding: .day, value: -StretchPlan.totalDays, to: start),
+           let planStart = Calendar.current.date(byAdding: .day, value: -tier.totalDays, to: start),
            planStart > Date() {
-            return "Starts \(planStart.formatted(.dateTime.month().day())) — see the 14-day schedule"
+            return "Starts \(planStart.formatted(.dateTime.month().day())) — see the schedule"
         }
-        return "The 14-day schedule for the two weeks before your period"
+        return "Your \(tier.label.lowercased()) for the days before your period"
     }
 
     @ViewBuilder private var trailingIcon: some View {

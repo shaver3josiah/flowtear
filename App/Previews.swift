@@ -30,7 +30,19 @@ extension View {
 #Preview("Stretch card (Today)") { StretchPlanCard().previewEnv().padding() }
 #Preview("Theme editor") { ThemeEditorSheet().previewEnv() }
 #Preview("Stretch session") {
-    StretchSessionView(day: StretchPlan.days[2]).previewEnv()
+    StretchSessionView(day: StretchPlan.days[2], planDay: 3).previewEnv()
+}
+
+#Preview("Coach flower") {
+    CoachFlower(message: "Ready when you are — even five gentle minutes counts.")
+        .previewEnv().padding()
+}
+
+#Preview("Slide to log") {
+    VStack(spacing: 30) {
+        SlideToLog(enabled: true) {}
+        SlideToLog(enabled: false) {}
+    }.previewEnv().padding()
 }
 
 // LogView takes a Date binding; give it one for the preview.
