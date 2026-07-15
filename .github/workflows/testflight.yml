@@ -71,21 +71,10 @@ jobs:
         run: |
           IPA_PATH=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
           echo "Uploading $IPA_PATH"
-          set +e
-          IPA_PATH="$IPA_PATH" fastlane upload_testflight 2>&1 | tee "$RUNNER_TEMP/upload.log"
-          status=${PIPESTATUS[0]}
-          set -e
-          # fastlane itself reported success — done.
-          if [ "$status" -eq 0 ]; then echo "Upload succeeded."; exit 0; fi
-          # fastlane exited nonzero, but the binary may have been delivered before a
-          # transient post-upload error (Apple 500 on a status poll). Accept the known
-          # delivery markers; a genuine rejection (validation 409) has none of them.
-          if grep -qE "Successfully uploaded package to App Store Connect|UPLOAD SUCCEEDED with no errors|No errors uploading archive" "$RUNNER_TEMP/upload.log"; then
-            echo "Binary delivered to App Store Connect (ignoring transient post-upload error)."
-            exit 0
-          fi
-          echo "::error::TestFlight upload did not report success — see the log above."
-          exit 1
+          # Direct call: pilot now waits for processing, so its exit code is the honest
+          # answer — green means the build actually reached TestFlight, red carries the
+          # real processing error.
+          IPA_PATH="$IPA_PATH" fastlane upload_testflight
 
       - name: Remove API key
         if: always()

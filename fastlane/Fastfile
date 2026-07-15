@@ -22,7 +22,10 @@ platform :ios do
       api_key: asc_api_key,
       ipa: ENV.fetch("IPA_PATH"),
       skip_submission: true,
-      skip_waiting_for_build_processing: true
+      # Wait for Apple's post-upload PROCESSING and fail loudly if it's rejected —
+      # an "uploaded" build that never appears in TestFlight failed processing, and
+      # skipping the wait hides exactly that error.
+      skip_waiting_for_build_processing: false
     )
   end
 
