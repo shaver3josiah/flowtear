@@ -1,11 +1,11 @@
 name: testflight
-# Build, sign (cloud-managed: Xcode automatic signing + an App Store Connect API
-# key), and upload Uncorked to TestFlight from a hosted macOS runner. No Mac and
-# no stored certificates required.
+# Build, sign, and upload Uncorked to TestFlight from a hosted macOS runner.
+# Signing uses fastlane MATCH: the permanent Apple Distribution cert + App Store
+# profile are fetched read-only from the flowtear-certs repo — no per-runner
+# certificate creation, so the account's certificate cap is never hit.
 #
-# NOTE: cloud signing mints a fresh distribution certificate on each ephemeral
-# runner, so the account needs a FREE certificate slot per build. When that gets
-# annoying, switch to the match pipeline (fastlane beta + bootstrap-signing.yml).
+# pilot waits for Apple's post-upload processing, so a green run means the build
+# is actually visible in TestFlight; a red run carries the real reason.
 #
 # Fires on a pushed v* tag or a manual dispatch. Secrets are read at run time.
 on:
@@ -39,42 +39,25 @@ jobs:
           echo "${{ secrets.ASC_KEY_P8_BASE64 }}" | openssl base64 -d -A > "$RUNNER_TEMP/asc.p8"
           test -s "$RUNNER_TEMP/asc.p8" || { echo "Decoded .p8 is empty"; exit 1; }
 
-      - name: Archive
-        run: |
-          xcodebuild archive \
-            -project Flowtear.xcodeproj -scheme Flowtear -configuration Release \
-            -destination "generic/platform=iOS" \
-            -archivePath "$RUNNER_TEMP/Flowtear.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }}
-
-      - name: Export .ipa
-        run: |
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Flowtear.xcarchive" \
-            -exportOptionsPlist App/Support/ExportOptions.plist \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
-
-      - name: Upload to TestFlight (fastlane pilot)
+      - name: Build & upload (fastlane beta — match signing, waits for processing)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_FILEPATH: ${{ runner.temp }}/asc.p8
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          IPA_PATH=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
-          echo "Uploading $IPA_PATH"
-          # Direct call: pilot now waits for processing, so its exit code is the honest
-          # answer — green means the build actually reached TestFlight, red carries the
-          # real processing error.
-          IPA_PATH="$IPA_PATH" fastlane upload_testflight
+          # Credential-in-URL auth for the match repo (Basic header proved flaky
+          # with Windows-set secrets); derived values are masked from logs.
+          pair=$(printf '%s' "$MATCH_GIT_BASIC_AUTHORIZATION" | tr -d '\r\n ' | openssl base64 -d -A)
+          echo "::add-mask::$pair"
+          token="${pair#*:}"
+          echo "::add-mask::$token"
+          export MATCH_GIT_URL="https://x-access-token:${token}@github.com/shaver3josiah/flowtear-certs.git"
+          unset MATCH_GIT_BASIC_AUTHORIZATION
+          fastlane beta
 
       - name: Remove API key
         if: always()

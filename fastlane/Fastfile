@@ -78,7 +78,8 @@ platform :ios do
       api_key: key,
       ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
       skip_submission: true,
-      skip_waiting_for_build_processing: true
+      # Wait for Apple's processing: green means the build is actually in TestFlight.
+      skip_waiting_for_build_processing: false
     )
   end
 end
