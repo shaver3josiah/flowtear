@@ -29,6 +29,9 @@ extension View {
 #Preview("Stretch coach") { StretchCoachView().previewEnv() }
 #Preview("Stretch card (Today)") { StretchPlanCard().previewEnv().padding() }
 #Preview("Theme editor") { ThemeEditorSheet().previewEnv() }
+#Preview("Stretch session") {
+    StretchSessionView(day: StretchPlan.days[2]).previewEnv()
+}
 
 // LogView takes a Date binding; give it one for the preview.
 private struct LogPreviewHost: View {

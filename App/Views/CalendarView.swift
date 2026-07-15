@@ -101,6 +101,7 @@ struct CalendarView: View {
             isFertile: st.isFertile,
             isOvulation: st.isOvulation,
             flow: st.flow,
+            stretchDone: store.log(for: date)?.stretchDone ?? false,
             action: { onLog(date) }
         )
     }
@@ -154,6 +155,7 @@ struct CalendarView: View {
                 HStack(spacing: FFSpace.s3) {
                     FFBadge("Ovulation", tint: .phaseOvulation, dot: true)
                     FFBadge("Predicted", tint: .phaseMenstrual, dot: true)
+                    FFBadge("Stretched", tint: .phaseLuteal, dot: true)
                     Spacer(minLength: 0)
                 }
             }

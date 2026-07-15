@@ -30,9 +30,10 @@ struct RootView: View {
             VStack(spacing: FFSpace.s3) {
                 Group {
                     switch tab {
-                    case .today:    TodayView(onLog: openLog)
+                    case .today:    TodayView(onLog: openLog, onOpenStretch: { switchTo(.stretch) })
                     case .calendar: CalendarView(onLog: openLog)
                     case .log:      LogView(date: $logDate)
+                    case .stretch:  StretchCoachView()
                     case .insights: InsightsView()
                     }
                 }
@@ -49,6 +50,10 @@ struct RootView: View {
 
     private func openLog(_ date: Date) {
         logDate = date
-        withAnimation(FFMotion.spring) { tab = .log }
+        switchTo(.log)
+    }
+
+    private func switchTo(_ t: FFTab) {
+        withAnimation(FFMotion.spring) { tab = t }
     }
 }

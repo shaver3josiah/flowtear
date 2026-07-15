@@ -1,18 +1,19 @@
 import SwiftUI
 
-// FFTabBar — the four-destination bottom bar in the DS look: a floating white
-// rail with a soft rose pill under the active tab. Order is Today / Calendar /
-// Log / Insights. Icons are SF Symbols carried on the FFTab enum.
+// FFTabBar — the bottom bar in the DS look: a floating white rail with a soft
+// rose pill under the active tab. Order is Today / Calendar / Log / Stretch /
+// Insights. Icons are SF Symbols carried on the FFTab enum.
 enum FFTab: String, CaseIterable, Identifiable {
-    case today, calendar, log, insights
+    case today, calendar, log, stretch, insights
     var id: String { rawValue }
     var title: String {
         switch self { case .today: "Today"; case .calendar: "Calendar"
-                      case .log: "Log"; case .insights: "Insights" }
+                      case .log: "Log"; case .stretch: "Stretch"; case .insights: "Insights" }
     }
     var icon: String {
         switch self { case .today: "drop.fill"; case .calendar: "calendar"
-                      case .log: "square.and.pencil"; case .insights: "chart.bar.fill" }
+                      case .log: "square.and.pencil"; case .stretch: "figure.cooldown"
+                      case .insights: "chart.bar.fill" }
     }
 }
 

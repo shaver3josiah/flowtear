@@ -8,6 +8,7 @@ struct TodayView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
     var onLog: (Date) -> Void
+    var onOpenStretch: () -> Void = {}
 
     private var p: CyclePrediction { store.prediction() }
     private var today: Date { Date() }
@@ -21,7 +22,7 @@ struct TodayView: View {
                 if p.hasHistory {
                     hero
                     quickLog
-                    StretchPlanCard()
+                    StretchPlanCard(action: onOpenStretch)
                     FertileWindowCard()
                 } else {
                     emptyState

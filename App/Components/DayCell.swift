@@ -14,6 +14,7 @@ struct DayCell: View {
     let isFertile: Bool
     let isOvulation: Bool
     var flow: Flow? = nil
+    var stretchDone: Bool = false
     let action: () -> Void
 
     private let disc: CGFloat = 38   // wash disc; leaves a gap for the today ring
@@ -47,6 +48,13 @@ struct DayCell: View {
                         .fill(dotColor(flow))
                         .frame(width: 5, height: 5)
                         .offset(y: 12)
+                }
+
+                if stretchDone {
+                    Circle()
+                        .fill(theme.color(.phaseLuteal))
+                        .frame(width: 5, height: 5)
+                        .offset(y: -12)
                 }
 
                 if isToday {
@@ -91,6 +99,7 @@ struct DayCell: View {
         if isFertile   { parts.append("fertile") }
         if isOvulation { parts.append("ovulation") }
         if let flow    { parts.append("\(flow.label) flow") }
+        if stretchDone { parts.append("stretch done") }
         if isToday     { parts.append("today") }
         return parts.joined(separator: ", ")
     }

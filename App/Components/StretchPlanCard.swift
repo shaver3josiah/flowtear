@@ -3,11 +3,11 @@ import SwiftUI
 // Today's entry to the cramp-ease stretch plan (Stay Flexy-informed dosing).
 // Always visible so the schedule is never lost: in the two weeks before the
 // period it shows today's session; outside the window it shows when the plan
-// starts. Tapping always opens the full coach with the 14-day schedule.
+// starts. Tapping jumps to the Stretch tab.
 struct StretchPlanCard: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
-    @State private var show = false
+    var action: () -> Void = {}
 
     private var p: CyclePrediction { store.prediction() }
     private var session: StretchDay? {
@@ -16,7 +16,7 @@ struct StretchPlanCard: View {
     }
 
     var body: some View {
-        Button { show = true } label: {
+        Button(action: action) {
             FFCard {
                 HStack(spacing: 12) {
                     Image(systemName: "figure.cooldown")
@@ -38,11 +38,7 @@ struct StretchPlanCard: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Opens the 14-day stretch schedule")
-        .sheet(isPresented: $show) {
-            StretchCoachView()
-                .presentationDragIndicator(.visible)
-        }
+        .accessibilityHint("Opens the Stretch tab with the 14-day schedule")
     }
 
     private var subtitle: String {

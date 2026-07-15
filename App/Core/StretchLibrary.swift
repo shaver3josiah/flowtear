@@ -18,8 +18,10 @@ import Foundation
 
 struct StretchMove: Identifiable {
     let name: String
-    let hold: String    // e.g. "20s × 3", "60s flowing"
+    let hold: String    // display string, e.g. "20s × 3", "60s flowing"
     let cue: String
+    var seconds: Int = 45              // guided-session timer length for this move
+    var icon: String = "figure.flexibility"   // SF Symbol visual anchor
     var id: String { name + hold }
 }
 
@@ -71,21 +73,29 @@ enum StretchPlan {
 
     // Standard cues, reused across days.
     private static let breathing = StretchMove(name: "Diaphragmatic breathing", hold: "5–6 slow breaths",
-        cue: "Lie back, one hand on your belly. Breathe into it slowly, with long easy exhales.")
+        cue: "Lie back, one hand on your belly. Breathe into it slowly, with long easy exhales.",
+        seconds: 60, icon: "wind")
     private static let pelvicTilts = StretchMove(name: "Pelvic tilts", hold: "10–12 reps",
-        cue: "On your back, knees bent. Gently flatten then arch your low back with your breath.")
+        cue: "On your back, knees bent. Gently flatten then arch your low back with your breath.",
+        seconds: 60, icon: "figure.core.training")
     private static let catCow = StretchMove(name: "Cat-Cow", hold: "45–60s flowing",
-        cue: "On all fours, alternate arching and rounding your spine, moving with your breath.")
+        cue: "On all fours, alternate arching and rounding your spine, moving with your breath.",
+        seconds: 60, icon: "figure.yoga")
     private static let childs = StretchMove(name: "Child's pose", hold: "45–60s",
-        cue: "Knees wide, sit back toward your heels, forehead down, arms long. Breathe into your back.")
+        cue: "Knees wide, sit back toward your heels, forehead down, arms long. Breathe into your back.",
+        seconds: 60, icon: "figure.mind.and.body")
     private static let knees = StretchMove(name: "Knees-to-chest", hold: "30–40s",
-        cue: "Hug both knees to your chest and let your low back soften. Rock side to side if it feels good.")
+        cue: "Hug both knees to your chest and let your low back soften. Rock side to side if it feels good.",
+        seconds: 40, icon: "figure.rolling")
     private static let cobra = StretchMove(name: "Cobra (gentle)", hold: "20–25s × 3",
-        cue: "Face down, press up low and easy through your arms. Keep it pain-free — shoulders down.")
+        cue: "Face down, press up low and easy through your arms. Keep it pain-free — shoulders down.",
+        seconds: 75, icon: "figure.yoga")
     private static let fish = StretchMove(name: "Supported Fish", hold: "20–25s × 2",
-        cue: "Lie back over a rolled towel under your upper back, chest open. Skip if it strains your neck.")
+        cue: "Lie back over a rolled towel under your upper back, chest open. Skip if it strains your neck.",
+        seconds: 50, icon: "figure.yoga")
     private static let restfulBreath = StretchMove(name: "Constructive rest", hold: "2 min",
-        cue: "Lie down, knees bent, feet wide, and just breathe. Let your belly and hips go heavy.")
+        cue: "Lie down, knees bent, feet wide, and just breathe. Let your belly and hips go heavy.",
+        seconds: 120, icon: "wind")
 
     static let days: [StretchDay] = [
         StretchDay(daysBeforePeriod: 14, focus: "Foundations & breath", minutes: 8,
@@ -97,33 +107,33 @@ enum StretchPlan {
         StretchDay(daysBeforePeriod: 11, focus: "Light — hips & low back", minutes: 6,
                    moves: [
                     StretchMove(name: "Butterfly / adductor", hold: "40s", cue: "Sit, soles together, let your knees ease down. Hinge gently forward from the hips."),
-                    StretchMove(name: "Supine figure-4", hold: "30s each side", cue: "On your back, ankle over the opposite knee, draw the thigh toward you."),
+                    StretchMove(name: "Supine figure-4", hold: "30s each side", cue: "On your back, ankle over the opposite knee, draw the thigh toward you.", seconds: 60),
                     knees]),
         StretchDay(daysBeforePeriod: 10, focus: "Core session — belly & pelvic", minutes: 13,
                    moves: [
-                    StretchMove(name: "Standing warm-up", hold: "2–3 min", cue: "March in place and reach side to side to warm up."),
-                    StretchMove(name: "Standing side stretch", hold: "20s each side", cue: "Reach one arm overhead and lean gently away."),
+                    StretchMove(name: "Standing warm-up", hold: "2–3 min", cue: "March in place and reach side to side to warm up.", seconds: 150, icon: "figure.walk"),
+                    StretchMove(name: "Standing side stretch", hold: "20s each side", cue: "Reach one arm overhead and lean gently away.", seconds: 40),
                     pelvicTilts, knees, childs]),
         StretchDay(daysBeforePeriod: 9, focus: "Restorative & breath", minutes: 5,
                    moves: [childs, restfulBreath]),
         StretchDay(daysBeforePeriod: 8, focus: "Core session — full routine", minutes: 14,
                    moves: [catCow, cobra, fish,
-                    StretchMove(name: "Standing side stretch", hold: "20s each side", cue: "Reach overhead and lean gently away, both sides."),
+                    StretchMove(name: "Standing side stretch", hold: "20s each side", cue: "Reach overhead and lean gently away, both sides.", seconds: 40),
                     pelvicTilts, childs]),
         StretchDay(daysBeforePeriod: 7, focus: "Light — hamstrings & low back", minutes: 7,
                    moves: [
-                    StretchMove(name: "Supine hamstring stretch", hold: "30s each side", cue: "On your back, raise one leg, hold behind the thigh or use a strap."),
+                    StretchMove(name: "Supine hamstring stretch", hold: "30s each side", cue: "On your back, raise one leg, hold behind the thigh or use a strap.", seconds: 60),
                     knees, childs]),
         StretchDay(daysBeforePeriod: 6, focus: "Core session — Cobra/Cat/Fish", minutes: 12,
                    moves: [catCow, cobra, fish, childs]),
         StretchDay(daysBeforePeriod: 5, focus: "Restorative — gentle twists", minutes: 6,
                    moves: [catCow,
-                    StretchMove(name: "Supine gentle twist", hold: "30s each side", cue: "On your back, drop bent knees to one side, gaze the other way."),
+                    StretchMove(name: "Supine gentle twist", hold: "30s each side", cue: "On your back, drop bent knees to one side, gaze the other way.", seconds: 60, icon: "figure.cooldown"),
                     childs]),
         StretchDay(daysBeforePeriod: 4, focus: "Core session — gentler", minutes: 11,
                    moves: [
-                    StretchMove(name: "Standing warm-up", hold: "2 min", cue: "March and reach to warm up."),
-                    StretchMove(name: "Standing side stretch", hold: "20s each side", cue: "Reach overhead, lean gently."),
+                    StretchMove(name: "Standing warm-up", hold: "2 min", cue: "March and reach to warm up.", seconds: 120, icon: "figure.walk"),
+                    StretchMove(name: "Standing side stretch", hold: "20s each side", cue: "Reach overhead, lean gently.", seconds: 40),
                     pelvicTilts, knees, childs]),
         StretchDay(daysBeforePeriod: 3, focus: "Gentle relief", minutes: 6,
                    moves: [catCow, knees, childs]),
