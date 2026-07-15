@@ -19,6 +19,7 @@ struct LogView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
+                SampleBanner()
                 datePicker
                 flowSection
                 dischargeSection

@@ -11,15 +11,16 @@ struct TodayView: View {
 
     private var p: CyclePrediction { store.prediction() }
     private var today: Date { Date() }
+    @State private var showThemeEditor = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
                 header
+                SampleBanner()
                 if p.hasHistory {
                     hero
                     quickLog
-                    statsGrid
                     StretchPlanCard()
                     FertileWindowCard()
                 } else {
@@ -30,9 +31,14 @@ struct TodayView: View {
             .padding(.top, FFSpace.s2)
             .padding(.bottom, FFSpace.s6)
         }
+        .sheet(isPresented: $showThemeEditor) {
+            ThemeEditorSheet()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
-    // MARK: Header (weekday + date — no greeting)
+    // MARK: Header (weekday + date + the pencil, like Bloom)
 
     private var header: some View {
         HStack(spacing: 11) {
@@ -46,6 +52,8 @@ struct TodayView: View {
                     .foregroundStyle(theme.color(.muted))
             }
             Spacer(minLength: 0)
+            FFIconButton("pencil") { showThemeEditor = true }
+                .accessibilityLabel("Theme settings")
         }
         .padding(.top, 2)
     }
@@ -110,32 +118,6 @@ struct TodayView: View {
                 store.upsert(log)
             }
         )
-    }
-
-    // MARK: Stat tiles
-
-    private var statsGrid: some View {
-        HStack(spacing: 10) {
-            StatTile(title: "Cycle day",
-                     value: p.cycleDay.map(String.init) ?? "–",
-                     tint: .primary)
-            StatTile(title: "Next period",
-                     value: nextPeriodValue,
-                     unit: nextPeriodUnit,
-                     tint: .phaseMenstrual)
-            StatTile(title: "Phase",
-                     value: p.phase?.label ?? "–",
-                     tint: p.phase.map(CycleRing.tint) ?? .primary)
-        }
-    }
-
-    private var nextPeriodValue: String {
-        guard let d = p.daysUntilNextPeriod else { return "–" }
-        return String(abs(d))
-    }
-    private var nextPeriodUnit: String? {
-        guard let d = p.daysUntilNextPeriod else { return nil }
-        return d < 0 ? "late" : "days"
     }
 
     // MARK: Empty state

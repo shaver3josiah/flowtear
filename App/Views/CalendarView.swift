@@ -18,6 +18,7 @@ struct CalendarView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.s4) {
+                SampleBanner()
                 FFCard {
                     VStack(spacing: FFSpace.s3) {
                         monthHeader

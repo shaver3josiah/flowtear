@@ -16,17 +16,14 @@ struct InsightsView: View {
             VStack(alignment: .leading, spacing: FFSpace.section) {
                 header
 
+                SampleBanner()
+
                 if p.hasHistory {
                     summaryGrid
                     rhythmCard
                     symptomsCard
-                    aheadCard
                 } else {
                     emptyCard
-                }
-
-                if store.sampleActive {
-                    sampleDataCard
                 }
             }
             .padding(.horizontal, FFSpace.s4)
@@ -47,24 +44,6 @@ struct InsightsView: View {
                 .foregroundStyle(theme.color(.muted))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // Shown only while the first-launch demo data is active: a gentle way to
-    // wipe it and start tracking for real. Never re-seeds after clearing.
-    private var sampleDataCard: some View {
-        FFCard(variant: .outline) {
-            VStack(alignment: .leading, spacing: FFSpace.s2) {
-                Text("You're looking at sample data")
-                    .font(ffBody(FFType.md, weight: .semibold))
-                    .foregroundStyle(theme.color(.deep))
-                Text("Everything here is a 3-month preview so you can explore. When you're ready to track for real, clear it.")
-                    .font(ffBody(FFType.sm))
-                    .foregroundStyle(theme.color(.muted))
-                FFButton("Clear sample data & start fresh", style: .soft, size: .sm, icon: "sparkles") {
-                    store.clearSampleData()
-                }
-            }
-        }
     }
 
     private var subtitle: String {
@@ -132,33 +111,6 @@ struct InsightsView: View {
     }
 
     // MARK: upcoming milestones
-
-    private var aheadCard: some View {
-        FFCard(variant: .soft) {
-            VStack(alignment: .leading, spacing: FFSpace.s3) {
-                cardTitle("What's ahead")
-                aheadRow("Next period", p.nextPeriodStart, .phaseFollicular)
-                aheadRow("Fertile window opens", p.fertileStart, .phaseFertile)
-                aheadRow("Ovulation, estimated", p.ovulationDate, .phaseOvulation)
-            }
-        }
-    }
-
-    private func aheadRow(_ label: String, _ date: Date?, _ tint: Tok) -> some View {
-        let dateText = date?.formatted(.dateTime.month(.abbreviated).day()) ?? "—"
-        return HStack(spacing: FFSpace.inline) {
-            Circle().fill(theme.color(tint)).frame(width: 8, height: 8)
-            Text(label)
-                .font(ffBody(FFType.sm))
-                .foregroundStyle(theme.color(.text))
-            Spacer(minLength: FFSpace.s2)
-            Text(dateText)
-                .font(ffBody(FFType.sm, weight: .semibold))
-                .foregroundStyle(theme.color(.deep))
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label), \(dateText)")
-    }
 
     // MARK: empty state
 
