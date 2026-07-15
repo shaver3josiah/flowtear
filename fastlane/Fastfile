@@ -35,6 +35,7 @@ platform :ios do
   desc "Create/refresh the shared App Store signing assets in the match repo."
   lane :certs do
     setup_ci
+    ENV["MATCH_READONLY"] = "false"   # setup_ci turns readonly on; bootstrap must create/store
     match(type: "appstore", app_identifier: APP_ID, api_key: asc_api_key, readonly: false)
   end
 
