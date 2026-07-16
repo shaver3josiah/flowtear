@@ -17,6 +17,7 @@ struct StretchCoachView: View {
     @State private var celebrationToken = 0
     @State private var lastAward = 0
     @State private var penaltyCharged = 0
+    @State private var planExpanded = false
     @State private var burstToken = 0
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
@@ -51,6 +52,7 @@ struct StretchCoachView: View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
                 gardenHeader
+                planBar
                 CoachFlower(message: coachLine, celebrateToken: celebrationToken, lastAward: lastAward)
                 SampleBanner()
                 if let s = todaySession {
@@ -65,7 +67,6 @@ struct StretchCoachView: View {
                     // off a session — it logs to today like any other.
                     todayCard(anytimeSession, heading: "ANYTIME SESSION · NO SCHEDULE NEEDED")
                 }
-                modeChooser
                 if tier != .trio { scheduleCard }
                 evidenceCard
                 safetyCard
@@ -113,26 +114,62 @@ struct StretchCoachView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // The three ways to play, each with its point preview. Switching keeps
-    // every completion and every point.
-    private var modeChooser: some View {
+    // Her plan, right at the top: collapsed it names the current mode; tapping
+    // expands the three previews; picking one selects it and folds back up.
+    private var planBar: some View {
         VStack(alignment: .leading, spacing: FFSpace.s2) {
-            Text("Your plan")
-                .font(ffBody(FFType.md, weight: .semibold))
-                .foregroundStyle(theme.color(.deep))
-            modeRow(.trio,    note: "Any day, no schedule, no pressure")
-            modeRow(.starter, note: "The 3 days before your period · −5 a missed day")
-            modeRow(.full,    note: "The full two weeks · −5 a missed day")
-            Text("Switching keeps every point and completion.")
-                .font(ffBody(FFType.xs2))
-                .foregroundStyle(theme.color(.muted))
+            Button {
+                withAnimation(FFMotion.fast) { planExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("PLAN")
+                        .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
+                        .foregroundStyle(theme.color(.muted))
+                    Text(tier.label)
+                        .font(ffBody(FFType.sm, weight: .bold))
+                        .foregroundStyle(theme.color(.deep))
+                    Text("×\(tier.multiplier)")
+                        .font(ffBody(FFType.xs2, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(theme.color(.phaseLuteal), in: Capsule())
+                    Spacer(minLength: 4)
+                    Text("up to \(maxDailyPoints(tier))/day")
+                        .font(ffBody(FFType.xs, weight: .bold))
+                        .foregroundStyle(theme.color(.deep))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(theme.color(.muted))
+                        .rotationEffect(.degrees(planExpanded ? 180 : 0))
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
+                    .strokeBorder(theme.color(.line), lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Current plan: \(tier.label)")
+            .accessibilityHint(planExpanded ? "Collapses the plan choices" : "Shows the plan choices")
+
+            if planExpanded {
+                modeRow(.trio,    note: "Any day, no schedule, no pressure")
+                modeRow(.starter, note: "The 3 days before your period · −5 a missed day")
+                modeRow(.full,    note: "The full two weeks · −5 a missed day")
+                Text("Switching keeps every point and completion.")
+                    .font(ffBody(FFType.xs2))
+                    .foregroundStyle(theme.color(.muted))
+            }
         }
     }
 
     private func modeRow(_ t: StretchTier, note: String) -> some View {
         let selected = tier == t
         return Button {
-            withAnimation(FFMotion.fast) { store.stretchTierRaw = t.rawValue }
+            withAnimation(FFMotion.fast) {
+                store.stretchTierRaw = t.rawValue
+                planExpanded = false
+            }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: selected ? "largecircle.fill.circle" : "circle")
@@ -422,13 +459,12 @@ struct StretchCoachView: View {
         let isTodayRow = todaySession?.daysBeforePeriod == day.daysBeforePeriod
         let expanded = expandedDay == planDay
         return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(FFMotion.fast) { expandedDay = expanded ? nil : planDay }
-            } label: {
+            HStack(spacing: 10) {
+                dayCheckbox(planDay: planDay)
+                Button {
+                    withAnimation(FFMotion.fast) { expandedDay = expanded ? nil : planDay }
+                } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: isDone(planDay: planDay) ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 18))
-                        .foregroundStyle(theme.color(isDone(planDay: planDay) ? .good : .line))
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
                             Text("Day \(planDay)")
@@ -459,14 +495,27 @@ struct StretchCoachView: View {
                         .foregroundStyle(theme.color(.muted))
                         .rotationEffect(.degrees(expanded ? 180 : 0))
                 }
-                .padding(.vertical, 9)
                 .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Day \(planDay), \(day.focus), \(day.minutes) minutes")
+                .accessibilityHint(expanded ? "Collapses the moves" : "Shows the moves")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Day \(planDay), \(day.focus), \(day.minutes) minutes")
-            .accessibilityHint(expanded ? "Collapses the moves" : "Shows the moves")
+            .padding(.vertical, 9)
 
-            if expanded {
+            if expanded, isTodayRow {
+                // Today's moves are the real thing — check them off right here.
+                VStack(alignment: .leading, spacing: FFSpace.s2) {
+                    ForEach(Array(day.moves.enumerated()), id: \.element.id) { i, m in
+                        moveCheckRow(m, index: i,
+                                     checked: store.stretchMovesDone(on: today).contains(i),
+                                     session: day)
+                    }
+                }
+                .padding(.leading, 34)
+                .padding(.bottom, FFSpace.s3)
+                .transition(.opacity)
+            } else if expanded {
                 VStack(alignment: .leading, spacing: FFSpace.s2) {
                     ForEach(day.moves) { m in
                         HStack(alignment: .top, spacing: 10) {

@@ -41,6 +41,7 @@ final class RewardsStore {
     private(set) var ownedSounds: Set<String> = []
     var activeSound: String? { didSet { save() } }
     private(set) var penalizedDays: Set<String> = []   // lock-in misses already charged
+    private(set) var periodLandDays: Set<String> = []  // ring-landing bonuses already paid
     private(set) var tutorialSeen = false
     var activeSticker: String? { didSet { save() } }  // flower id or "posey"
     /// Where her sticker sits around the Today ring (normalized -1…1 offsets).
@@ -115,6 +116,16 @@ final class RewardsStore {
         activeSound = id
         AudioServicesPlaySystemSound(SystemSoundID(item.systemID))   // hear it at once
         save(); return true
+    }
+
+    /// Easter egg: her flower settled on the period arc of the ring — +5,
+    /// at most once per calendar day.
+    @discardableResult
+    func awardPeriodLanding(dateKey: String) -> Bool {
+        guard !periodLandDays.contains(dateKey) else { return false }
+        periodLandDays.insert(dateKey)
+        earn(5)
+        return true
     }
 
     /// Lock-in: −5 petals for a missed plan day, charged at most once per day.
@@ -235,6 +246,7 @@ final class RewardsStore {
         var activeSound: String?
         var penalizedDays: Set<String>? = []
         var stickerAngle: Double? = -0.9
+        var periodLandDays: Set<String>? = []
     }
 
     private func save() {
@@ -245,7 +257,8 @@ final class RewardsStore {
                      soundUnlocked: false, tutorialSeen: tutorialSeen,
                      stickerX: stickerX, stickerY: stickerY,
                      ownedSounds: ownedSounds, activeSound: activeSound,
-                     penalizedDays: penalizedDays, stickerAngle: stickerAngle)
+                     penalizedDays: penalizedDays, stickerAngle: stickerAngle,
+                     periodLandDays: periodLandDays)
         guard let data = try? JSONEncoder().encode(b) else { return }
         if let prev = UserDefaults.standard.data(forKey: Self.key) {
             UserDefaults.standard.set(prev, forKey: Self.key + ".backup")
@@ -268,6 +281,7 @@ final class RewardsStore {
                 activeSound = b.activeSound
                 penalizedDays = b.penalizedDays ?? []
                 stickerAngle = b.stickerAngle ?? -0.9
+                periodLandDays = b.periodLandDays ?? []
                 // Migrate the old single-chime unlock into the crystal chime.
                 if b.soundUnlocked == true && ownedSounds.isEmpty {
                     ownedSounds.insert("crystal")

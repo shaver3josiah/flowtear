@@ -11,6 +11,9 @@ struct RingSticker: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let radius: CGFloat
+    /// Fraction of the ring (from 12 o'clock, clockwise) covered by the period
+    /// arc — landing the flower there pays a small bonus.
+    var periodFraction: Double = 0
 
     @State private var angle: Double = -0.9
     @State private var velocity: Double = 0       // radians / frame
@@ -19,6 +22,9 @@ struct RingSticker: View {
     @State private var lastDragAngle: Double? = nil
     @State private var trail: [TrailBit] = []
     @State private var settleBurst = 0
+    @State private var spins = 0
+    @State private var showTease = false
+    @State private var showBonus = false
 
     private var diameter: CGFloat { radius * 2 + 56 }
 
@@ -50,6 +56,8 @@ struct RingSticker: View {
                     .animation(dragging ? nil : FFMotion.spring, value: dragging)
             }
             .frame(width: diameter, height: diameter)
+            .overlay(alignment: .top) { teaseBubble }
+            .overlay(alignment: .bottom) { bonusBadge }
             .contentShape(ringHitArea)
             .gesture(orbitDrag)
             .onAppear { angle = rewards.stickerAngle }
@@ -94,9 +102,48 @@ struct RingSticker: View {
             }
     }
 
+    // Posey's gentle nudge after the fifth fling in a row.
+    @ViewBuilder private var teaseBubble: some View {
+        if showTease {
+            HStack(spacing: 8) {
+                FlowerMark(size: 22)
+                Text("All that spinning, petal — imagine the petals if we stretched.")
+                    .font(ffBody(FFType.xs, weight: .medium))
+                    .foregroundStyle(theme.color(.text))
+            }
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(theme.color(.surface), in: Capsule())
+            .overlay(Capsule().strokeBorder(theme.color(.line), lineWidth: 1))
+            .shadow(color: theme.shadow, radius: 6, y: 2)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder private var bonusBadge: some View {
+        if showBonus {
+            Label("+5 — right on your period day", systemImage: "sparkle")
+                .font(ffBody(FFType.xs, weight: .bold))
+                .foregroundStyle(theme.color(.deep))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(theme.color(.phaseMenstrualSoft), in: Capsule())
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .allowsHitTesting(false)
+        }
+    }
+
     // The fidget: inertia with gentle friction, confetti while fast.
     private func startSpin() {
         spinning = true
+        spins += 1
+        if spins >= 5 {
+            spins = 0
+            Task { @MainActor in
+                withAnimation(FFMotion.spring) { showTease = true }
+                try? await Task.sleep(for: .seconds(4))
+                withAnimation(FFMotion.fast) { showTease = false }
+            }
+        }
         Task { @MainActor in
             var frames = 0
             while spinning && abs(velocity) > 0.006 && !Task.isCancelled {
@@ -116,9 +163,26 @@ struct RingSticker: View {
         velocity = 0
         rewards.stickerAngle = angle
         settleBurst += 1
+        checkPeriodLanding()
         Task {
             try? await Task.sleep(for: .seconds(0.8))
             withAnimation(.easeOut(duration: 0.4)) { trail.removeAll() }
+        }
+    }
+
+    // Landed on the bleed arc? A small once-a-day bonus, with a note.
+    private func checkPeriodLanding() {
+        guard periodFraction > 0 else { return }
+        let deg = angle * 180 / .pi
+        var f = ((deg + 90) / 360).truncatingRemainder(dividingBy: 1)
+        if f < 0 { f += 1 }
+        guard f < periodFraction else { return }
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+        guard rewards.awardPeriodLanding(dateKey: df.string(from: Date())) else { return }
+        Task { @MainActor in
+            withAnimation(FFMotion.spring) { showBonus = true }
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation(FFMotion.fast) { showBonus = false }
         }
     }
 

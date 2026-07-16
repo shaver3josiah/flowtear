@@ -16,6 +16,7 @@ struct TodayView: View {
     private var p: CyclePrediction { store.prediction() }
     private var today: Date { Date() }
     @State private var showThemeEditor = false
+    @State private var showAbout = false
     @State private var paneIndex = 0
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
@@ -49,6 +50,7 @@ struct TodayView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showAbout) { AboutView() }
     }
 
     // MARK: Header (weekday + date + the pencil, like Bloom)
@@ -56,7 +58,10 @@ struct TodayView: View {
     private var header: some View {
         HStack(spacing: 11) {
             FlowerMark(size: 38)
-                .accessibilityHidden(true)
+                .onTapGesture(count: 2) { showAbout = true }
+                .accessibilityLabel("About Uncorked")
+                .accessibilityHint("Opens the about page and questions")
+                .accessibilityAddTraits(.isButton)
             VStack(alignment: .leading, spacing: 2) {
                 Text(today.formatted(.dateTime.weekday(.wide)))
                     .font(ffDisplay(FFType.xl, weight: .semibold))
@@ -90,7 +95,7 @@ struct TodayView: View {
                     .multilineTextAlignment(.center)
             }
 
-            RingSticker(radius: 122)
+            RingSticker(radius: 122, periodFraction: periodFraction(p))
         }
         .padding(.vertical, 2)
     }
@@ -150,6 +155,11 @@ struct TodayView: View {
         .accessibilityHint("Opens \(title)")
     }
 
+    /// Fraction of the ring covered by the bleed arc (day 1 → period length).
+    private func periodFraction(_ pred: CyclePrediction) -> Double {
+        min(Double(max(pred.averagePeriodLength, 0)) / Double(max(pred.averageCycleLength, 1)), 1)
+    }
+
     private var nextPeriodLine: String {
         guard let d = p.daysUntilNextPeriod else { return "" }
         switch d {
@@ -201,7 +211,7 @@ struct TodayView: View {
                     .font(ffBody(FFType.xs, weight: .medium))
                     .foregroundStyle(theme.color(.muted))
             }
-            RingSticker(radius: 110)
+            RingSticker(radius: 110, periodFraction: periodFraction(store.previewPrediction()))
         }
     }
 
