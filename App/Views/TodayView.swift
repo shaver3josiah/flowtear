@@ -18,6 +18,7 @@ struct TodayView: View {
     @State private var showThemeEditor = false
     @State private var showAbout = false
     @State private var paneIndex = 0
+    @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -46,9 +47,12 @@ struct TodayView: View {
             .padding(.bottom, FFSpace.s6)
         }
         .sheet(isPresented: $showThemeEditor) {
-            ThemeEditorSheet()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            ThemeEditorSheet(onGoEarn: {
+                showThemeEditor = false
+                onOpenStretch()
+            })
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAbout) { AboutView() }
     }
@@ -72,6 +76,7 @@ struct TodayView: View {
             }
             Spacer(minLength: 0)
             FFIconButton("pencil") { showThemeEditor = true }
+                .glitterHint("themeEditor")
                 .accessibilityLabel("Theme settings")
         }
         .padding(.top, 2)
@@ -82,20 +87,28 @@ struct TodayView: View {
     private var hero: some View {
         ZStack {
             // Subtle drifting-petal accent behind the ring. PetalRain self-gates
-            // reduce-motion (renders nothing) and ignores hit-testing.
-            PetalRain(count: 10)
-                .frame(height: 300)
+            // reduce-motion (renders nothing) and ignores hit-testing; she can
+            // switch it off in the pencil settings.
+            if petalsOnRing {
+                PetalRain(count: 10)
+                    .frame(height: 300)
+            }
 
             VStack(spacing: 10) {
-                CycleRing(prediction: p, size: 244)
+                // The sticker shares the ring's ZStack so its orbit center IS the
+                // ring's center, and it rides the drawn track's exact radius —
+                // concentric, never offset.
+                ZStack {
+                    CycleRing(prediction: p, size: 244)
+                    RingSticker(radius: CycleRing.trackRadius(for: 244),
+                                periodFraction: periodFraction(p))
+                }
                 PhaseBadge(phase: p.phase)
                 Text(nextPeriodLine)
                     .font(ffBody(FFType.sm, weight: .medium))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)
             }
-
-            RingSticker(radius: 122, periodFraction: periodFraction(p))
         }
         .padding(.vertical, 2)
     }
@@ -204,14 +217,15 @@ struct TodayView: View {
     // A best-guess ring before her first confirmed period: anchored on any
     // bleeding (or her first log), clearly labeled as an estimate.
     private var previewHero: some View {
-        ZStack {
-            VStack(spacing: 8) {
+        VStack(spacing: 8) {
+            ZStack {
                 CycleRing(prediction: store.previewPrediction(), size: 220)
-                Text("A first guess — it sharpens as you log")
-                    .font(ffBody(FFType.xs, weight: .medium))
-                    .foregroundStyle(theme.color(.muted))
+                RingSticker(radius: CycleRing.trackRadius(for: 220),
+                            periodFraction: periodFraction(store.previewPrediction()))
             }
-            RingSticker(radius: 110, periodFraction: periodFraction(store.previewPrediction()))
+            Text("A first guess — it sharpens as you log")
+                .font(ffBody(FFType.xs, weight: .medium))
+                .foregroundStyle(theme.color(.muted))
         }
     }
 

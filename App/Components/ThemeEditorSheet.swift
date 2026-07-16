@@ -8,7 +8,11 @@ struct ThemeEditorSheet: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
     @Environment(\.dismiss) private var dismiss
+    /// Close this sheet and jump to the Stretch tab (wired by TodayView).
+    var onGoEarn: (() -> Void)? = nil
     @State private var showShop = false
+    @State private var petalGap: PetalGap?
+    @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: FFSpace.s3)]
 
@@ -22,6 +26,7 @@ struct ThemeEditorSheet: View {
                 presetSection
                 accentSection
                 studioSection
+                touchesSection
                 Text("Period, fertile and phase colors never change — they mean something.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
@@ -29,7 +34,10 @@ struct ThemeEditorSheet: View {
             .padding(FFSpace.s5)
         }
         .background(theme.color(.bg))
-        .sheet(isPresented: $showShop) { GardenShopView() }
+        .sheet(isPresented: $showShop) { GardenShopView(onGoEarn: { onGoEarn?() }) }
+        .sheet(item: $petalGap) { gap in
+            NeedMorePetalsView(gap: gap, onGoStretch: { onGoEarn?() })
+        }
     }
 
     private var header: some View {
@@ -68,6 +76,9 @@ struct ThemeEditorSheet: View {
                 withAnimation(FFMotion.fast) { theme.setPreset(name) }
             } else if rewards.buyTheme(name) {
                 withAnimation(FFMotion.fast) { theme.setPreset(name) }
+            } else {
+                petalGap = PetalGap(name: "the \(Theme.label(for: name)) palette",
+                                    price: RewardsStore.themePrice)
             }
         } label: {
             HStack(spacing: 8) {
@@ -125,7 +136,10 @@ struct ThemeEditorSheet: View {
                         }
                         Spacer(minLength: 4)
                         Button {
-                            _ = rewards.buyAccent()
+                            if !rewards.buyAccent() {
+                                petalGap = PetalGap(name: "the custom accent color",
+                                                    price: RewardsStore.accentPrice)
+                            }
                         } label: {
                             Label("\(RewardsStore.accentPrice)", systemImage: "sparkle")
                                 .font(ffBody(FFType.xs, weight: .bold))
@@ -187,6 +201,28 @@ struct ThemeEditorSheet: View {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // Little touches — the ambient magic, hers to switch off.
+    private var touchesSection: some View {
+        VStack(alignment: .leading, spacing: FFSpace.s3) {
+            sectionTitle("Little touches")
+            FFCard {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Falling petals")
+                            .font(ffBody(FFType.md, weight: .semibold))
+                            .foregroundStyle(theme.color(.text))
+                        Text("Petals drift around your cycle ring on Today")
+                            .font(ffBody(FFType.xs))
+                            .foregroundStyle(theme.color(.muted))
+                    }
+                    Spacer(minLength: 4)
+                    FFSwitch(isOn: $petalsOnRing)
+                        .accessibilityLabel("Falling petals around the cycle ring")
                 }
             }
         }

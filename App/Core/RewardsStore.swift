@@ -15,7 +15,6 @@ import AudioToolbox
 
 struct FlowerItem: Identifiable {
     let id: String
-    let emoji: String
     let name: String
     let price: Int
     let rarity: String
@@ -44,11 +43,15 @@ final class RewardsStore {
     private(set) var periodLandDays: Set<String> = []  // ring-landing bonuses already paid
     private(set) var tutorialSeen = false
     var activeSticker: String? { didSet { save() } }  // flower id or "posey"
-    /// Where her sticker sits around the Today ring (normalized -1…1 offsets).
+    /// Where her plucked sticker rests near the Today ring (offsets from the
+    /// ring center in units of the ring's track radius, so ~-1.4…1.4).
     var stickerX: Double = 0.78 { didSet { save() } }
     var stickerY: Double = -0.72 { didSet { save() } }
     /// Resting angle of the sticker on the Today ring (radians). Persisted.
     var stickerAngle: Double = -0.9 { didSet { save() } }
+    /// "ring" (riding the ring at `stickerAngle`) or "free" (plucked off and
+    /// resting at `stickerX`/`stickerY`). Persisted.
+    var stickerMode: String = "ring" { didSet { save() } }
 
     private static let key = "flowtear.rewards.v1"
 
@@ -56,17 +59,19 @@ final class RewardsStore {
 
     // MARK: catalog
 
+    // Hand-drawn in FlowerArt.swift — cuter, prouder, and a touch bigger as
+    // rarity climbs (never emoji; the DS forbids them in product UI).
     static let flowers: [FlowerItem] = [
-        FlowerItem(id: "daisy",     emoji: "🌼", name: "Daisy",     price: 100,  rarity: "Common"),
-        FlowerItem(id: "tulip",     emoji: "🌷", name: "Tulip",     price: 250,  rarity: "Common"),
-        FlowerItem(id: "blossom",   emoji: "🌸", name: "Blossom",   price: 500,  rarity: "Sweet"),
-        FlowerItem(id: "camellia",  emoji: "💮", name: "Camellia",  price: 800,  rarity: "Sweet"),
-        FlowerItem(id: "rosette",   emoji: "🏵️", name: "Rosette",   price: 1200, rarity: "Lovely"),
-        FlowerItem(id: "rose",      emoji: "🌹", name: "Rose",      price: 1800, rarity: "Lovely"),
-        FlowerItem(id: "hibiscus",  emoji: "🌺", name: "Hibiscus",  price: 2600, rarity: "Rare"),
-        FlowerItem(id: "sunflower", emoji: "🌻", name: "Sunflower", price: 3600, rarity: "Rare"),
-        FlowerItem(id: "lotus",     emoji: "🪷", name: "Lotus",     price: 5000, rarity: "Precious"),
-        FlowerItem(id: "bouquet",   emoji: "🌹", name: "Red rose bouquet", price: 7500, rarity: "Precious"),
+        FlowerItem(id: "daisy",     name: "Daisy",     price: 100,  rarity: "Common"),
+        FlowerItem(id: "tulip",     name: "Tulip",     price: 250,  rarity: "Common"),
+        FlowerItem(id: "blossom",   name: "Blossom",   price: 500,  rarity: "Sweet"),
+        FlowerItem(id: "camellia",  name: "Camellia",  price: 800,  rarity: "Sweet"),
+        FlowerItem(id: "rosette",   name: "Rosette",   price: 1200, rarity: "Lovely"),
+        FlowerItem(id: "rose",      name: "Rose",      price: 1800, rarity: "Lovely"),
+        FlowerItem(id: "hibiscus",  name: "Hibiscus",  price: 2600, rarity: "Rare"),
+        FlowerItem(id: "sunflower", name: "Sunflower", price: 3600, rarity: "Rare"),
+        FlowerItem(id: "lotus",     name: "Lotus",     price: 5000, rarity: "Precious"),
+        FlowerItem(id: "bouquet",   name: "Red rose bouquet", price: 7500, rarity: "Precious"),
     ]
     static let poseyPrice = 10000
 
@@ -82,13 +87,6 @@ final class RewardsStore {
     static let soundPrice = 1200
     static let starterGift = 100          // exactly a Daisy — her first unlock
     static let freeThemes: Set<String> = ["cherry", "rose", "dark"]
-
-    /// The emoji for the sticker she has equipped (Posey shows as her bloom).
-    var activeStickerEmoji: String? {
-        guard let s = activeSticker else { return nil }
-        if s == "posey" { return "🌸" }
-        return Self.flowers.first { $0.id == s }?.emoji
-    }
 
     /// First open of the Stretch tab: mark the tutorial seen and gift exactly
     /// enough petals for the Daisy, once ever.
@@ -247,6 +245,7 @@ final class RewardsStore {
         var penalizedDays: Set<String>? = []
         var stickerAngle: Double? = -0.9
         var periodLandDays: Set<String>? = []
+        var stickerMode: String? = "ring"
     }
 
     private func save() {
@@ -258,7 +257,7 @@ final class RewardsStore {
                      stickerX: stickerX, stickerY: stickerY,
                      ownedSounds: ownedSounds, activeSound: activeSound,
                      penalizedDays: penalizedDays, stickerAngle: stickerAngle,
-                     periodLandDays: periodLandDays)
+                     periodLandDays: periodLandDays, stickerMode: stickerMode)
         guard let data = try? JSONEncoder().encode(b) else { return }
         if let prev = UserDefaults.standard.data(forKey: Self.key) {
             UserDefaults.standard.set(prev, forKey: Self.key + ".backup")
@@ -282,6 +281,7 @@ final class RewardsStore {
                 penalizedDays = b.penalizedDays ?? []
                 stickerAngle = b.stickerAngle ?? -0.9
                 periodLandDays = b.periodLandDays ?? []
+                stickerMode = b.stickerMode ?? "ring"
                 // Migrate the old single-chime unlock into the crystal chime.
                 if b.soundUnlocked == true && ownedSounds.isEmpty {
                     ownedSounds.insert("crystal")

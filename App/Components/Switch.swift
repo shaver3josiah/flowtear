@@ -33,5 +33,6 @@ struct FFSwitch: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(.isToggle)
+        .accessibilityValue(isOn ? "On" : "Off")
     }
 }

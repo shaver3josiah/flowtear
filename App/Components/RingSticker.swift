@@ -1,10 +1,13 @@
 import SwiftUI
 
-// RingSticker — her flower rides the cycle ring like a bead on a bangle. Drag
-// it and it orbits (always snapped to the ring); fling it and it keeps spinning
-// like a fidget spinner, shedding confetti while it's fast, easing to a stop
-// with a little sparkle. The resting angle persists. Reduce Motion: drag moves
-// it, no inertia, no trail.
+// RingSticker — her flower rides the cycle ring like a bead on a bangle. The
+// hitbox is the flower itself (the rest of the ring keeps its scrub gesture).
+// Dragging along the ring band keeps it magnetically locked to the ring —
+// always concentric, never offset; fling it and it keeps spinning like a
+// fidget spinner, shedding confetti while it's fast. Pull it clearly off the
+// band and it PLUCKS free: drop it inside the ring or off to the side and it
+// rests there (persisted); carry it back to the band and it snaps on again.
+// Reduce Motion: drag still works, no inertia, no trail.
 struct RingSticker: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
@@ -16,7 +19,10 @@ struct RingSticker: View {
     var periodFraction: Double = 0
 
     @State private var angle: Double = -0.9
-    @State private var velocity: Double = 0       // radians / frame
+    @State private var freePos: CGPoint = .zero    // center-origin, when plucked
+    @State private var onRing = true
+    @State private var plucked = false             // mid-drag, off the band
+    @State private var velocity: Double = 0        // radians / frame
     @State private var dragging = false
     @State private var spinning = false
     @State private var lastDragAngle: Double? = nil
@@ -26,7 +32,17 @@ struct RingSticker: View {
     @State private var showTease = false
     @State private var showBonus = false
 
-    private var diameter: CGFloat { radius * 2 + 56 }
+    /// Frame margin: wide enough that a free rest can clear the snap band on
+    /// every axis (margin/2 − 14 > snapBand), so "beside the ring" is stable.
+    private var diameter: CGFloat { radius * 2 + 96 }
+    /// How far off the ring counts as "still on the band" (magnetic snap zone).
+    private let snapBand: CGFloat = 26
+
+    /// Where the flower sits right now, center-origin.
+    private var pos: CGPoint {
+        if plucked || !onRing { return freePos }
+        return CGPoint(x: CGFloat(cos(angle)) * radius, y: CGFloat(sin(angle)) * radius)
+    }
 
     var body: some View {
         if let id = rewards.activeSticker {
@@ -43,62 +59,106 @@ struct RingSticker: View {
                         .allowsHitTesting(false)
                 }
 
+                SparkleBurst(trigger: settleBurst, count: 10)
+                    .offset(x: pos.x, y: pos.y)
+                    .allowsHitTesting(false)
+
+                // The flower: its 44pt circle IS the hitbox — nothing else here
+                // grabs touches, so the ring's own scrub gesture keeps the rest.
                 StickerView(id: id, size: 30)
                     .scaleEffect(dragging ? 1.2 : 1)
                     .shadow(color: theme.shadow, radius: dragging || spinning ? 6 : 0)
-                    .offset(x: CGFloat(cos(angle)) * radius,
-                            y: CGFloat(sin(angle)) * radius)
-                    .overlay(
-                        SparkleBurst(trigger: settleBurst, count: 10)
-                            .offset(x: CGFloat(cos(angle)) * radius,
-                                    y: CGFloat(sin(angle)) * radius)
-                    )
+                    .frame(width: FFSpace.tapMin, height: FFSpace.tapMin)
+                    .contentShape(Circle())
+                    .offset(x: pos.x, y: pos.y)
+                    .highPriorityGesture(stickerDrag)
                     .animation(dragging ? nil : FFMotion.spring, value: dragging)
             }
             .frame(width: diameter, height: diameter)
+            .coordinateSpace(name: "ffRingSticker")
             .overlay(alignment: .top) { teaseBubble }
             .overlay(alignment: .bottom) { bonusBadge }
-            .contentShape(ringHitArea)
-            .gesture(orbitDrag)
-            .onAppear { angle = rewards.stickerAngle }
+            .onAppear {
+                angle = rewards.stickerAngle
+                onRing = rewards.stickerMode != "free"
+                // Normalized by RADIUS (not the frame) so a rest keeps the same
+                // relation to the band across ring sizes (hero vs preview).
+                freePos = CGPoint(x: CGFloat(rewards.stickerX) * radius,
+                                  y: CGFloat(rewards.stickerY) * radius)
+            }
             .sensoryFeedback(.selection, trigger: settleBurst)
-            .accessibilityLabel("Your flower sticker on the ring")
-            .accessibilityHint("Drag to spin it around the ring")
+            .accessibilityLabel("Your flower sticker")
+            .accessibilityHint("Drag along the ring to spin it, or pull it off and set it anywhere")
         }
     }
 
-    // Only the band near the ring grabs touches — the ring's own scrub gesture
-    // keeps the interior.
-    private var ringHitArea: some Shape {
-        Circle().inset(by: 8)
-            .subtracting(Circle().inset(by: 52))
-    }
-
-    private var orbitDrag: some Gesture {
-        DragGesture(minimumDistance: 0)
+    private var stickerDrag: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("ffRingSticker"))
             .onChanged { v in
                 dragging = true
                 spinning = false
                 let c = diameter / 2
-                let a = Double(atan2(v.location.y - c, v.location.x - c))
-                if let last = lastDragAngle {
-                    var delta = a - last
-                    if delta > .pi { delta -= 2 * .pi }
-                    if delta < -.pi { delta += 2 * .pi }
-                    velocity = delta
-                    if !reduceMotion, abs(delta) > 0.06 { emitTrail() }
+                let dx = v.location.x - c
+                let dy = v.location.y - c
+                let r = hypot(dx, dy)
+                let onBand = abs(r - radius) <= snapBand
+                // A free-resting flower needs real movement before it re-beads —
+                // a bare tap must never yank it out of its placed spot.
+                let moved = hypot(v.translation.width, v.translation.height) > 8
+                if onBand && (onRing || moved) {
+                    // On the band: magnetically locked to the ring, concentric.
+                    plucked = false
+                    onRing = true
+                    let a = Double(atan2(dy, dx))
+                    if let last = lastDragAngle {
+                        var delta = a - last
+                        if delta > .pi { delta -= 2 * .pi }
+                        if delta < -.pi { delta += 2 * .pi }
+                        velocity = delta
+                        if !reduceMotion, abs(delta) > 0.06 { emitTrail() }
+                    }
+                    lastDragAngle = a
+                    angle = a
+                } else if !onBand && (onRing || plucked || moved) {
+                    // Plucked: the flower follows her finger anywhere.
+                    plucked = true
+                    lastDragAngle = nil
+                    velocity = 0
+                    let limit = c - 14
+                    freePos = CGPoint(x: min(max(dx, -limit), limit),
+                                      y: min(max(dy, -limit), limit))
                 }
-                lastDragAngle = a
-                angle = a
+                // else: an untraveled touch on a free-resting flower — hold still.
             }
             .onEnded { _ in
                 dragging = false
                 lastDragAngle = nil
-                if !reduceMotion && abs(velocity) > 0.035 {
-                    startSpin()
-                } else {
-                    settle()
+                if plucked {
+                    plucked = false
+                    let rest = hypot(freePos.x, freePos.y)
+                    if abs(rest - radius) <= snapBand {
+                        // Dropped onto the band — it beads back onto the ring.
+                        angle = Double(atan2(freePos.y, freePos.x))
+                        onRing = true
+                        rewards.stickerMode = "ring"
+                        settle()
+                    } else {
+                        onRing = false
+                        rewards.stickerX = Double(freePos.x / radius)
+                        rewards.stickerY = Double(freePos.y / radius)
+                        rewards.stickerMode = "free"
+                        settleBurst += 1
+                        withAnimation(.easeOut(duration: 0.4)) { trail.removeAll() }
+                    }
+                } else if onRing {
+                    rewards.stickerMode = "ring"
+                    if !reduceMotion && abs(velocity) > 0.035 {
+                        startSpin()
+                    } else {
+                        settle()
+                    }
                 }
+                // else: an idle tap on a free-resting flower — leave it be.
             }
     }
 

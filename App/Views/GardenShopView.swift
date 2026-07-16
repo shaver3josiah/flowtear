@@ -4,7 +4,7 @@ import SwiftUI
 // + Posey), theme/accent/Color-Studio unlocks, sticker equipping, the rules
 // sheet, and the shareable lifetime card.
 
-// MARK: - Sticker art (the bouquet is a fan of red roses, not the emoji bundle)
+// MARK: - Sticker art (hand-drawn blooms; rarer ones render a touch larger)
 
 struct StickerView: View {
     let id: String
@@ -13,16 +13,9 @@ struct StickerView: View {
     var body: some View {
         if id == "posey" {
             FlowerMark(size: size)
-        } else if id == "bouquet" {
-            ZStack {
-                Text("🌹").font(.system(size: size * 0.8)).rotationEffect(.degrees(-24)).offset(x: -size * 0.22)
-                Text("🌹").font(.system(size: size * 0.8)).rotationEffect(.degrees(24)).offset(x: size * 0.22)
-                Text("🌹").font(.system(size: size * 0.9)).offset(y: -size * 0.06)
-            }
-            .frame(width: size * 1.4, height: size)
         } else {
-            Text(RewardsStore.flowers.first { $0.id == id }?.emoji ?? "🌸")
-                .font(.system(size: size))
+            let scale = RewardsStore.flowers.first { $0.id == id }?.artScale ?? 1
+            FlowerArt(id: id, size: size * scale)
         }
     }
 }
@@ -117,8 +110,11 @@ struct GardenShopView: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
     @Environment(\.dismiss) private var dismiss
+    /// Jump to the Stretch tab (set by callers that aren't already there).
+    var onGoEarn: (() -> Void)? = nil
     @State private var showShare = false
     @State private var buyBurst = 0
+    @State private var petalGap: PetalGap?
 
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: FFSpace.s3)]
 
@@ -137,6 +133,12 @@ struct GardenShopView: View {
         .background(theme.color(.bg))
         .overlay(SparkleBurst(trigger: buyBurst, count: 24))
         .sheet(isPresented: $showShare) { ShareCardView() }
+        .sheet(item: $petalGap) { gap in
+            NeedMorePetalsView(gap: gap, onGoStretch: {
+                dismiss()
+                onGoEarn?()
+            })
+        }
     }
 
     private var header: some View {
@@ -180,10 +182,13 @@ struct GardenShopView: View {
             } else if rewards.buyFlower(f.id) {
                 buyBurst += 1
                 rewards.playCelebrationIfOwned()
+            } else {
+                petalGap = PetalGap(name: "the \(f.name)", price: f.price)
             }
         } label: {
             VStack(spacing: 6) {
                 StickerView(id: f.id, size: 34)
+                    .frame(height: 48)   // rarity scaling without jagged grid rows
                     .saturation(owned || affordable ? 1 : 0.35)
                 Text(f.name)
                     .font(ffBody(FFType.sm, weight: .semibold))
@@ -237,6 +242,7 @@ struct GardenShopView: View {
                 Button {
                     if owned { rewards.activeSticker = equipped ? nil : "posey" }
                     else if rewards.buyPosey() { buyBurst += 1 }
+                    else { petalGap = PetalGap(name: "Posey herself", price: RewardsStore.poseyPrice) }
                 } label: {
                     Group {
                         if equipped { Label("Worn", systemImage: "checkmark") }
@@ -263,16 +269,22 @@ struct GardenShopView: View {
                           title: "\(Theme.label(for: name)) palette",
                           owned: rewards.themeOwned(name), price: RewardsStore.themePrice) {
                     if rewards.buyTheme(name) { buyBurst += 1 }
+                    else { petalGap = PetalGap(name: "the \(Theme.label(for: name)) palette",
+                                               price: RewardsStore.themePrice) }
                 }
             }
             unlockRow(icon: "paintpalette.fill", swatch: nil, title: "Custom accent color",
                       owned: rewards.accentUnlocked, price: RewardsStore.accentPrice) {
                 if rewards.buyAccent() { buyBurst += 1 }
+                else { petalGap = PetalGap(name: "the custom accent color",
+                                           price: RewardsStore.accentPrice) }
             }
             soundShelf
             unlockRow(icon: "slider.horizontal.3", swatch: nil, title: "Color Studio — recolor nearly everything",
                       owned: rewards.colorStudioUnlocked, price: RewardsStore.colorStudioPrice) {
                 if rewards.buyColorStudio() { buyBurst += 1 }
+                else { petalGap = PetalGap(name: "the Color Studio",
+                                           price: RewardsStore.colorStudioPrice) }
             }
             Text("Cherry, Rose and Dark are always free. Unlocked colors live in the pencil settings on Today.")
                 .font(ffBody(FFType.xs2)).foregroundStyle(theme.color(.muted))
@@ -306,6 +318,8 @@ struct GardenShopView: View {
                     rewards.playCelebrationIfOwned()
                 } else if rewards.buySoundItem(item.id) {
                     buyBurst += 1
+                } else {
+                    petalGap = PetalGap(name: "the \(item.name) sound", price: item.price)
                 }
             } label: {
                 Group {
@@ -408,7 +422,7 @@ struct StretchRulesView: View {
 
                 rulesCard("Spending", "bag", [
                     "Your first 100 petals are a welcome gift — enough for the Daisy.",
-                    "Ten flowers of rising rarity — Daisy (100) up to the red rose bouquet (7,500). Own one, wear it as a sticker and drag it anywhere around your Today ring.",
+                    "Ten flowers of rising rarity — Daisy (100) up to the red rose bouquet (7,500). Own one, wear it on your Today ring — spin it around the ring, or pluck it off and rest it anywhere you like.",
                     "Posey herself is the legendary sticker: 10,000.",
                     "Celebration sounds — Petal swoosh 800, Songbird 1,200, Crystal chime 1,600. They ring when a session ends or a log slides home.",
                     "Palettes — Pink, Peony, Soft, Light: 600 each. Cherry, Rose and Dark are always free.",

@@ -21,6 +21,7 @@ struct StretchCoachView: View {
     @State private var burstToken = 0
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
+    @State private var playingDay: StretchDay? = nil   // any schedule day, guided
 
     private var today: Date { Date() }
     private var p: CyclePrediction { store.prediction() }
@@ -77,6 +78,13 @@ struct StretchCoachView: View {
         }
         .fullScreenCover(isPresented: $playing) {
             StretchSessionView(day: activeSession, finishTitle: sessionFinishTitle,
+                               multiplier: multiplier)
+        }
+        // Any day of the plan can be run guided, right from the schedule list.
+        .fullScreenCover(item: $playingDay) { day in
+            StretchSessionView(day: day,
+                               finishTitle: day.daysBeforePeriod == todaySession?.daysBeforePeriod
+                                   ? sessionFinishTitle : "Session done",
                                multiplier: multiplier)
         }
         .sheet(isPresented: $showShop) { GardenShopView() }
@@ -223,10 +231,12 @@ struct StretchCoachView: View {
             PointsPill(action: { showShop = true })
             Spacer(minLength: 0)
             FFIconButton("bag") { showShop = true }
+                .glitterHint("gardenShop")
                 .accessibilityLabel("Garden shop")
             FFIconButton("square.and.arrow.up") { showShare = true }
                 .accessibilityLabel("Share your garden")
             FFIconButton("book") { showRules = true }
+                .glitterHint("rules")
                 .accessibilityLabel("How points and unlocks work")
         }
     }
@@ -442,6 +452,9 @@ struct StretchCoachView: View {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 Text(tier == .starter ? "The 3 days" : "The 14 days")
                     .font(ffBody(FFType.md, weight: .semibold)).foregroundStyle(theme.color(.deep))
+                Text("Tap any day to open its moves — and run any session guided, whenever you like.")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
                 VStack(spacing: 0) {
                     ForEach(StretchPlan.days(for: tier)) { day in
                         scheduleRow(day)
@@ -511,6 +524,9 @@ struct StretchCoachView: View {
                                      checked: store.stretchMovesDone(on: today).contains(i),
                                      session: day)
                     }
+                    FFButton("Start guided session", style: .soft, size: .sm, icon: "play.fill") {
+                        playingDay = day
+                    }
                 }
                 .padding(.leading, 34)
                 .padding(.bottom, FFSpace.s3)
@@ -529,6 +545,11 @@ struct StretchCoachView: View {
                                 Text(m.cue).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
                             }
                         }
+                    }
+                    // Off-schedule days still open the guided player — the whole
+                    // system is hers to explore; completions log to today.
+                    FFButton("Do this session now", style: .soft, size: .sm, icon: "play.fill") {
+                        playingDay = day
                     }
                 }
                 .padding(.leading, 34)
