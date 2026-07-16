@@ -29,7 +29,7 @@ struct CycleRing: View {
         let c = Self.computeCycle(cycleLength: cycleLength, periodLength: periodLength)
         let cl = Double(cycleLength)
         let k = size / 200
-        let radius = 84 * k
+        let radius = Self.trackRadius(for: size)
         let stroke = 15 * k
         let center = size / 2
         let reveal: Double = reduceMotion ? 1 : progress
@@ -143,6 +143,11 @@ struct CycleRing: View {
     }
 
     // MARK: - Standard cycle model (shared helpers)
+
+    /// Radius of the drawn track for a given ring size (arcs live at 84/200 of
+    /// the design space). RingSticker orbits at exactly this radius so the
+    /// flower beads onto the visible ring, concentric with it.
+    static func trackRadius(for size: CGFloat) -> CGFloat { 84 * size / 200 }
 
     struct Derived { let ovDay: Int; let fertileStart: Int }
 

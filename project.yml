@@ -37,6 +37,8 @@ targets:
       properties:
         CFBundleDisplayName: Uncorked
         ITSAppUsesNonExemptEncryption: false
+        # Optional privacy lock (toggled in the pencil settings).
+        NSFaceIDUsageDescription: Unlocks your cycle data with Face ID.
         # Fonts: drop the OFL .ttf files into App/Resources/Fonts/ to activate.
         # Until then Font.custom falls back to the system font (see Theme.swift).
         UIAppFonts:

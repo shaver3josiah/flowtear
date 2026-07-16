@@ -156,6 +156,7 @@ struct StretchSessionView: View {
             }
         } else {
             store.setStretchDone(true, on: Date())
+            rewards.playCelebrationIfOwned()
             withAnimation(reduceMotion ? nil : FFMotion.signature) { finished = true }
         }
     }

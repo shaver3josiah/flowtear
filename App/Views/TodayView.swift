@@ -16,8 +16,10 @@ struct TodayView: View {
     private var p: CyclePrediction { store.prediction() }
     private var today: Date { Date() }
     @State private var showThemeEditor = false
+    @State private var showAbout = false
+    @State private var showTips = false
     @State private var paneIndex = 0
-    @State private var stickerDrag: CGSize = .zero
+    @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -31,8 +33,9 @@ struct TodayView: View {
                     rotatingPane
                     FertileWindowCard()
                 } else if store.hasAnyLogs {
-                    // She's logging (moods, temps…) but hasn't recorded a period
-                    // yet — say so honestly instead of "nothing logged yet".
+                    // She's logging but no period is confirmed yet — show the
+                    // ring anyway as a best-guess preview that sharpens with data.
+                    previewHero
                     startedState
                     quickLog
                     rotatingPane
@@ -45,10 +48,15 @@ struct TodayView: View {
             .padding(.bottom, FFSpace.s6)
         }
         .sheet(isPresented: $showThemeEditor) {
-            ThemeEditorSheet()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            ThemeEditorSheet(onGoEarn: {
+                showThemeEditor = false
+                onOpenStretch()
+            })
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showAbout) { AboutView() }
+        .sheet(isPresented: $showTips) { TipsSheet() }
     }
 
     // MARK: Header (weekday + date + the pencil, like Bloom)
@@ -56,7 +64,10 @@ struct TodayView: View {
     private var header: some View {
         HStack(spacing: 11) {
             FlowerMark(size: 38)
-                .accessibilityHidden(true)
+                .onTapGesture(count: 2) { showAbout = true }
+                .accessibilityLabel("About Uncorked")
+                .accessibilityHint("Opens the about page and questions")
+                .accessibilityAddTraits(.isButton)
             VStack(alignment: .leading, spacing: 2) {
                 Text(today.formatted(.dateTime.weekday(.wide)))
                     .font(ffDisplay(FFType.xl, weight: .semibold))
@@ -66,7 +77,11 @@ struct TodayView: View {
                     .foregroundStyle(theme.color(.muted))
             }
             Spacer(minLength: 0)
+            FFIconButton("lightbulb") { showTips = true }
+                .glitterHint("tips")
+                .accessibilityLabel("Tips and hidden features")
             FFIconButton("pencil") { showThemeEditor = true }
+                .glitterHint("themeEditor")
                 .accessibilityLabel("Theme settings")
         }
         .padding(.top, 2)
@@ -77,45 +92,30 @@ struct TodayView: View {
     private var hero: some View {
         ZStack {
             // Subtle drifting-petal accent behind the ring. PetalRain self-gates
-            // reduce-motion (renders nothing) and ignores hit-testing.
-            PetalRain(count: 10)
-                .frame(height: 300)
+            // reduce-motion (renders nothing) and ignores hit-testing; she can
+            // switch it off in the pencil settings.
+            if petalsOnRing {
+                PetalRain(count: 10)
+                    .frame(height: 300)
+            }
 
             VStack(spacing: 10) {
-                CycleRing(prediction: p, size: 244)
+                // The sticker shares the ring's ZStack so its orbit center IS the
+                // ring's center, and it rides the drawn track's exact radius —
+                // concentric, never offset.
+                ZStack {
+                    CycleRing(prediction: p, size: 244)
+                    RingSticker(radius: CycleRing.trackRadius(for: 244),
+                                periodFraction: periodFraction(p))
+                }
                 PhaseBadge(phase: p.phase)
                 Text(nextPeriodLine)
                     .font(ffBody(FFType.sm, weight: .medium))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)
             }
-
-            stickerOverlay
         }
         .padding(.vertical, 2)
-    }
-
-    // Her flower sticker, placeable anywhere around the ring: drag it, it stays.
-    @ViewBuilder private var stickerOverlay: some View {
-        if let id = rewards.activeSticker {
-            let radius: CGFloat = 118
-            StickerView(id: id, size: 32)
-                .offset(x: CGFloat(rewards.stickerX) * radius + stickerDrag.width,
-                        y: CGFloat(rewards.stickerY) * radius + stickerDrag.height)
-                .highPriorityGesture(
-                    DragGesture()
-                        .onChanged { v in stickerDrag = v.translation }
-                        .onEnded { v in
-                            let nx = rewards.stickerX + Double(v.translation.width / radius)
-                            let ny = rewards.stickerY + Double(v.translation.height / radius)
-                            rewards.stickerX = min(max(nx, -1.15), 1.15)
-                            rewards.stickerY = min(max(ny, -1.15), 1.15)
-                            stickerDrag = .zero
-                        }
-                )
-                .accessibilityLabel("Your flower sticker")
-                .accessibilityHint("Drag to place it around the ring")
-        }
     }
 
     // The bottom pane takes turns: the stretch plan, then a peek at Insights,
@@ -173,6 +173,11 @@ struct TodayView: View {
         .accessibilityHint("Opens \(title)")
     }
 
+    /// Fraction of the ring covered by the bleed arc (day 1 → period length).
+    private func periodFraction(_ pred: CyclePrediction) -> Double {
+        min(Double(max(pred.averagePeriodLength, 0)) / Double(max(pred.averageCycleLength, 1)), 1)
+    }
+
     private var nextPeriodLine: String {
         guard let d = p.daysUntilNextPeriod else { return "" }
         switch d {
@@ -212,6 +217,21 @@ struct TodayView: View {
                 store.upsert(log)
             }
         )
+    }
+
+    // A best-guess ring before her first confirmed period: anchored on any
+    // bleeding (or her first log), clearly labeled as an estimate.
+    private var previewHero: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                CycleRing(prediction: store.previewPrediction(), size: 220)
+                RingSticker(radius: CycleRing.trackRadius(for: 220),
+                            periodFraction: periodFraction(store.previewPrediction()))
+            }
+            Text("A first guess — it sharpens as you log")
+                .font(ffBody(FFType.xs, weight: .medium))
+                .foregroundStyle(theme.color(.muted))
+        }
     }
 
     // Logged something, but no period days yet — predictions are waiting.

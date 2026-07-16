@@ -35,6 +35,7 @@ extension View {
 #Preview("Rules") { StretchRulesView().previewEnv() }
 #Preview("Share card") { ShareCardView().previewEnv() }
 #Preview("Tutorial") { StretchTutorialView().previewEnv() }
+#Preview("About") { AboutView().previewEnv() }
 #Preview("Pose figures") {
     let moves = StretchPlan.days.flatMap { $0.moves }
     var seen = Set<String>()

@@ -14,6 +14,7 @@ import SwiftUI
 //   rest offset x = 6; travel = width − knobW − 12; full: right edge = W − 6.
 struct SlideToLog: View {
     @Environment(Theme.self) private var theme
+    @Environment(RewardsStore.self) private var rewards
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var enabled: Bool
@@ -172,6 +173,7 @@ struct SlideToLog: View {
         withAnimation(FFMotion.spring) { dragX = travel }
         committed = true
         burst += 1
+        rewards.playCelebrationIfOwned()
         // Let the burst and checkmark land before the caller navigates away.
         Task {
             try? await Task.sleep(for: .seconds(0.9))
