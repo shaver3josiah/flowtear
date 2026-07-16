@@ -175,7 +175,10 @@ final class RewardsStore {
     /// Symmetric take-back when a pose is UNchecked: pop the day's last recorded
     /// award (awards depend only on the checked COUNT, so a stack refunds the
     /// right amount in every toggle order — no farming, no unfair drain). Days
-    /// checked before the ledger existed fall back to recomputing.
+    /// checked before the ledger existed fall back to recomputing. Known,
+    /// accepted ceiling: the refund clamps at a zero balance, so spending
+    /// everything and then uncheck/recheck can mint back what the clamp ate —
+    /// she'd only be gaming herself, and never loses petals to it.
     func revokePose(dateKey: String, remainingDone: Int, total: Int, wasFullDay: Bool, multiplier: Int) {
         let refund: Int
         if var log = poseAwardLog[dateKey], let last = log.popLast() {

@@ -22,6 +22,7 @@ struct CoachFlower: View {
     @State private var balloon = false
     @State private var starBurst = 0
     @State private var showAward = false
+    @State private var awardHideTask: Task<Void, Never>? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -112,22 +113,28 @@ struct CoachFlower: View {
     // Reduce Motion keeps the INFORMATION (the +N award readout, shown plainly
     // for a moment) and drops only the theatrics — never both.
     private func celebrate() {
+        // Each celebration restarts the full display window — a rapid second
+        // check-off must never let the FIRST award's hide truncate the second.
+        awardHideTask?.cancel()
         guard !reduceMotion else {
             showAward = true
-            Task {
+            awardHideTask = Task {
                 try? await Task.sleep(for: .seconds(1.4))
+                guard !Task.isCancelled else { return }
                 showAward = false
             }
             return
         }
         withAnimation(.easeIn(duration: 0.25)) { watering = true }
-        Task {
+        awardHideTask = Task {
             try? await Task.sleep(for: .seconds(0.5))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.2)) { watering = false }
             withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) { balloon = true }
             starBurst += 1
             withAnimation(FFMotion.spring) { showAward = true }
             try? await Task.sleep(for: .seconds(0.9))
+            guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.35)) { balloon = false; showAward = false }
         }
     }

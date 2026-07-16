@@ -246,6 +246,7 @@ struct StretchCoachView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 7)
+            .frame(minHeight: FFSpace.tapMin)   // comfortably past the 44pt floor
             .background(
                 selected ? theme.color(.primaryStrong) : .clear,
                 in: RoundedRectangle(cornerRadius: FFRadius.sm, style: .continuous)

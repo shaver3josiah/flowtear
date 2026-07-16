@@ -94,6 +94,7 @@ struct InsightsView: View {
             Text("Insights")
                 .font(ffDisplay(FFType.xl2, weight: .bold))
                 .foregroundStyle(theme.color(.deep))
+                .accessibilityAddTraits(.isHeader)
             Text(subtitle)
                 .font(ffBody(FFType.sm))
                 .foregroundStyle(theme.color(.muted))
@@ -113,6 +114,7 @@ struct InsightsView: View {
                       systemImage: flags.isEmpty ? "doc.text" : "exclamationmark.bubble")
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
+                    .accessibilityAddTraits(.isHeader)
                 ForEach(flags.prefix(2), id: \.self) { f in
                     HStack(alignment: .top, spacing: 8) {
                         Circle().fill(theme.color(.primaryStrong)).frame(width: 5, height: 5).padding(.top, 6)
@@ -137,6 +139,7 @@ struct InsightsView: View {
                 Label("Your data, your spreadsheet", systemImage: "tablecells")
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
+                    .accessibilityAddTraits(.isHeader)
                 Text("Everything from the calendar — flow, discharge, temps, moods, symptoms, stretches, notes — as a CSV file.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
@@ -218,6 +221,7 @@ struct InsightsView: View {
                 Label("Backup & restore", systemImage: "externaldrive")
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
+                    .accessibilityAddTraits(.isHeader)
                 Text("One file with everything — history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
