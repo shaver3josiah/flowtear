@@ -73,6 +73,27 @@ enum StretchPlan {
         tier.totalDays + 1 - day.daysBeforePeriod
     }
 
+    /// The calendar date for a 1-based plan day. Anchored so the window ends
+    /// the day before the predicted period when a prediction exists; otherwise
+    /// the window simply STARTS today (the plan starts when she does). Either
+    /// way every plan day maps to a real date, so every schedule checkbox is
+    /// always live — a nil here is what once left whole plans' checkboxes dead.
+    /// Pure and covered by StretchPlanTests; completions are stored per
+    /// calendar date, so remapping (e.g. a prediction appearing later) never
+    /// loses history.
+    static func date(forPlanDay planDay: Int, tier: StretchTier,
+                     nextPeriodStart: Date?, today: Date,
+                     cal: Calendar = .current) -> Date? {
+        let start: Date?
+        if let next = nextPeriodStart {
+            start = cal.date(byAdding: .day, value: -tier.totalDays, to: next)
+        } else {
+            start = cal.startOfDay(for: today)
+        }
+        guard let start else { return nil }
+        return cal.date(byAdding: .day, value: planDay - 1, to: start)
+    }
+
     /// The session for a given days-until-period, or nil if outside the window.
     static func session(daysUntilPeriod n: Int) -> StretchDay? {
         days.first { $0.daysBeforePeriod == n }

@@ -41,13 +41,11 @@ struct StretchCoachView: View {
     private var multiplier: Int { (tier == .trio || todaySession == nil) ? 1 : tier.multiplier }
 
     private func date(forPlanDay planDay: Int) -> Date? {
-        guard let next = p.nextPeriodStart,
-              let start = Calendar.current.date(byAdding: .day, value: -tier.totalDays, to: next)
-        else { return nil }
-        return Calendar.current.date(byAdding: .day, value: planDay - 1, to: start)
+        StretchPlan.date(forPlanDay: planDay, tier: tier,
+                         nextPeriodStart: p.nextPeriodStart, today: today)
     }
     private func isDone(planDay: Int) -> Bool {
-        guard let d = date(forPlanDay: planDay), d <= today else { return false }
+        guard let d = date(forPlanDay: planDay) else { return false }
         return store.stretchDone(on: d)
     }
 
@@ -511,7 +509,7 @@ struct StretchCoachView: View {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 Text(tier == .starter ? "The 3 days" : "The 14 days")
                     .font(ffBody(FFType.md, weight: .semibold)).foregroundStyle(theme.color(.deep))
-                Text("Tap any day to open its moves — and run any session guided, whenever you like.")
+                Text("Tap a day for its moves, run any session guided, and check off any day — even ahead of schedule.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 VStack(spacing: 0) {
@@ -618,14 +616,13 @@ struct StretchCoachView: View {
         }
     }
 
-    // The day's own checkbox — tappable for today and past plan days; future
-    // days wait their turn. Completing rings her chime and bursts.
+    // The day's own checkbox — EVERY day is tappable: past days back-fill,
+    // today counts, and future days can be done early (her plan, her pace).
+    // Completing rings her chime and bursts.
     private func dayCheckbox(planDay: Int) -> some View {
         let done = isDone(planDay: planDay)
-        let dayDate = date(forPlanDay: planDay)
-        let tappable = dayDate.map { $0 <= today } ?? false
         return Button {
-            guard let d = dayDate else { return }
+            guard let d = date(forPlanDay: planDay) else { return }
             let finishing = !store.stretchDone(on: d)
             store.setStretchDone(finishing, on: d)
             if finishing {
@@ -635,12 +632,11 @@ struct StretchCoachView: View {
         } label: {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20))
-                .foregroundStyle(theme.color(done ? .good : (tappable ? .muted : .line)))
+                .foregroundStyle(theme.color(done ? .good : .muted))
                 .frame(width: FFSpace.tapMin - 14, height: FFSpace.tapMin - 4)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!tappable)
         .accessibilityLabel(done ? "Day \(planDay) done" : "Mark day \(planDay) done")
         .accessibilityAddTraits(done ? .isSelected : [])
     }

@@ -36,7 +36,9 @@ final class Theme {
     private static let studioKey = "flowtear.theme.studio"
 
     init() {
-        let p = UserDefaults.standard.string(forKey: Theme.presetKey) ?? "cherry"
+        // Dark is the house default — new installs open in the plum night
+        // palette; anything she's ever picked wins over the default.
+        let p = UserDefaults.standard.string(forKey: Theme.presetKey) ?? "dark"
         let a = UserDefaults.standard.string(forKey: Theme.accentKey)
         let o = UserDefaults.standard.dictionary(forKey: Theme.studioKey) as? [String: String] ?? [:]
         presetName = p
@@ -169,10 +171,11 @@ final class Theme {
     private static func overrides(for preset: String) -> [String: String] {
         switch preset {
         case "pink":
-            // A brighter, bubble-gum pink — the explicit "pink mode".
-            return ["bg": "#FEF0F6", "surfaceSoft": "#FDDCEB", "surface2": "#FEEAF3",
-                    "primary": "#FF5FA8", "primaryStrong": "#F42C88", "deep": "#C21567",
-                    "text": "#43132C", "muted": "#8C526F", "line": "#FBCDE1", "flowerCenter": "#FFC24E"]
+            // The explicit "pink mode" — candy-bright but no longer neon:
+            // the accents sit a step softer so long reading stays gentle.
+            return ["bg": "#FEF1F7", "surfaceSoft": "#FCDDEC", "surface2": "#FEEAF3",
+                    "primary": "#F9679E", "primaryStrong": "#E93A82", "deep": "#B01A60",
+                    "text": "#43132C", "muted": "#8C526F", "line": "#F9CFE2", "flowerCenter": "#FFC55A"]
         case "rose":
             return ["bg": "#FDF2F1", "surfaceSoft": "#FADDE0", "surface2": "#FCEBEC",
                     "primary": "#E56A87", "primaryStrong": "#CE3E63", "deep": "#A11C41",
@@ -192,19 +195,22 @@ final class Theme {
                     "primary": "#E75C93", "primaryStrong": "#CE3B76", "deep": "#8A2A54",
                     "text": "#2A2430", "muted": "#726A75", "line": "#E9E2E8", "flowerCenter": "#F5B342"]
         case "dark":
-            // Full dark palette. Overrides every scheme + soft-ramp key; the vivid
-            // phase/flow tints read fine on dark so they carry through from base.
+            // Full dark palette — the house default. A rich warm plum rather
+            // than flat near-black: surfaces carry a whisper of rose so cards
+            // lift off the background, accents run rosier, text a touch
+            // creamier. Overrides every scheme + soft-ramp key; the vivid
+            // phase/flow tints read fine on dark so they carry through.
             return [
-                "bg": "#141017", "surface": "#1E1822", "surfaceSoft": "#2B2130", "surface2": "#241C2A",
-                "primary": "#F58FB8", "primaryStrong": "#F06FA7", "deep": "#F7C9DD",
-                "text": "#F6E9EF", "muted": "#BFA1B0", "line": "#3A2E38",
-                "flowerCenter": "#FFC966", "good": "#4FBE86",
+                "bg": "#171118", "surface": "#221925", "surfaceSoft": "#302433", "surface2": "#291E2D",
+                "primary": "#F792BC", "primaryStrong": "#F26AA2", "deep": "#F8CCDF",
+                "text": "#F8EDF3", "muted": "#C7A9B8", "line": "#3F3140",
+                "flowerCenter": "#FFCE73", "good": "#55C389",
                 // dark soft-washes for phase cells/badges (light tints would glow)
-                "phaseMenstrualSoft": "#3A2230", "phaseFollicularSoft": "#33202B",
-                "phaseFertileSoft": "#382C1E", "phaseOvulationSoft": "#382A1A", "phaseLutealSoft": "#2E2338",
-                "flowNone": "#5A4A52",
+                "phaseMenstrualSoft": "#3E2433", "phaseFollicularSoft": "#372230",
+                "phaseFertileSoft": "#3C2F20", "phaseOvulationSoft": "#3C2D1C", "phaseLutealSoft": "#32263D",
+                "flowNone": "#5E4D56",
                 // aliases that point at soft washes
-                "flowSoft": "#3A2230",
+                "flowSoft": "#3E2433",
             ]
         default: // cherry
             return [:]
