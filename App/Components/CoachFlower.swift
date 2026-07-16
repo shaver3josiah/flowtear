@@ -6,6 +6,7 @@ import SwiftUI
 // Reduce Motion: she stands still (no sway, wave, or blink), everything else intact.
 struct CoachFlower: View {
     @Environment(Theme.self) private var theme
+    @Environment(RewardsStore.self) private var rewards
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let message: String
@@ -181,6 +182,14 @@ struct CoachFlower: View {
                 .offset(x: 18, y: 58)
 
             FlowerMark(size: 46)
+                // The crown she chained on her ring, resting on Posey's petals —
+                // an overlay on the bloom itself so it sways, tilts and bounces
+                // with her. Same blooms, same order, as the ring.
+                .overlay {
+                    if rewards.poseyCrowned && rewards.ringChain.count >= 3 {
+                        crown
+                    }
+                }
                 .rotationEffect(.degrees(tilt ? 10 : 0), anchor: .bottom)
                 .scaleEffect(balloon ? 1.18 : 1, anchor: .bottom)
                 .offset(y: bounce ? -5 : 0)
@@ -226,6 +235,23 @@ struct CoachFlower: View {
         Ellipse()
             .fill(theme.color(.good).opacity(0.85))
             .frame(width: 22, height: 10)
+    }
+
+    /// The flower crown: her chained blooms fanned in an arc over the bloom's
+    /// crown-line, each tilted outward like a woven daisy chain.
+    private var crown: some View {
+        let chain = Array(rewards.ringChain.prefix(7))   // a crown, not a hedge
+        return ZStack {
+            ForEach(Array(chain.enumerated()), id: \.offset) { i, id in
+                let t = chain.count == 1 ? 0.5 : Double(i) / Double(chain.count - 1)
+                let deg = -142 + 104 * t                 // fan across the top arc
+                let rad = deg * .pi / 180
+                StickerView(id: id, size: 11)
+                    .rotationEffect(.degrees((deg + 90) * 0.5))
+                    .offset(x: 24 * CGFloat(cos(rad)), y: 24 * CGFloat(sin(rad)))
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

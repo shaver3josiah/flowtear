@@ -55,6 +55,10 @@ final class RewardsStore {
     /// "ring" (riding the ring at `stickerAngle`) or "free" (plucked off and
     /// resting at `stickerX`/`stickerY`). Persisted.
     var stickerMode: String = "ring" { didSet { save() } }
+    /// Owned blooms chained around the Today ring, in the order she added them.
+    private(set) var ringChain: [String] = []
+    /// Posey wears the chain as a flower crown (needs 3+ blooms chained).
+    var poseyCrowned = false { didSet { save() } }
 
     private static let key = "flowtear.rewards.v1"
 
@@ -146,11 +150,25 @@ final class RewardsStore {
         save(); return true
     }
 
-    /// Pause amnesty: mark a missed day handled WITHOUT charging it, so days
-    /// skipped while her plan is paused can never be billed later.
+    /// Amnesty: mark a missed day handled WITHOUT charging it — used for days
+    /// before the plan was activated, which are never billable.
     func excuseMissedDay(_ dateKey: String) {
         guard !penalizedDays.contains(dateKey) else { return }
         penalizedDays.insert(dateKey)
+        save()
+    }
+
+    // MARK: the flower chain (daisy-chained blooms around the Today ring)
+
+    func inChain(_ id: String) -> Bool { ringChain.contains(id) }
+
+    /// Add or remove an owned bloom from the chain (order = ring order).
+    func toggleChain(_ id: String) {
+        if let i = ringChain.firstIndex(of: id) {
+            ringChain.remove(at: i)
+        } else if ownedFlowers.contains(id) {
+            ringChain.append(id)
+        }
         save()
     }
 
@@ -281,6 +299,8 @@ final class RewardsStore {
         var periodLandDays: Set<String>? = []
         var stickerMode: String? = "ring"
         var poseAwardLog: [String: [Int]]? = [:]
+        var ringChain: [String]? = []
+        var poseyCrowned: Bool? = false
     }
 
     private func makeBlob() -> Blob {
@@ -293,7 +313,7 @@ final class RewardsStore {
              ownedSounds: ownedSounds, activeSound: activeSound,
              penalizedDays: penalizedDays, stickerAngle: stickerAngle,
              periodLandDays: periodLandDays, stickerMode: stickerMode,
-             poseAwardLog: poseAwardLog)
+             poseAwardLog: poseAwardLog, ringChain: ringChain, poseyCrowned: poseyCrowned)
     }
 
     private func apply(_ b: Blob) {
@@ -311,6 +331,8 @@ final class RewardsStore {
         periodLandDays = b.periodLandDays ?? []
         stickerMode = b.stickerMode ?? "ring"
         poseAwardLog = b.poseAwardLog ?? [:]
+        ringChain = b.ringChain ?? []
+        poseyCrowned = b.poseyCrowned ?? false
         // Migrate the old single-chime unlock into the crystal chime.
         if b.soundUnlocked == true && ownedSounds.isEmpty {
             ownedSounds.insert("crystal")

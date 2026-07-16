@@ -14,6 +14,10 @@ struct StretchSessionView: View {
     let day: StretchDay
     var finishTitle: String = "Session done"
     var multiplier: Int = 1
+    /// The calendar date completions and awards land on. Defaults to today;
+    /// a session run from a plan day's schedule row passes THAT day, so the
+    /// row's checkboxes light up and nothing can be earned twice.
+    var logDate: Date = Date()
 
     @State private var index = 0            // current move
     @State private var remaining = 0        // seconds left on this move
@@ -142,10 +146,10 @@ struct StretchSessionView: View {
         transitionToken += 1
         // The move she just finished counts — check it off (never uncheck),
         // award its points, and pay the first-ever-guided bonus for this pose.
-        if !store.stretchMovesDone(on: Date()).contains(index) {
-            let doneBefore = store.stretchMovesDone(on: Date()).count
-            store.toggleStretchMove(index, on: Date(), totalMoves: day.moves.count)
-            rewards.awardPose(dateKey: store.key(for: Date()),
+        if !store.stretchMovesDone(on: logDate).contains(index) {
+            let doneBefore = store.stretchMovesDone(on: logDate).count
+            store.toggleStretchMove(index, on: logDate, totalMoves: day.moves.count)
+            rewards.awardPose(dateKey: store.key(for: logDate),
                               alreadyDone: doneBefore, total: day.moves.count,
                               multiplier: multiplier)
         }
@@ -156,7 +160,7 @@ struct StretchSessionView: View {
                 remaining = day.moves[index].seconds
             }
         } else {
-            store.setStretchDone(true, on: Date())
+            store.setStretchDone(true, on: logDate)
             rewards.playCelebrationIfOwned()
             withAnimation(reduceMotion ? nil : FFMotion.signature) { finished = true }
         }

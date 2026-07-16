@@ -269,3 +269,23 @@ private struct TrailBit: Identifiable {
     var tint: Tok
     var opacity: Double = 0.85
 }
+
+// RingChainView — her daisy chain: every bloom she's chained in the shop rides
+// the ring together, evenly spaced from 12 o'clock. Purely decorative (the one
+// ACTIVE sticker stays the draggable bead); no touches stolen from the scrub.
+struct RingChainView: View {
+    let chain: [String]
+    let radius: CGFloat
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(chain.enumerated()), id: \.offset) { i, id in
+                let a = Double(i) / Double(max(chain.count, 1)) * 2 * .pi - .pi / 2
+                StickerView(id: id, size: 19)
+                    .offset(x: radius * CGFloat(cos(a)), y: radius * CGFloat(sin(a)))
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
