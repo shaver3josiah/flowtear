@@ -75,7 +75,9 @@ struct FFTabBar: View {
                     .fill(active ? theme.color(.surfaceSoft) : .clear)
             )
             .overlay {
-                if tab == .insights && store.hasNewInsights && !active {
+                // Mounted only when motion is allowed — SweepBand animates on
+                // appear, so gating the refire timer alone wasn't enough.
+                if tab == .insights && store.hasNewInsights && !active && !reduceMotion {
                     InsightsSweep(token: sweepToken)
                 }
             }

@@ -38,7 +38,9 @@ struct FFButton: View {
 
     private var fg: Color {
         switch style {
-        case .primary, .deep: .white
+        // onPrimary, not literal white: the dark palettes brighten these fills
+        // to light pinks, where white text would wash out (~2.8:1).
+        case .primary, .deep: theme.color(.onPrimary)
         case .soft:           theme.color(.deep)
         case .ghost:          theme.color(.primaryStrong)
         }

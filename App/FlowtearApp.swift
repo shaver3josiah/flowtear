@@ -54,7 +54,10 @@ struct RootView: View {
             .frame(maxWidth: .infinity)
         }
         .preferredColorScheme(theme.isDarkMode ? .dark : .light)
-        .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        // Larger text is real accessibility: allow the full non-accessibility
+        // range (three steps past the old xLarge clamp). The layouts are all
+        // flexible stacks, so they reflow rather than clip.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         // Whichever way she lands on Insights (tab bar or programmatic), the
         // new-insights shimmer stands down.
         .onChange(of: tab) { _, newTab in

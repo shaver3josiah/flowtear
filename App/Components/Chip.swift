@@ -33,7 +33,11 @@ struct FFChip: View {
                 Text(title)
             }
             .font(ffBody(FFType.sm, weight: .semibold))
-            .foregroundStyle(selected ? .white : theme.color(.muted))
+            // onPrimary is calibrated for the brand ramp only; other tint fills
+            // (e.g. the lavender mood chips) stay fixed mid-tones in every
+            // preset, so they take the fixed dark bloom ink instead.
+            .foregroundStyle(selected ? theme.color(tint == .primaryStrong ? .onPrimary : .bloomInk)
+                                      : theme.color(.muted))
             .frame(height: 40)
             .padding(.horizontal, 16)
             .background(selected ? theme.color(tint) : theme.color(.surfaceSoft), in: Capsule())

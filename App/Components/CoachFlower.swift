@@ -60,7 +60,6 @@ struct CoachFlower: View {
                         antic += 1
                     }
                 }
-                .accessibilityHidden(true)
                 .overlay(alignment: .top) { wateringOverlay }
                 .overlay(SparkleBurst(trigger: starBurst, count: 14).offset(y: 20))
                 .overlay(alignment: .top) {
@@ -72,6 +71,10 @@ struct CoachFlower: View {
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
+                // Hidden AFTER the overlays so the transient "+N" text can never
+                // surface as a stray VoiceOver element mid-celebration (the award
+                // is already spoken via the bubble/points elsewhere).
+                .accessibilityHidden(true)
                 .onChange(of: celebrateToken) { _, _ in celebrate() }
 
             // Her speech bubble, with a nameplate.
@@ -106,8 +109,17 @@ struct CoachFlower: View {
     }
 
     // Points! Water her, she swells with pride, stars fly, the number floats up.
+    // Reduce Motion keeps the INFORMATION (the +N award readout, shown plainly
+    // for a moment) and drops only the theatrics — never both.
     private func celebrate() {
-        guard !reduceMotion else { starBurst += 1; return }
+        guard !reduceMotion else {
+            showAward = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                showAward = false
+            }
+            return
+        }
         withAnimation(.easeIn(duration: 0.25)) { watering = true }
         Task {
             try? await Task.sleep(for: .seconds(0.5))
@@ -168,15 +180,19 @@ struct CoachFlower: View {
     }
 
     private var face: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 2.5) {
             HStack(spacing: 5) {
                 eye
                 eye
             }
-            // A small, contented smile.
+            // The faintest contented curve — barely there, like a soft hum.
+            // (A wide, deep grin on a face this small read as unsettling; the
+            // fix is less mouth, not more.) bloomInk keeps the face legible on
+            // her petals in both light and dark palettes.
             SmileShape()
-                .stroke(theme.color(.deep), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
-                .frame(width: 9, height: 4)
+                .stroke(theme.color(.bloomInk).opacity(0.75),
+                        style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
+                .frame(width: 6, height: 2)
         }
         .overlay(alignment: .leading) { cheek.offset(x: -7, y: 1) }
         .overlay(alignment: .trailing) { cheek.offset(x: 7, y: 1) }
@@ -184,14 +200,14 @@ struct CoachFlower: View {
 
     private var eye: some View {
         Capsule()
-            .fill(theme.color(.deep))
+            .fill(theme.color(.bloomInk))
             .frame(width: 2.6, height: 4.6)
             .scaleEffect(y: blink ? 0.15 : 1, anchor: .center)
     }
 
     private var cheek: some View {
         Circle()
-            .fill(theme.color(.primary).opacity(0.45))
+            .fill(theme.color(.bloomInk).opacity(0.22))
             .frame(width: 3.6, height: 3.6)
     }
 

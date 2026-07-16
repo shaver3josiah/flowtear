@@ -179,6 +179,33 @@ final class CycleStore {
         }
     }
 
+    // MARK: backup & restore (her history + settings, portable)
+
+    /// Everything the cycle side persists, as one JSON blob.
+    func backupData() -> Data? {
+        try? JSONEncoder().encode(Snapshot(logs: Array(logs.values), settings: settings))
+    }
+
+    /// True when `data` is a decodable cycle backup — checked WITHOUT touching
+    /// the store, so a combined restore can be all-or-nothing across stores.
+    static func isValidBackup(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(Snapshot.self, from: data)) != nil
+    }
+
+    /// Replace the whole store from a backup blob. Validates before touching
+    /// anything; returns false (and changes nothing) if the data won't decode.
+    /// Restoring real data also retires the first-launch sample banner.
+    @discardableResult
+    func restore(from data: Data) -> Bool {
+        guard let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return false }
+        logs = Dictionary(uniqueKeysWithValues: snap.logs.map { ($0.dateKey, $0) })
+        settings = snap.settings
+        UserDefaults.standard.set(false, forKey: Self.sampleSeededKey)
+        save()
+        noteEdited()
+        return true
+    }
+
     // MARK: sample data (first-launch demo)
 
     private static let sampleSeededKey = "flowtear.sample.seeded"

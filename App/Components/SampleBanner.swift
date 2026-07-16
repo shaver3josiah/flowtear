@@ -26,7 +26,7 @@ struct SampleBanner: View {
                     Spacer(minLength: 0)
                     Text("Begin")
                         .font(ffBody(FFType.sm, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.color(.onPrimary))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .background(theme.color(.primaryStrong), in: Capsule())

@@ -17,13 +17,18 @@ struct StretchCoachView: View {
     @State private var celebrationToken = 0
     @State private var lastAward = 0
     @State private var penaltyCharged = 0
-    @State private var planExpanded = false
     @State private var burstToken = 0
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
     @State private var playingDay: StretchDay? = nil   // any schedule day, guided
     /// Life happens: while paused, missed plan days are excused, never charged.
     @AppStorage("flowtear.planPaused") private var planPaused = false
+    /// When the current lock-in plan was (re)chosen, as a startOfDay timestamp.
+    /// Penalties never reach behind this line — so switching tiers, the first
+    /// prediction remapping the window into the past, or toggling tiers while
+    /// paused can never retroactively bill days the plan wasn't active for.
+    /// ("Switching keeps every point and completion" has to be TRUE.)
+    @AppStorage("flowtear.planActivatedAt") private var planActivatedAt: Double = 0
 
     private var today: Date { Date() }
     private var p: CyclePrediction { store.prediction() }
@@ -95,6 +100,11 @@ struct StretchCoachView: View {
         }
         .onAppear {
             if !rewards.tutorialSeen { showTutorial = true }
+            // First time this screen ever runs the accounting, anchor the plan
+            // to today — nothing before "she started" is ever chargeable.
+            if planActivatedAt == 0 {
+                planActivatedAt = Calendar.current.startOfDay(for: today).timeIntervalSinceReferenceDate
+            }
             applyLockInPenalties()
         }
         // Pausing grants amnesty immediately; UNpausing forgives everything
@@ -121,15 +131,17 @@ struct StretchCoachView: View {
 
     /// Lock-in accounting: past plan days in this window she didn't stretch cost
     /// 5 petals each, charged once ever per day. Trio never penalizes; while the
-    /// plan is PAUSED those days are excused for good instead of charged.
+    /// plan is PAUSED those days are excused for good instead of charged; days
+    /// before the plan was activated are never chargeable at all.
     private func applyLockInPenalties() {
         guard tier.locksIn, tier.totalDays > 0 else { return }
         let startOfToday = Calendar.current.startOfDay(for: today)
+        let activation = Date(timeIntervalSinceReferenceDate: planActivatedAt)
         var charged = 0
         for d in 1...tier.totalDays {
             guard let date = date(forPlanDay: d), date < startOfToday else { continue }
             guard !store.stretchDone(on: date) else { continue }
-            if planPaused {
+            if planPaused || date < activation {
                 rewards.excuseMissedDay(store.key(for: date))
             } else if rewards.penalizeMissedDay(store.key(for: date)) {
                 charged += 1
@@ -145,63 +157,102 @@ struct StretchCoachView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // Her plan, right at the top: collapsed it names the current mode; tapping
-    // expands the three previews; picking one selects it and folds back up.
+    // Her plan, right at the top — all three choices visible all the time, one
+    // tap to switch (no hidden menus to discover). The segments carry the name
+    // and points multiplier; the line beneath explains the one she's on.
     private var planBar: some View {
         VStack(alignment: .leading, spacing: FFSpace.s2) {
-            Button {
-                withAnimation(FFMotion.fast) { planExpanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Text("PLAN")
-                        .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
-                        .foregroundStyle(theme.color(.muted))
-                    Text(tier.label)
-                        .font(ffBody(FFType.sm, weight: .bold))
-                        .foregroundStyle(theme.color(.deep))
-                    Text("×\(tier.multiplier)")
-                        .font(ffBody(FFType.xs2, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(theme.color(.phaseLuteal), in: Capsule())
-                    if planPaused && tier.locksIn {
-                        Text("paused")
-                            .font(ffBody(FFType.xs2, weight: .bold))
-                            .foregroundStyle(theme.color(.deep))
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(theme.color(.surfaceSoft), in: Capsule())
-                    }
-                    Spacer(minLength: 4)
-                    Text("up to \(maxDailyPoints(tier))/day")
-                        .font(ffBody(FFType.xs, weight: .bold))
-                        .foregroundStyle(theme.color(.deep))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.color(.muted))
-                        .rotationEffect(.degrees(planExpanded ? 180 : 0))
-                }
-                .padding(.horizontal, 14).padding(.vertical, 11)
-                .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
-                    .strokeBorder(theme.color(.line), lineWidth: 1))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Current plan: \(tier.label)")
-            .accessibilityHint(planExpanded ? "Collapses the plan choices" : "Shows the plan choices")
-
-            if planExpanded {
-                modeRow(.trio,    note: "Any day, no schedule, no pressure")
-                modeRow(.starter, note: "The 3 days before your period · −5 a missed day")
-                modeRow(.full,    note: "The full two weeks · −5 a missed day")
-                if tier.locksIn {
-                    pauseRow
-                }
-                Text("Switching keeps every point and completion.")
-                    .font(ffBody(FFType.xs2))
+            HStack {
+                Text("YOUR PLAN")
+                    .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
                     .foregroundStyle(theme.color(.muted))
+                Spacer()
+                if planPaused && tier.locksIn {
+                    Text("paused")
+                        .font(ffBody(FFType.xs2, weight: .bold))
+                        .foregroundStyle(theme.color(.deep))
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(theme.color(.surfaceSoft), in: Capsule())
+                }
             }
+
+            HStack(spacing: 4) {
+                planSegment(.trio,    name: "Anytime")
+                planSegment(.starter, name: "3-day")
+                planSegment(.full,    name: "14-day")
+            }
+            .padding(4)
+            .background(theme.color(.surfaceSoft),
+                        in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(planNote(tier))
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+                Spacer(minLength: 8)
+                Text("up to \(maxDailyPoints(tier))/day")
+                    .font(ffBody(FFType.xs, weight: .bold))
+                    .foregroundStyle(theme.color(.deep))
+                    .layoutPriority(1)
+            }
+
+            if tier.locksIn {
+                pauseRow
+            }
+            Text("Switching keeps every point and completion.")
+                .font(ffBody(FFType.xs2))
+                .foregroundStyle(theme.color(.muted))
         }
+    }
+
+    private func planNote(_ t: StretchTier) -> String {
+        switch t {
+        case .trio:    "Any day, no schedule, no pressure"
+        case .starter: "The 3 days before your period · −5 a missed day"
+        case .full:    "The full two weeks · −5 a missed day"
+        }
+    }
+
+    private func planSegment(_ t: StretchTier, name: String) -> some View {
+        let selected = tier == t
+        return Button {
+            guard t != tier else { return }
+            // Re-anchor the accounting: a freshly chosen plan starts today, so
+            // its window days in the past can never be billed retroactively.
+            planActivatedAt = Calendar.current.startOfDay(for: today).timeIntervalSinceReferenceDate
+            withAnimation(FFMotion.fast) { store.stretchTierRaw = t.rawValue }
+        } label: {
+            VStack(spacing: 1) {
+                Text(name)
+                    .font(ffBody(FFType.sm, weight: .bold))
+                    .foregroundStyle(selected ? theme.color(.onPrimary) : theme.color(.text))
+                    .lineLimit(1).minimumScaleFactor(0.85)
+                Text("×\(t.multiplier) petals")
+                    .font(ffBody(FFType.xs2, weight: .semibold))
+                    .foregroundStyle(selected ? theme.color(.onPrimary) : theme.color(.muted))
+                    .lineLimit(1).minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(
+                selected ? theme.color(.primaryStrong) : .clear,
+                in: RoundedRectangle(cornerRadius: FFRadius.sm, style: .continuous)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(planA11yLabel(t))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Plain-prose plan description — no midpoints or minus glyphs for VoiceOver.
+    private func planA11yLabel(_ t: StretchTier) -> String {
+        let how = switch t {
+        case .trio:    "any day, no schedule, no pressure"
+        case .starter: "the 3 days before your period, 5 petals lost per missed day"
+        case .full:    "the full two weeks before your period, 5 petals lost per missed day"
+        }
+        return "\(t.label), \(how), up to \(maxDailyPoints(t)) points a day"
     }
 
     // Her plan, her terms: pausing excuses missed days instead of charging them.
@@ -226,53 +277,6 @@ struct StretchCoachView: View {
         .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
             .strokeBorder(theme.color(.line), lineWidth: 1))
-    }
-
-    private func modeRow(_ t: StretchTier, note: String) -> some View {
-        let selected = tier == t
-        return Button {
-            withAnimation(FFMotion.fast) {
-                store.stretchTierRaw = t.rawValue
-                planExpanded = false
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 17))
-                    .foregroundStyle(theme.color(selected ? .primaryStrong : .line))
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text(t.label)
-                            .font(ffBody(FFType.sm, weight: .bold))
-                            .foregroundStyle(theme.color(.deep))
-                        Text("×\(t.multiplier)")
-                            .font(ffBody(FFType.xs2, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6).padding(.vertical, 1)
-                            .background(theme.color(.phaseLuteal), in: Capsule())
-                    }
-                    Text(note)
-                        .font(ffBody(FFType.xs))
-                        .foregroundStyle(theme.color(.muted))
-                }
-                Spacer(minLength: 4)
-                Text("up to \(maxDailyPoints(t))/day")
-                    .font(ffBody(FFType.xs, weight: .bold))
-                    .foregroundStyle(theme.color(.deep))
-            }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(theme.color(selected ? .surfaceSoft : .surface),
-                        in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
-                    .strokeBorder(selected ? theme.color(.primaryStrong) : theme.color(.line),
-                                  lineWidth: selected ? 1.5 : 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(t.label), \(note), up to \(maxDailyPoints(t)) points a day")
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /// Best day's pose points on a tier: 15·m + 5·(m−1) + 10, times the multiplier.
@@ -399,12 +403,14 @@ struct StretchCoachView: View {
             let wasFullDay = doneBefore == session.moves.count
             let completedDay = store.toggleStretchMove(index, on: today, totalMoves: session.moves.count)
             if !checked {
-                lastAward = rewards.awardPose(alreadyDone: doneBefore, total: session.moves.count,
+                lastAward = rewards.awardPose(dateKey: store.key(for: today),
+                                              alreadyDone: doneBefore, total: session.moves.count,
                                               multiplier: multiplier)
                 burstToken += 1                      // checking ON celebrates
                 celebrationToken += 1                // Posey gets watered
             } else {
-                rewards.revokePose(remainingDone: max(doneBefore - 1, 0),
+                rewards.revokePose(dateKey: store.key(for: today),
+                                   remainingDone: max(doneBefore - 1, 0),
                                    total: session.moves.count,
                                    wasFullDay: wasFullDay, multiplier: multiplier)
             }
@@ -439,7 +445,10 @@ struct StretchCoachView: View {
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: checked)
-        .accessibilityLabel(m.name)
+        // VoiceOver gets the hold time with the name; the coaching cue rides
+        // as the (skippable) hint, so nothing sighted users see is lost.
+        .accessibilityLabel("\(m.name), \(m.hold)")
+        .accessibilityHint(m.cue)
         .accessibilityAddTraits(checked ? .isSelected : [])
     }
 
@@ -524,9 +533,22 @@ struct StretchCoachView: View {
         }
     }
 
+    /// The full spoken row: VoiceOver hears the date and today-badge state the
+    /// eyes get from the chips, so back-filling checkboxes stays navigable.
+    private func scheduleRowLabel(planDay: Int, day: StretchDay, isTodayRow: Bool) -> String {
+        var label = "Day \(planDay)"
+        if isTodayRow { label += ", today" }
+        if let d = date(forPlanDay: planDay) {
+            label += ", \(d.formatted(.dateTime.month(.wide).day()))"
+        }
+        return label + ", \(day.focus), \(day.minutes) minutes"
+    }
+
     private func scheduleRow(_ day: StretchDay) -> some View {
         let planDay = StretchPlan.planDay(day, tier: tier)
-        let isTodayRow = todaySession?.daysBeforePeriod == day.daysBeforePeriod
+        // Today is decided by the DATE the row writes to, so the badge also
+        // appears in the no-prediction fallback window (day 1 = today).
+        let isTodayRow = date(forPlanDay: planDay).map { Calendar.current.isDateInToday($0) } ?? false
         let expanded = expandedDay == planDay
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
@@ -543,7 +565,7 @@ struct StretchCoachView: View {
                             if isTodayRow {
                                 Text("today")
                                     .font(ffBody(FFType.xs2, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(theme.color(.onPrimary))
                                     .padding(.horizontal, 7).padding(.vertical, 2)
                                     .background(theme.color(.primaryStrong), in: Capsule())
                             }
@@ -565,10 +587,11 @@ struct StretchCoachView: View {
                         .foregroundStyle(theme.color(.muted))
                         .rotationEffect(.degrees(expanded ? 180 : 0))
                 }
+                .frame(minHeight: FFSpace.tapMin)
                 .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Day \(planDay), \(day.focus), \(day.minutes) minutes")
+                .accessibilityLabel(scheduleRowLabel(planDay: planDay, day: day, isTodayRow: isTodayRow))
                 .accessibilityHint(expanded ? "Collapses the moves" : "Shows the moves")
             }
             .padding(.vertical, 9)
@@ -633,7 +656,9 @@ struct StretchCoachView: View {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20))
                 .foregroundStyle(theme.color(done ? .good : .muted))
-                .frame(width: FFSpace.tapMin - 14, height: FFSpace.tapMin - 4)
+                // Full 44pt hit target — the glyph stays 20pt, only the
+                // touchable area grows (and pulls clear of the expand button).
+                .frame(width: FFSpace.tapMin, height: FFSpace.tapMin)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -657,8 +682,11 @@ struct StretchCoachView: View {
 
     private var evidenceBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-                Text(StretchPlan.evidenceNote)
+                // The readable short report first, then the specific citations.
+                Text(PhaseResearch.stretching.body)
                     .font(ffBody(FFType.sm)).foregroundStyle(theme.color(.text)).lineSpacing(3)
+                Text(StretchPlan.evidenceNote)
+                    .font(ffBody(FFType.xs)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
                 Text(StretchPlan.dosingNote)
                     .font(ffBody(FFType.xs)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
                 Text(StretchPlan.disclaimer)

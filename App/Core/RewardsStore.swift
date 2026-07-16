@@ -41,6 +41,9 @@ final class RewardsStore {
     var activeSound: String? { didSet { save() } }
     private(set) var penalizedDays: Set<String> = []   // lock-in misses already charged
     private(set) var periodLandDays: Set<String> = []  // ring-landing bonuses already paid
+    /// Per-day stack of pose awards actually paid (newest last) — the ledger
+    /// revokePose refunds from, so award/refund stay symmetric across tier switches.
+    private(set) var poseAwardLog: [String: [Int]] = [:]
     private(set) var tutorialSeen = false
     var activeSticker: String? { didSet { save() } }  // flower id or "posey"
     /// Where her plucked sticker rests near the Today ring (offsets from the
@@ -81,12 +84,14 @@ final class RewardsStore {
         SoundItem(id: "songbird", name: "Songbird",      systemID: 1016, price: 1200),
         SoundItem(id: "crystal",  name: "Crystal chime", systemID: 1025, price: 1600),
     ]
-    static let themePrice = 600          // pink, peony, soft, light (cherry/rose/dark are free)
+    static let themePrice = 600          // pink, peony, soft, light (cherry/rose/dark/midnight are free)
     static let accentPrice = 1500
     static let colorStudioPrice = 4000
     static let soundPrice = 1200
     static let starterGift = 100          // exactly a Daisy — her first unlock
-    static let freeThemes: Set<String> = ["cherry", "rose", "dark"]
+    // Both dark palettes stay free — dark is the house default, so choosing
+    // between the two dark moods must never sit behind a paywall of petals.
+    static let freeThemes: Set<String> = ["cherry", "rose", "dark", "midnight"]
 
     /// First open of the Stretch tab: mark the tutorial seen and gift exactly
     /// enough petals for the Daisy, once ever.
@@ -97,8 +102,11 @@ final class RewardsStore {
     }
 
     /// Her chosen celebration sound, if she owns one. (System sounds — asset-free.)
+    /// Quiet mode (pencil settings) silences every celebration without touching
+    /// which sound she owns or has picked.
     func playCelebrationIfOwned() {
-        guard let id = activeSound,
+        guard !UserDefaults.standard.bool(forKey: "flowtear.quiet"),
+              let id = activeSound,
               let sound = Self.sounds.first(where: { $0.id == id }) else { return }
         AudioServicesPlaySystemSound(SystemSoundID(sound.systemID))
     }
@@ -112,7 +120,9 @@ final class RewardsStore {
         balance -= item.price
         ownedSounds.insert(id)
         activeSound = id
-        AudioServicesPlaySystemSound(SystemSoundID(item.systemID))   // hear it at once
+        if !UserDefaults.standard.bool(forKey: "flowtear.quiet") {
+            AudioServicesPlaySystemSound(SystemSoundID(item.systemID))   // hear it at once
+        }
         save(); return true
     }
 
@@ -148,23 +158,36 @@ final class RewardsStore {
 
     /// Points for checking ON a pose. `alreadyDone` = poses done today before
     /// this one; `total` = poses in the session; `multiplier` = plan tier.
-    /// Returns the points awarded (for the UI to celebrate with).
+    /// Returns the points awarded (for the UI to celebrate with). Each award is
+    /// also pushed onto the day's ledger so a later uncheck refunds EXACTLY
+    /// what was paid — even if she switches plan tiers in between.
     @discardableResult
-    func awardPose(alreadyDone: Int, total: Int, multiplier: Int) -> Int {
+    func awardPose(dateKey: String, alreadyDone: Int, total: Int, multiplier: Int) -> Int {
         var pts = 15
         if alreadyDone >= 1 { pts += 5 }                    // consecutive bonus
         if alreadyDone + 1 == total { pts += 10 }           // whole-day bonus
         let amount = pts * multiplier
+        poseAwardLog[dateKey, default: []].append(amount)
         earn(amount)
         return amount
     }
 
-    /// Symmetric take-back when a pose is UNchecked, so toggling can't farm points.
-    func revokePose(remainingDone: Int, total: Int, wasFullDay: Bool, multiplier: Int) {
-        var pts = 15
-        if remainingDone >= 1 { pts += 5 }
-        if wasFullDay { pts += 10 }
-        balance = max(0, balance - pts * multiplier)
+    /// Symmetric take-back when a pose is UNchecked: pop the day's last recorded
+    /// award (awards depend only on the checked COUNT, so a stack refunds the
+    /// right amount in every toggle order — no farming, no unfair drain). Days
+    /// checked before the ledger existed fall back to recomputing.
+    func revokePose(dateKey: String, remainingDone: Int, total: Int, wasFullDay: Bool, multiplier: Int) {
+        let refund: Int
+        if var log = poseAwardLog[dateKey], let last = log.popLast() {
+            poseAwardLog[dateKey] = log.isEmpty ? nil : log
+            refund = last
+        } else {
+            var pts = 15
+            if remainingDone >= 1 { pts += 5 }
+            if wasFullDay { pts += 10 }
+            refund = pts * multiplier
+        }
+        balance = max(0, balance - refund)
         save()
     }
 
@@ -254,19 +277,53 @@ final class RewardsStore {
         var stickerAngle: Double? = -0.9
         var periodLandDays: Set<String>? = []
         var stickerMode: String? = "ring"
+        var poseAwardLog: [String: [Int]]? = [:]
     }
 
+    private func makeBlob() -> Blob {
+        Blob(balance: balance, lifetime: lifetime, guidedSeen: guidedSeen,
+             ownedFlowers: ownedFlowers, ownedThemes: ownedThemes,
+             accentUnlocked: accentUnlocked, colorStudioUnlocked: colorStudioUnlocked,
+             poseyOwned: poseyOwned, activeSticker: activeSticker,
+             soundUnlocked: false, tutorialSeen: tutorialSeen,
+             stickerX: stickerX, stickerY: stickerY,
+             ownedSounds: ownedSounds, activeSound: activeSound,
+             penalizedDays: penalizedDays, stickerAngle: stickerAngle,
+             periodLandDays: periodLandDays, stickerMode: stickerMode,
+             poseAwardLog: poseAwardLog)
+    }
+
+    private func apply(_ b: Blob) {
+        balance = b.balance; lifetime = b.lifetime; guidedSeen = b.guidedSeen
+        ownedFlowers = b.ownedFlowers; ownedThemes = b.ownedThemes
+        accentUnlocked = b.accentUnlocked; colorStudioUnlocked = b.colorStudioUnlocked
+        poseyOwned = b.poseyOwned; activeSticker = b.activeSticker
+        tutorialSeen = b.tutorialSeen ?? false
+        stickerX = b.stickerX ?? 0.78
+        stickerY = b.stickerY ?? -0.72
+        ownedSounds = b.ownedSounds ?? []
+        activeSound = b.activeSound
+        penalizedDays = b.penalizedDays ?? []
+        stickerAngle = b.stickerAngle ?? -0.9
+        periodLandDays = b.periodLandDays ?? []
+        stickerMode = b.stickerMode ?? "ring"
+        poseAwardLog = b.poseAwardLog ?? [:]
+        // Migrate the old single-chime unlock into the crystal chime.
+        if b.soundUnlocked == true && ownedSounds.isEmpty {
+            ownedSounds.insert("crystal")
+            if activeSound == nil { activeSound = "crystal" }
+        }
+    }
+
+    /// False until the initial load() finishes. Several stored properties carry
+    /// didSet { save() } observers, and apply() assigns them mid-hydration —
+    /// without this guard every launch performed ~6 redundant saves and rotated
+    /// PARTIALLY-loaded blobs through the .backup slot.
+    private var hydrated = false
+
     private func save() {
-        let b = Blob(balance: balance, lifetime: lifetime, guidedSeen: guidedSeen,
-                     ownedFlowers: ownedFlowers, ownedThemes: ownedThemes,
-                     accentUnlocked: accentUnlocked, colorStudioUnlocked: colorStudioUnlocked,
-                     poseyOwned: poseyOwned, activeSticker: activeSticker,
-                     soundUnlocked: false, tutorialSeen: tutorialSeen,
-                     stickerX: stickerX, stickerY: stickerY,
-                     ownedSounds: ownedSounds, activeSound: activeSound,
-                     penalizedDays: penalizedDays, stickerAngle: stickerAngle,
-                     periodLandDays: periodLandDays, stickerMode: stickerMode)
-        guard let data = try? JSONEncoder().encode(b) else { return }
+        guard hydrated else { return }
+        guard let data = try? JSONEncoder().encode(makeBlob()) else { return }
         if let prev = UserDefaults.standard.data(forKey: Self.key) {
             UserDefaults.standard.set(prev, forKey: Self.key + ".backup")
         }
@@ -274,29 +331,38 @@ final class RewardsStore {
     }
 
     private func load() {
+        defer { hydrated = true }
         for key in [Self.key, Self.key + ".backup"] {
             if let data = UserDefaults.standard.data(forKey: key),
                let b = try? JSONDecoder().decode(Blob.self, from: data) {
-                balance = b.balance; lifetime = b.lifetime; guidedSeen = b.guidedSeen
-                ownedFlowers = b.ownedFlowers; ownedThemes = b.ownedThemes
-                accentUnlocked = b.accentUnlocked; colorStudioUnlocked = b.colorStudioUnlocked
-                poseyOwned = b.poseyOwned; activeSticker = b.activeSticker
-                tutorialSeen = b.tutorialSeen ?? false
-                stickerX = b.stickerX ?? 0.78
-                stickerY = b.stickerY ?? -0.72
-                ownedSounds = b.ownedSounds ?? []
-                activeSound = b.activeSound
-                penalizedDays = b.penalizedDays ?? []
-                stickerAngle = b.stickerAngle ?? -0.9
-                periodLandDays = b.periodLandDays ?? []
-                stickerMode = b.stickerMode ?? "ring"
-                // Migrate the old single-chime unlock into the crystal chime.
-                if b.soundUnlocked == true && ownedSounds.isEmpty {
-                    ownedSounds.insert("crystal")
-                    if activeSound == nil { activeSound = "crystal" }
-                }
+                apply(b)
                 return
             }
         }
+    }
+
+    // MARK: backup & restore (the whole garden, portable)
+
+    /// The whole garden as one JSON blob — the same shape the store persists.
+    func backupData() -> Data? { try? JSONEncoder().encode(makeBlob()) }
+
+    /// True when `data` is a decodable garden backup — checked WITHOUT touching
+    /// the store, so a combined restore can be all-or-nothing across stores.
+    static func isValidBackup(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(Blob.self, from: data)) != nil
+    }
+
+    /// Replace the whole garden from a backup blob. Validates before touching
+    /// anything; returns false (and changes nothing) if the data won't decode.
+    @discardableResult
+    func restore(from data: Data) -> Bool {
+        guard let b = try? JSONDecoder().decode(Blob.self, from: data) else { return false }
+        // Same hydration guard as load(): apply() trips ~6 didSet saves, and a
+        // mid-apply save would rotate a half-restored hybrid into the backup slot.
+        hydrated = false
+        apply(b)
+        hydrated = true
+        save()
+        return true
     }
 }

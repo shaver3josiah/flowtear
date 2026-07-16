@@ -1,9 +1,10 @@
 import SwiftUI
 
 // The pencil settings — Bloom-calculator-style theming. Pick one of the full
-// palette presets (Cherry, Pink, Rose, Peony, Soft, Light, Dark) or lay a custom
-// accent color over any of them; the whole app recolors live through the token
-// seam. Cycle-phase and flow colors stay fixed — they carry meaning.
+// palette presets (the two dark moods, Plum Night and Midnight, then Cherry,
+// Pink, Rose, Peony, Soft, Light) or lay a custom accent color over any of
+// them; the whole app recolors live through the token seam. Cycle-phase and
+// flow colors stay fixed — they carry meaning.
 struct ThemeEditorSheet: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
@@ -15,6 +16,7 @@ struct ThemeEditorSheet: View {
     @State private var petalGap: PetalGap?
     @State private var pendingBuy: PendingBuy?
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
+    @AppStorage("flowtear.quiet") private var quietMode = false
     @AppStorage("flowtear.appLock") private var appLock = false
     @AppStorage(FFReminders.stretchOnKey) private var stretchReminder = false
     @AppStorage(FFReminders.stretchMinutesKey) private var stretchMinutes = 18 * 60
@@ -134,7 +136,8 @@ struct ThemeEditorSheet: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(Theme.label(for: name)) palette")
+        .accessibilityLabel("\(Theme.label(for: name)) palette"
+                            + (owned ? "" : ", locked, \(RewardsStore.themePrice) petals"))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -251,6 +254,20 @@ struct ThemeEditorSheet: View {
                     Spacer(minLength: 4)
                     FFSwitch(isOn: $petalsOnRing)
                         .accessibilityLabel("Falling petals around the cycle ring")
+                }
+                Rectangle().fill(theme.color(.line)).frame(height: 1)
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Quiet mode")
+                            .font(ffBody(FFType.md, weight: .semibold))
+                            .foregroundStyle(theme.color(.text))
+                        Text("Celebration sounds stay silent — the sparkle stays")
+                            .font(ffBody(FFType.xs))
+                            .foregroundStyle(theme.color(.muted))
+                    }
+                    Spacer(minLength: 4)
+                    FFSwitch(isOn: $quietMode)
+                        .accessibilityLabel("Quiet mode, silence celebration sounds")
                 }
             }
         }

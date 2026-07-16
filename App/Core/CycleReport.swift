@@ -85,7 +85,7 @@ enum CycleReport {
             for n in notes { lines.append("• \(n)") }
         }
         lines.append("")
-        lines.append("From my Uncorked tracker. Estimates, not medical advice.")
+        lines.append("From my cycle tracker. Estimates, not medical advice.")
         return lines.joined(separator: "\n")
     }
 

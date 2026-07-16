@@ -81,6 +81,31 @@ final class StretchPlanTests: XCTestCase {
         XCTAssertEqual(p.daysUntilNextPeriod, 16)
     }
 
+    // Her locked numbers must beat the logged averages in predictions — BOTH
+    // of them, or the period stepper is a placebo for anyone with logged flow.
+    func testLockedCycleLengthOverridesAverage() {
+        // Two 4-day periods, starts 28 days apart → averages 28 / 4.
+        var periodDays: [Date] = []
+        for start in [day(2026, 5, 1), day(2026, 5, 29)] {
+            for off in 0..<4 { periodDays.append(cal.date(byAdding: .day, value: off, to: start)!) }
+        }
+        var settings = CycleSettings()
+        settings.defaultCycleLength = 31
+        settings.defaultPeriodLength = 6
+        settings.lockCycleLength = true
+        let p = CycleEngine.predict(periodDays: periodDays, today: day(2026, 6, 5),
+                                    settings: settings, cal: cal)
+        XCTAssertEqual(p.averageCycleLength, 31)
+        XCTAssertEqual(p.averagePeriodLength, 6)
+        XCTAssertEqual(p.nextPeriodStart, day(2026, 6, 29))   // May 29 + 31
+
+        settings.lockCycleLength = false
+        let q = CycleEngine.predict(periodDays: periodDays, today: day(2026, 6, 5),
+                                    settings: settings, cal: cal)
+        XCTAssertEqual(q.averageCycleLength, 28)              // averages win again
+        XCTAssertEqual(q.averagePeriodLength, 4)
+    }
+
     // planDay / session round-trips: the schedule labels and the per-day
     // sessions must agree for both tiers.
     func testPlanDayRoundTrips() {
