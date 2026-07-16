@@ -67,7 +67,9 @@ struct FFTabBar: View {
                 Text(tab.title)
                     .font(ffBody(FFType.xs2, weight: .semibold))
             }
-            .foregroundStyle(active ? theme.color(.primaryStrong) : theme.color(.muted))
+            // .deep, not primaryStrong: the 11pt active label sits on the
+            // surfaceSoft pill, where deep clears 4.5:1 in every preset.
+            .foregroundStyle(active ? theme.color(.deep) : theme.color(.muted))
             .frame(maxWidth: .infinity, minHeight: FFSpace.tapMin)
             .padding(.vertical, FFSpace.s1)
             .background(
@@ -75,7 +77,9 @@ struct FFTabBar: View {
                     .fill(active ? theme.color(.surfaceSoft) : .clear)
             )
             .overlay {
-                if tab == .insights && store.hasNewInsights && !active {
+                // Mounted only when motion is allowed — SweepBand animates on
+                // appear, so gating the refire timer alone wasn't enough.
+                if tab == .insights && store.hasNewInsights && !active && !reduceMotion {
                     InsightsSweep(token: sweepToken)
                 }
             }

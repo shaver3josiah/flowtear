@@ -22,7 +22,7 @@ struct FFSegmentedTabs: View {
                 } label: {
                     Text(item)
                         .font(ffBody(FFType.sm, weight: .semibold))
-                        .foregroundStyle(active ? Color.white : theme.color(.muted))
+                        .foregroundStyle(active ? theme.color(.onPrimary) : theme.color(.muted))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                         .frame(height: 36)

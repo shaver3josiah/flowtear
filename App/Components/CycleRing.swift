@@ -38,15 +38,38 @@ struct CycleRing: View {
         let (tx, ty) = point(forDay: todayDay, radius: radius, center: center, cl: cl)
 
         ZStack {
-            Circle().inset(by: stroke / 2).stroke(theme.color(.surfaceSoft), lineWidth: stroke).padding(stroke / 2)
+            // The track — brushed-metal base band: a diagonal light so the whole
+            // bangle reads as one polished piece under a single lamp.
+            Circle().inset(by: stroke / 2)
+                .stroke(theme.color(.surfaceSoft), lineWidth: stroke)
+                .padding(stroke / 2)
+            Circle().inset(by: stroke / 2)
+                .stroke(metalSheen, lineWidth: stroke)
+                .padding(stroke / 2)
 
-            arc(0, Double(periodLength) / cl, reveal, color: theme.color(.phaseMenstrual), width: stroke)
-            arc(Double(c.fertileStart - 1) / cl, Double(c.ovDay + 1) / cl, reveal,
-                color: theme.color(.phaseFertile), width: stroke)
-            arc((Double(c.ovDay) - 0.6) / cl, (Double(c.ovDay) + 0.6) / cl, reveal,
-                color: theme.color(.phaseOvulation), width: stroke)
+            // Phase arcs — each stroked twice: its meaning color, then the same
+            // shared top-light wash, so the arcs read as enamel inlays on the
+            // same metal band (never flat printed color).
+            Group {
+                arc(0, Double(periodLength) / cl, reveal, color: theme.color(.phaseMenstrual), width: stroke)
+                arc(Double(c.fertileStart - 1) / cl, Double(c.ovDay + 1) / cl, reveal,
+                    color: theme.color(.phaseFertile), width: stroke)
+                arc((Double(c.ovDay) - 0.6) / cl, (Double(c.ovDay) + 0.6) / cl, reveal,
+                    color: theme.color(.phaseOvulation), width: stroke)
+                arcSheen(0, Double(periodLength) / cl, reveal, width: stroke)
+                arcSheen(Double(c.fertileStart - 1) / cl, Double(c.ovDay + 1) / cl, reveal, width: stroke)
+                arcSheen((Double(c.ovDay) - 0.6) / cl, (Double(c.ovDay) + 0.6) / cl, reveal, width: stroke)
+            }
 
-            // Today pip — only shown (muted) when the focus has moved off today.
+            // A slow glint that circles the band — the light catching polished
+            // metal as it turns. One narrow highlight, long rests implied by the
+            // slow lap; masked to the ring so it never touches the readout.
+            if !reduceMotion {
+                RingGlint(inset: stroke)
+            }
+
+            // Today pip — only shown (muted) when the focus has moved off today,
+            // so she can always find her way home to the current day.
             Circle().fill(theme.color(.surface))
                 .overlay(Circle().strokeBorder(theme.color(.muted), lineWidth: 2 * k))
                 .frame(width: stroke * 0.7, height: stroke * 0.7)
@@ -54,11 +77,30 @@ struct CycleRing: View {
                 .opacity(focused == todayDay ? 0 : 0.9)
 
             // Draggable focus marker (phase-colored, grows while dragging).
+            // On today it wears its jewel setting: a gold halo that breathes
+            // and two tiny twinkles — the day she's on is the ring's gem.
             ZStack {
+                if focused == todayDay {
+                    TodayGlimmer(diameter: stroke + 22 * k)
+                }
                 Circle().fill(theme.color(.surface))
                     .overlay(Circle().strokeBorder(theme.color(Self.tint(focusedPhase)), lineWidth: 4 * k))
+                    .overlay(
+                        // Specular top-left kiss, so the marker is metal too.
+                        Circle().strokeBorder(
+                            LinearGradient(colors: [.white.opacity(0.55), .clear, .clear],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1.5 * k
+                        )
+                    )
                     .frame(width: stroke + 10 * k, height: stroke + 10 * k)
-                Circle().fill(theme.color(Self.tint(focusedPhase))).frame(width: 7 * k, height: 7 * k)
+                Circle()
+                    .fill(focused == todayDay
+                          ? AnyShapeStyle(LinearGradient(
+                                colors: [theme.color(.flowerCenter), theme.color(Self.tint(focusedPhase))],
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                          : AnyShapeStyle(theme.color(Self.tint(focusedPhase))))
+                    .frame(width: 7 * k, height: 7 * k)
             }
             .scaleEffect((dragging ? 1.15 : 1) * reveal)
             .shadow(color: theme.shadow, radius: dragging ? 6 : 0)
@@ -69,10 +111,15 @@ struct CycleRing: View {
         .frame(width: size, height: size)
         .contentShape(Circle())
         // High priority so scrubbing on the ring wins over the Today ScrollView;
-        // dragging anywhere else on the page still scrolls normally.
+        // dragging anywhere else on the page still scrolls normally. The center
+        // is a DEAD ZONE for scrubbing: a tap on the big number (which invites
+        // "tap for insight") must open the sheet for the day shown — never
+        // scrub to whatever angle the finger happened to land on.
         .highPriorityGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { v in
+                    let r = hypot(v.location.x - center, v.location.y - center)
+                    guard r > Self.trackRadius(for: size) * 0.55 else { return }
                     dragging = true
                     focusedDay = day(at: v.location, center: center)
                 }
@@ -82,7 +129,10 @@ struct CycleRing: View {
                 }
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(a11yLabel)
+        // Label stays constant; the DAY lives in the value so VoiceOver
+        // announces each swipe-up/-down adjustment as it happens.
+        .accessibilityLabel("Cycle ring")
+        .accessibilityValue(a11yLabel)
         .accessibilityHint("Swipe up or down to explore days, double-tap for phase details")
         .accessibilityAdjustableAction { direction in
             let next = focused + (direction == .increment ? 1 : -1)
@@ -110,7 +160,7 @@ struct CycleRing: View {
             Text("\(focused)")
                 .font(ffNumber(size * 0.26, weight: .semibold))
                 .foregroundStyle(theme.color(.deep))
-            Text(focused == todayDay ? "day of your cycle" : "tap for insight")
+            Text(focused == todayDay ? "tap for today's insight" : "tap for insight")
                 .font(ffBody(FFType.sm))
                 .foregroundStyle(theme.color(.muted))
         }
@@ -135,6 +185,23 @@ struct CycleRing: View {
     private func arc(_ from: Double, _ to: Double, _ reveal: Double, color: Color, width: CGFloat) -> some View {
         PhaseArc(fromFrac: from, toFrac: to, reveal: reveal)
             .stroke(color, style: StrokeStyle(lineWidth: width, lineCap: .round))
+    }
+
+    /// The shared "single lamp" wash: light from the top-left, a shadow toward
+    /// the bottom-right. Laid over the track and every arc so the whole ring
+    /// reads as one polished piece of metal.
+    private var metalSheen: LinearGradient {
+        LinearGradient(stops: [
+            .init(color: .white.opacity(0.38), location: 0),
+            .init(color: .white.opacity(0.08), location: 0.35),
+            .init(color: .clear, location: 0.55),
+            .init(color: .black.opacity(theme.isDarkMode ? 0.30 : 0.16), location: 1),
+        ], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    private func arcSheen(_ from: Double, _ to: Double, _ reveal: Double, width: CGFloat) -> some View {
+        PhaseArc(fromFrac: from, toFrac: to, reveal: reveal)
+            .stroke(metalSheen, style: StrokeStyle(lineWidth: width, lineCap: .round))
     }
 
     private var a11yLabel: String {
@@ -184,6 +251,107 @@ struct CycleRing: View {
         case .ovulation:  .phaseOvulationSoft
         case .luteal:     .phaseLutealSoft
         }
+    }
+}
+
+// A slow glint that laps the band once every ~9 seconds — a narrow white
+// highlight rotating continuously around the ring, masked to the band itself.
+// It's the light catching polished metal as the bangle slowly turns: always
+// somewhere on the band, never bright (peak 0.5 over a narrow window), and
+// mounted only when motion is allowed.
+private struct RingGlint: View {
+    let inset: CGFloat
+    @State private var angle: Double = 0
+
+    var body: some View {
+        AngularGradient(stops: [
+            .init(color: .clear, location: 0),
+            .init(color: .clear, location: 0.42),
+            .init(color: .white.opacity(0.22), location: 0.48),
+            .init(color: .white.opacity(0.5), location: 0.5),
+            .init(color: .white.opacity(0.22), location: 0.52),
+            .init(color: .clear, location: 0.58),
+            .init(color: .clear, location: 1),
+        ], center: .center)
+        .rotationEffect(.degrees(angle))
+        .mask(Circle().inset(by: inset / 2).stroke(lineWidth: inset).padding(inset / 2))
+        .allowsHitTesting(false)
+        .onAppear {
+            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) { angle = 360 }
+        }
+    }
+}
+
+// The gem setting for today: a soft gold halo that breathes, and two tiny
+// four-point twinkles that alternate — the current day glimmers so it's
+// unmissable and clearly the thing to touch. Mounted only on the today marker.
+// Gates itself on Reduce Motion: the loops never start, and the halo plus one
+// lit twinkle render static (information kept, motion dropped).
+private struct TodayGlimmer: View {
+    @Environment(Theme.self) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let diameter: CGFloat
+
+    @State private var breathe = false
+    @State private var twinkle = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    AngularGradient(colors: [
+                        theme.color(.flowerCenter).opacity(0.0),
+                        theme.color(.flowerCenter).opacity(0.9),
+                        theme.color(.flowerCenter).opacity(0.0),
+                        theme.color(.flowerCenter).opacity(0.7),
+                        theme.color(.flowerCenter).opacity(0.0),
+                    ], center: .center),
+                    lineWidth: 2.5
+                )
+                .frame(width: diameter, height: diameter)
+                .scaleEffect(breathe ? 1.12 : 0.98)
+                .opacity(breathe ? 0.55 : 0.95)
+            FFTwinkle(size: 7, color: theme.color(.flowerCenter))
+                .offset(x: -diameter * 0.42, y: -diameter * 0.34)
+                .opacity(twinkle ? 1 : 0.15)
+            FFTwinkle(size: 5, color: theme.color(.flowerCenter))
+                .offset(x: diameter * 0.44, y: diameter * 0.28)
+                .opacity(twinkle ? 0.2 : 1)
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { twinkle = true }
+        }
+    }
+}
+
+/// A thin four-point sparkle (concave star) — shared by the today glimmer.
+struct FFTwinkle: View {
+    var size: CGFloat
+    var color: Color
+
+    var body: some View {
+        TwinkleShape()
+            .fill(color)
+            .frame(width: size, height: size)
+    }
+}
+
+private struct TwinkleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        let w = r * 0.3
+        var p = Path()
+        p.move(to: CGPoint(x: c.x, y: c.y - r))
+        p.addQuadCurve(to: CGPoint(x: c.x + r, y: c.y), control: CGPoint(x: c.x + w, y: c.y - w))
+        p.addQuadCurve(to: CGPoint(x: c.x, y: c.y + r), control: CGPoint(x: c.x + w, y: c.y + w))
+        p.addQuadCurve(to: CGPoint(x: c.x - r, y: c.y), control: CGPoint(x: c.x - w, y: c.y + w))
+        p.addQuadCurve(to: CGPoint(x: c.x, y: c.y - r), control: CGPoint(x: c.x - w, y: c.y - w))
+        p.closeSubpath()
+        return p
     }
 }
 

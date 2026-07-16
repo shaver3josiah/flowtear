@@ -145,7 +145,8 @@ struct StretchSessionView: View {
         if !store.stretchMovesDone(on: Date()).contains(index) {
             let doneBefore = store.stretchMovesDone(on: Date()).count
             store.toggleStretchMove(index, on: Date(), totalMoves: day.moves.count)
-            rewards.awardPose(alreadyDone: doneBefore, total: day.moves.count,
+            rewards.awardPose(dateKey: store.key(for: Date()),
+                              alreadyDone: doneBefore, total: day.moves.count,
                               multiplier: multiplier)
         }
         rewards.awardGuidedFirstTime(moveName: move.name, multiplier: multiplier)

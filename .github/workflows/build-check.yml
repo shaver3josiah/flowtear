@@ -1,0 +1,48 @@
+# Compile + unit-test gate on every push — catches a broken build or a failing
+# StretchPlan/CycleEngine test BEFORE a release tag ever reaches TestFlight.
+# (Mirrors BloomCalculator's proven build-check; adds the simulator test run.)
+name: build-check
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Select newest Xcode
+        run: |
+          set -e
+          latest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -viE 'beta|rc|release[_ ]candidate' | sort -V | tail -1)
+          if [ -z "$latest" ]; then echo "No Xcode found under /Applications"; exit 1; fi
+          echo "Selecting $latest"
+          sudo xcode-select -s "$latest/Contents/Developer"
+          xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          set -e
+          NAME=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)['devices']
+          names = [dev['name'] for v in d.values() for dev in v
+                   if dev.get('isAvailable') and dev['name'].startswith('iPhone')]
+          print(sorted(names)[-1] if names else '')")
+          if [ -z "$NAME" ]; then echo "No iPhone simulator available"; exit 1; fi
+          echo "Using simulator: $NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+      - name: Build + run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Flowtear.xcodeproj \
+            -scheme Flowtear \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO

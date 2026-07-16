@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // Today — the home screen: the CycleRing hero with a drifting-petal accent, the
 // current phase, a next-period countdown, a quick flow log, the cycle-day /
@@ -19,6 +20,7 @@ struct TodayView: View {
     @State private var showAbout = false
     @State private var showTips = false
     @State private var paneIndex = 0
+    @State private var undoToast: UndoAction? = nil
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
@@ -57,6 +59,46 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showAbout) { AboutView() }
         .sheet(isPresented: $showTips) { TipsSheet() }
+        .overlay(alignment: .top) { undoToastView }
+    }
+
+    // MARK: Undo toast (one gentle chance to take a quick action back)
+
+    @ViewBuilder private var undoToastView: some View {
+        if let t = undoToast {
+            HStack(spacing: 8) {
+                Text(t.message)
+                    .font(ffBody(FFType.sm, weight: .medium))
+                    .foregroundStyle(theme.color(.text))
+                Button {
+                    t.undo()
+                    withAnimation(FFMotion.fast) { undoToast = nil }
+                } label: {
+                    Text("Undo")
+                        .font(ffBody(FFType.sm, weight: .bold))
+                        .foregroundStyle(theme.color(.primaryStrong))
+                        .frame(minWidth: FFSpace.tapMin, minHeight: FFSpace.tapMin)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 4)
+            .background(theme.color(.surface), in: Capsule())
+            .overlay(Capsule().strokeBorder(theme.color(.line), lineWidth: 1))
+            .shadow(color: theme.shadow, radius: 10, y: 6)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .task(id: t.id) {
+                // Spoken confirmation, and much more time when VoiceOver is on —
+                // an unheard toast that vanishes in 5s is no undo at all.
+                UIAccessibility.post(notification: .announcement,
+                                     argument: "\(t.message). Undo is available near the top of the screen.")
+                let grace: Double = UIAccessibility.isVoiceOverRunning ? 20 : 5
+                try? await Task.sleep(for: .seconds(grace))
+                withAnimation(FFMotion.fast) {
+                    if undoToast?.id == t.id { undoToast = nil }
+                }
+            }
+        }
     }
 
     // MARK: Header (weekday + date + the pencil, like Bloom)
@@ -190,9 +232,31 @@ struct TodayView: View {
 
     // MARK: Quick flow log
 
+    /// One tap when it matters most: her period is due (or late) and nothing is
+    /// logged yet — no slider hunting on a crampy morning.
+    private var showPeriodCTA: Bool {
+        store.log(for: today)?.flow == nil
+            && (p.daysUntilNextPeriod.map { $0 <= 2 } ?? false)
+    }
+
     private var quickLog: some View {
         FFCard {
             VStack(alignment: .leading, spacing: 12) {
+                if showPeriodCTA {
+                    FFButton((p.daysUntilNextPeriod ?? 0) < 0 ? "My period started" : "My period started today",
+                             style: .primary, icon: "drop.fill") {
+                        var log = store.log(for: today) ?? DayLog(dateKey: store.key(for: today))
+                        log.flow = .medium
+                        store.upsert(log)
+                        withAnimation(FFMotion.spring) {
+                            undoToast = UndoAction(message: "Logged a medium flow for today") {
+                                var l = store.log(for: today) ?? DayLog(dateKey: store.key(for: today))
+                                l.flow = nil
+                                store.upsert(l)
+                            }
+                        }
+                    }
+                }
                 FFPickerSlider(
                     title: "How's your flow today?",
                     options: Flow.allCases,
@@ -257,6 +321,7 @@ struct TodayView: View {
 
     // MARK: Empty state
 
+
     private var emptyState: some View {
         FFCard {
             VStack(spacing: 16) {
@@ -282,4 +347,11 @@ struct TodayView: View {
             .padding(.vertical, FFSpace.s5)
         }
     }
+}
+
+/// A just-taken quick action with one gentle chance to take it back.
+struct UndoAction: Identifiable {
+    let id = UUID()
+    let message: String
+    let undo: () -> Void
 }

@@ -68,6 +68,10 @@ struct CycleSettings: Codable {
     var defaultCycleLength: Int = 28
     var defaultPeriodLength: Int = 5
     var lutealPhaseLength: Int = 14   // ovulation ≈ nextPeriod − luteal
+    /// When true, predictions use HER number (`defaultCycleLength`) instead of
+    /// the logged average — for thin or irregular history she knows better
+    /// than the math does. Optional so old persisted blobs keep decoding.
+    var lockCycleLength: Bool? = false
 }
 
 enum CyclePhase: String, Codable {

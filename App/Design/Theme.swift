@@ -36,7 +36,9 @@ final class Theme {
     private static let studioKey = "flowtear.theme.studio"
 
     init() {
-        let p = UserDefaults.standard.string(forKey: Theme.presetKey) ?? "cherry"
+        // Dark is the house default — new installs open in the plum night
+        // palette; anything she's ever picked wins over the default.
+        let p = UserDefaults.standard.string(forKey: Theme.presetKey) ?? "dark"
         let a = UserDefaults.standard.string(forKey: Theme.accentKey)
         let o = UserDefaults.standard.dictionary(forKey: Theme.studioKey) as? [String: String] ?? [:]
         presetName = p
@@ -82,14 +84,15 @@ final class Theme {
     // MARK: presets
 
     static let lightPresets = ["cherry", "pink", "rose", "peony", "soft", "light"]
-    static let darkPresets  = ["dark"]
-    static let presetNames  = lightPresets + darkPresets
+    static let darkPresets  = ["dark", "midnight"]
+    static let presetNames  = darkPresets + lightPresets   // dark family first — it's the house default
 
     static func label(for preset: String) -> String {
         switch preset {
-        case "cherry": "Cherry"; case "pink": "Pink";  case "rose": "Rose"
-        case "peony":  "Peony";  case "soft": "Soft";  case "light": "Light"
-        case "dark":   "Dark";   default: preset.capitalized
+        case "cherry": "Cherry";     case "pink": "Pink";  case "rose": "Rose"
+        case "peony":  "Peony";      case "soft": "Soft";  case "light": "Light"
+        case "dark":   "Plum Night"; case "midnight": "Midnight"
+        default: preset.capitalized
         }
     }
 
@@ -136,11 +139,18 @@ final class Theme {
     private static let base: [String: String] = [
         // surfaces
         "bg": "#FDF2F7", "surface": "#FFFFFF", "surfaceSoft": "#FBE4EE", "surface2": "#FDF0F5",
-        // brand
-        "primary": "#F06FA7", "primaryStrong": "#E2417F", "deep": "#B01B58",
+        // brand (primaryStrong deep enough that white text on it clears 4.5:1)
+        "primary": "#F06FA7", "primaryStrong": "#D23070", "deep": "#B01B58",
         // text
         "text": "#421527", "muted": "#885B6D", "line": "#F2CEDF",
         "flowerCenter": "#FFC966", "good": "#17703B",
+        // Posy's face ink — a deep rose that reads on her pink petals in BOTH
+        // schemes (dark presets brighten the petals, so dark ink still lands).
+        "bloomInk": "#5E1434",
+        // Text/icon color on primary/primaryStrong/deep fills. White on light
+        // presets; the dark presets BRIGHTEN those fills to light pinks, so
+        // they override this to a deep plum ink (~5.5:1 on their primaryStrong).
+        "onPrimary": "#FFFFFF",
         // cycle-phase ramp
         "phaseMenstrual": "#E14B7A", "phaseFollicular": "#F7A8C6", "phaseFertile": "#F6BE6A",
         "phaseOvulation": "#EC9A32", "phaseLuteal": "#C98BC7",
@@ -169,10 +179,11 @@ final class Theme {
     private static func overrides(for preset: String) -> [String: String] {
         switch preset {
         case "pink":
-            // A brighter, bubble-gum pink — the explicit "pink mode".
-            return ["bg": "#FEF0F6", "surfaceSoft": "#FDDCEB", "surface2": "#FEEAF3",
-                    "primary": "#FF5FA8", "primaryStrong": "#F42C88", "deep": "#C21567",
-                    "text": "#43132C", "muted": "#8C526F", "line": "#FBCDE1", "flowerCenter": "#FFC24E"]
+            // The explicit "pink mode" — candy-bright but no longer neon:
+            // the accents sit a step softer so long reading stays gentle.
+            return ["bg": "#FEF1F7", "surfaceSoft": "#FCDDEC", "surface2": "#FEEAF3",
+                    "primary": "#F9679E", "primaryStrong": "#D62C74", "deep": "#B01A60",
+                    "text": "#43132C", "muted": "#8C526F", "line": "#F9CFE2", "flowerCenter": "#FFC55A"]
         case "rose":
             return ["bg": "#FDF2F1", "surfaceSoft": "#FADDE0", "surface2": "#FCEBEC",
                     "primary": "#E56A87", "primaryStrong": "#CE3E63", "deep": "#A11C41",
@@ -183,7 +194,7 @@ final class Theme {
                     "text": "#3B1030", "muted": "#815571", "line": "#EFC8E0", "flowerCenter": "#FFC966"]
         case "soft":
             return ["bg": "#FEF7F9", "surfaceSoft": "#FBE7ED", "surface2": "#FDF1F4",
-                    "primary": "#EE9DBB", "primaryStrong": "#DB6E93", "deep": "#B04266",
+                    "primary": "#EE9DBB", "primaryStrong": "#C14E73", "deep": "#B04266",
                     "text": "#4A2533", "muted": "#82606D", "line": "#F4D8E1", "flowerCenter": "#FFD488"]
         case "light":
             // Airy near-neutral light: crisp white surfaces, cool-neutral text,
@@ -192,19 +203,39 @@ final class Theme {
                     "primary": "#E75C93", "primaryStrong": "#CE3B76", "deep": "#8A2A54",
                     "text": "#2A2430", "muted": "#726A75", "line": "#E9E2E8", "flowerCenter": "#F5B342"]
         case "dark":
-            // Full dark palette. Overrides every scheme + soft-ramp key; the vivid
-            // phase/flow tints read fine on dark so they carry through from base.
+            // Full dark palette — the house default. A rich warm plum rather
+            // than flat near-black: surfaces carry a whisper of rose so cards
+            // lift off the background, accents run rosier, text a touch
+            // creamier. Overrides every scheme + soft-ramp key; the vivid
+            // phase/flow tints read fine on dark so they carry through.
             return [
-                "bg": "#141017", "surface": "#1E1822", "surfaceSoft": "#2B2130", "surface2": "#241C2A",
-                "primary": "#F58FB8", "primaryStrong": "#F06FA7", "deep": "#F7C9DD",
-                "text": "#F6E9EF", "muted": "#BFA1B0", "line": "#3A2E38",
-                "flowerCenter": "#FFC966", "good": "#4FBE86",
+                "bg": "#171118", "surface": "#221925", "surfaceSoft": "#302433", "surface2": "#291E2D",
+                "primary": "#F792BC", "primaryStrong": "#F26AA2", "deep": "#F8CCDF",
+                "text": "#F8EDF3", "muted": "#C7A9B8", "line": "#3F3140",
+                "flowerCenter": "#FFCE73", "good": "#55C389", "onPrimary": "#40122B",
                 // dark soft-washes for phase cells/badges (light tints would glow)
-                "phaseMenstrualSoft": "#3A2230", "phaseFollicularSoft": "#33202B",
-                "phaseFertileSoft": "#382C1E", "phaseOvulationSoft": "#382A1A", "phaseLutealSoft": "#2E2338",
-                "flowNone": "#5A4A52",
+                "phaseMenstrualSoft": "#3E2433", "phaseFollicularSoft": "#372230",
+                "phaseFertileSoft": "#3C2F20", "phaseOvulationSoft": "#3C2D1C", "phaseLutealSoft": "#32263D",
+                "flowNone": "#5E4D56",
                 // aliases that point at soft washes
-                "flowSoft": "#3A2230",
+                "flowSoft": "#3E2433",
+            ]
+        case "midnight":
+            // The second dark option — ink and moonlight. Cooler, quieter, and
+            // a step deeper than Plum Night: near-black slate surfaces, silvery
+            // rose accents, moon-gold kept for the flower center. For nights
+            // when plum feels too warm.
+            return [
+                "bg": "#0F0F14", "surface": "#181820", "surfaceSoft": "#23232F", "surface2": "#1E1E29",
+                "primary": "#E48BB3", "primaryStrong": "#ED6FA4", "deep": "#F0C4D8",
+                "text": "#F1EDF4", "muted": "#ABA1B6", "line": "#31313F",
+                "flowerCenter": "#F3C76F", "good": "#4EBD8C", "onPrimary": "#40122B",
+                // dark soft-washes (light tints would glow on near-black)
+                "phaseMenstrualSoft": "#391F2E", "phaseFollicularSoft": "#32202C",
+                "phaseFertileSoft": "#372B1E", "phaseOvulationSoft": "#362919", "phaseLutealSoft": "#2B2338",
+                "flowNone": "#555064",
+                // aliases that point at soft washes
+                "flowSoft": "#391F2E",
             ]
         default: // cherry
             return [:]
@@ -241,7 +272,7 @@ final class Theme {
 enum Tok: String {
     case bg, surface, surfaceSoft, surface2
     case primary, primaryStrong, deep
-    case text, muted, line, flowerCenter, good
+    case text, muted, line, flowerCenter, good, bloomInk, onPrimary
     case phaseMenstrual, phaseFollicular, phaseFertile, phaseOvulation, phaseLuteal
     case phaseMenstrualSoft, phaseFollicularSoft, phaseFertileSoft, phaseOvulationSoft, phaseLutealSoft
     case flowSpotting, flowLight, flowMedium, flowHeavy, flowNone

@@ -212,7 +212,7 @@ struct GardenShopView: View {
                     }
                 }
                 .font(ffBody(FFType.xs, weight: .bold))
-                .foregroundStyle(equipped ? .white : theme.color(owned ? .primaryStrong : (affordable ? .deep : .muted)))
+                .foregroundStyle(equipped ? theme.color(.onPrimary) : theme.color(owned ? .primaryStrong : (affordable ? .deep : .muted)))
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .background(equipped ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
             }
@@ -261,7 +261,7 @@ struct GardenShopView: View {
                         else { Label("\(RewardsStore.poseyPrice)", systemImage: "sparkle") }
                     }
                     .font(ffBody(FFType.xs, weight: .bold))
-                    .foregroundStyle(equipped ? .white : theme.color(.deep))
+                    .foregroundStyle(equipped ? theme.color(.onPrimary) : theme.color(.deep))
                     .padding(.horizontal, 12).padding(.vertical, 7)
                     .background(equipped ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
                 }
@@ -340,7 +340,7 @@ struct GardenShopView: View {
                     else { Label("\(item.price)", systemImage: "sparkle") }
                 }
                 .font(ffBody(FFType.xs, weight: .bold))
-                .foregroundStyle(active ? .white : theme.color(owned || rewards.canAfford(item.price) ? .deep : .muted))
+                .foregroundStyle(active ? theme.color(.onPrimary) : theme.color(owned || rewards.canAfford(item.price) ? .deep : .muted))
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .background(active ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
             }

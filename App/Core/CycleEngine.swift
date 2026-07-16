@@ -75,8 +75,16 @@ enum CycleEngine {
     ) -> CyclePrediction {
         let today = cal.startOfDay(for: today)
         let starts = periodStarts(from: periodDays, cal: cal)
-        let avgCycle = averageCycleLength(starts: starts, fallback: settings.defaultCycleLength, cal: cal)
-        let avgPeriod = averagePeriodLength(from: periodDays, fallback: settings.defaultPeriodLength, cal: cal)
+        // Her override wins over the logged averages when she's locked it in —
+        // BOTH numbers, or the period stepper would be a placebo for anyone
+        // with logged flow.
+        let locked = settings.lockCycleLength ?? false
+        let avgCycle = locked
+            ? settings.defaultCycleLength
+            : averageCycleLength(starts: starts, fallback: settings.defaultCycleLength, cal: cal)
+        let avgPeriod = locked
+            ? settings.defaultPeriodLength
+            : averagePeriodLength(from: periodDays, fallback: settings.defaultPeriodLength, cal: cal)
 
         guard let last = starts.last else {
             // No history yet — nothing to predict.

@@ -1,8 +1,10 @@
 import SwiftUI
 
 // FFChip — a selectable pill for multi-select vocabularies (DS core/Chip).
-// Resting: surfaceSoft fill, muted text. Selected: strong-pink fill, white text,
-// plus the `.isSelected` trait so selection isn't conveyed by color alone.
+// Resting: surfaceSoft fill, muted text. Selected: the caller's tint fill
+// (default primaryStrong) with onPrimary text on the brand ramp, or bloomInk
+// on fixed mid-tone tints (e.g. the lavender mood chips) — plus the
+// `.isSelected` trait so selection isn't conveyed by color alone.
 struct FFChip: View {
     @Environment(Theme.self) private var theme
     private let title: String
@@ -33,7 +35,11 @@ struct FFChip: View {
                 Text(title)
             }
             .font(ffBody(FFType.sm, weight: .semibold))
-            .foregroundStyle(selected ? .white : theme.color(.muted))
+            // onPrimary is calibrated for the brand ramp only; other tint fills
+            // (e.g. the lavender mood chips) stay fixed mid-tones in every
+            // preset, so they take the fixed dark bloom ink instead.
+            .foregroundStyle(selected ? theme.color(tint == .primaryStrong ? .onPrimary : .bloomInk)
+                                      : theme.color(.muted))
             .frame(height: 40)
             .padding(.horizontal, 16)
             .background(selected ? theme.color(tint) : theme.color(.surfaceSoft), in: Capsule())
