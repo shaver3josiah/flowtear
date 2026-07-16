@@ -7,6 +7,31 @@ struct PetalGap: Identifiable {
     var id: String { name }
 }
 
+/// A purchase she's tapped but not yet confirmed.
+struct PendingBuy: Identifiable {
+    let name: String
+    let price: Int
+    let buy: () -> Void
+    var id: String { name }
+}
+
+extension View {
+    /// One confirm step before petals leave her balance — a mis-tap costs nothing.
+    func petalPurchaseConfirm(_ pending: Binding<PendingBuy?>, balance: Int) -> some View {
+        confirmationDialog(
+            pending.wrappedValue.map { "Bring home \($0.name)?" } ?? "",
+            isPresented: Binding(get: { pending.wrappedValue != nil },
+                                 set: { if !$0 { pending.wrappedValue = nil } }),
+            titleVisibility: .visible,
+            presenting: pending.wrappedValue
+        ) { buy in
+            Button("Buy for \(buy.price) petals") { buy.buy() }
+        } message: { buy in
+            Text("That leaves \(max(balance - buy.price, 0)) of your \(balance) petals.")
+        }
+    }
+}
+
 // NeedMorePetalsView — the gentle "not yet" splash. Instead of a locked tap
 // silently doing nothing, this names the exact gap, shows how far she's come,
 // and walks her straight to the stretching side to earn the rest.

@@ -136,6 +136,14 @@ final class RewardsStore {
         save(); return true
     }
 
+    /// Pause amnesty: mark a missed day handled WITHOUT charging it, so days
+    /// skipped while her plan is paused can never be billed later.
+    func excuseMissedDay(_ dateKey: String) {
+        guard !penalizedDays.contains(dateKey) else { return }
+        penalizedDays.insert(dateKey)
+        save()
+    }
+
     // MARK: earning
 
     /// Points for checking ON a pose. `alreadyDone` = poses done today before

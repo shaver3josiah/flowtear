@@ -24,6 +24,7 @@ struct FlowtearApp: App {
 struct RootView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab: FFTab = .today
     @State private var logDate = Date()
 
@@ -59,6 +60,15 @@ struct RootView: View {
         .onChange(of: tab) { _, newTab in
             if newTab == .insights { store.markInsightsSeen() }
         }
+        // Keep the period heads-up tracking her latest logs — rebuilt both when
+        // she returns AND when she leaves, so logging a period mid-session can
+        // never leave a stale "expected in 2 days" queued from the old dates.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active || phase == .background {
+                FFReminders.refresh(nextPeriodStart: store.prediction().nextPeriodStart)
+            }
+        }
+        .appLockGate()
     }
 
     private func openLog(_ date: Date) {

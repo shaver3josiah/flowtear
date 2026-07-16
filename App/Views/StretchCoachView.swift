@@ -22,6 +22,8 @@ struct StretchCoachView: View {
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
     @State private var playingDay: StretchDay? = nil   // any schedule day, guided
+    /// Life happens: while paused, missed plan days are excused, never charged.
+    @AppStorage("flowtear.planPaused") private var planPaused = false
 
     private var today: Date { Date() }
     private var p: CyclePrediction { store.prediction() }
@@ -97,18 +99,41 @@ struct StretchCoachView: View {
             if !rewards.tutorialSeen { showTutorial = true }
             applyLockInPenalties()
         }
+        // Pausing grants amnesty immediately; UNpausing forgives everything
+        // missed up to that moment first (days that elapsed while paused must
+        // never be billed), then normal accounting resumes.
+        .onChange(of: planPaused) { wasPaused, isPaused in
+            if wasPaused && !isPaused { excusePauseWindow() }
+            applyLockInPenalties()
+        }
+    }
+
+    /// Amnesty at unpause: every past, un-done plan day is excused for good —
+    /// the plan only charges for days missed AFTER the pause lifts.
+    private func excusePauseWindow() {
+        guard tier.locksIn, tier.totalDays > 0 else { return }
+        let startOfToday = Calendar.current.startOfDay(for: today)
+        for d in 1...tier.totalDays {
+            guard let date = date(forPlanDay: d), date < startOfToday else { continue }
+            if !store.stretchDone(on: date) {
+                rewards.excuseMissedDay(store.key(for: date))
+            }
+        }
     }
 
     /// Lock-in accounting: past plan days in this window she didn't stretch cost
-    /// 5 petals each, charged once ever per day. Trio never penalizes.
+    /// 5 petals each, charged once ever per day. Trio never penalizes; while the
+    /// plan is PAUSED those days are excused for good instead of charged.
     private func applyLockInPenalties() {
         guard tier.locksIn, tier.totalDays > 0 else { return }
         let startOfToday = Calendar.current.startOfDay(for: today)
         var charged = 0
         for d in 1...tier.totalDays {
             guard let date = date(forPlanDay: d), date < startOfToday else { continue }
-            if !store.stretchDone(on: date),
-               rewards.penalizeMissedDay(store.key(for: date)) {
+            guard !store.stretchDone(on: date) else { continue }
+            if planPaused {
+                rewards.excuseMissedDay(store.key(for: date))
+            } else if rewards.penalizeMissedDay(store.key(for: date)) {
                 charged += 1
             }
         }
@@ -141,6 +166,13 @@ struct StretchCoachView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(theme.color(.phaseLuteal), in: Capsule())
+                    if planPaused && tier.locksIn {
+                        Text("paused")
+                            .font(ffBody(FFType.xs2, weight: .bold))
+                            .foregroundStyle(theme.color(.deep))
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(theme.color(.surfaceSoft), in: Capsule())
+                    }
                     Spacer(minLength: 4)
                     Text("up to \(maxDailyPoints(tier))/day")
                         .font(ffBody(FFType.xs, weight: .bold))
@@ -164,11 +196,38 @@ struct StretchCoachView: View {
                 modeRow(.trio,    note: "Any day, no schedule, no pressure")
                 modeRow(.starter, note: "The 3 days before your period · −5 a missed day")
                 modeRow(.full,    note: "The full two weeks · −5 a missed day")
+                if tier.locksIn {
+                    pauseRow
+                }
                 Text("Switching keeps every point and completion.")
                     .font(ffBody(FFType.xs2))
                     .foregroundStyle(theme.color(.muted))
             }
         }
+    }
+
+    // Her plan, her terms: pausing excuses missed days instead of charging them.
+    private var pauseRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pause.circle")
+                .font(.system(size: 17))
+                .foregroundStyle(theme.color(planPaused ? .primaryStrong : .muted))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Pause my plan")
+                    .font(ffBody(FFType.sm, weight: .bold))
+                    .foregroundStyle(theme.color(.deep))
+                Text("Life happens — missed days cost nothing while paused")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+            }
+            Spacer(minLength: 4)
+            FFSwitch(isOn: $planPaused)
+                .accessibilityLabel("Pause my plan")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
+            .strokeBorder(theme.color(.line), lineWidth: 1))
     }
 
     private func modeRow(_ t: StretchTier, note: String) -> some View {

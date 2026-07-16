@@ -7,12 +7,18 @@ import SwiftUI
 struct ThemeEditorSheet: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
+    @Environment(CycleStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     /// Close this sheet and jump to the Stretch tab (wired by TodayView).
     var onGoEarn: (() -> Void)? = nil
     @State private var showShop = false
     @State private var petalGap: PetalGap?
+    @State private var pendingBuy: PendingBuy?
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
+    @AppStorage("flowtear.appLock") private var appLock = false
+    @AppStorage(FFReminders.stretchOnKey) private var stretchReminder = false
+    @AppStorage(FFReminders.stretchMinutesKey) private var stretchMinutes = 18 * 60
+    @AppStorage(FFReminders.periodOnKey) private var periodReminder = false
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: FFSpace.s3)]
 
@@ -27,6 +33,8 @@ struct ThemeEditorSheet: View {
                 accentSection
                 studioSection
                 touchesSection
+                remindersSection
+                privacySection
                 Text("Period, fertile and phase colors never change — they mean something.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
@@ -38,6 +46,16 @@ struct ThemeEditorSheet: View {
         .sheet(item: $petalGap) { gap in
             NeedMorePetalsView(gap: gap, onGoStretch: { onGoEarn?() })
         }
+        .petalPurchaseConfirm($pendingBuy, balance: rewards.balance)
+        .onChange(of: stretchReminder) { _, on in replanReminders(justEnabled: on) }
+        .onChange(of: periodReminder) { _, on in replanReminders(justEnabled: on) }
+        .onChange(of: stretchMinutes) { _, _ in replanReminders(justEnabled: false) }
+    }
+
+    private func replanReminders(justEnabled: Bool) {
+        let next = store.prediction().nextPeriodStart
+        if justEnabled { FFReminders.requestThenRefresh(nextPeriodStart: next) }
+        else { FFReminders.refresh(nextPeriodStart: next) }
     }
 
     private var header: some View {
@@ -74,11 +92,16 @@ struct ThemeEditorSheet: View {
         return Button {
             if owned {
                 withAnimation(FFMotion.fast) { theme.setPreset(name) }
-            } else if rewards.buyTheme(name) {
-                withAnimation(FFMotion.fast) { theme.setPreset(name) }
-            } else {
+            } else if !rewards.canAfford(RewardsStore.themePrice) {
                 petalGap = PetalGap(name: "the \(Theme.label(for: name)) palette",
                                     price: RewardsStore.themePrice)
+            } else {
+                pendingBuy = PendingBuy(name: "the \(Theme.label(for: name)) palette",
+                                        price: RewardsStore.themePrice) {
+                    if rewards.buyTheme(name) {
+                        withAnimation(FFMotion.fast) { theme.setPreset(name) }
+                    }
+                }
             }
         } label: {
             HStack(spacing: 8) {
@@ -136,9 +159,14 @@ struct ThemeEditorSheet: View {
                         }
                         Spacer(minLength: 4)
                         Button {
-                            if !rewards.buyAccent() {
+                            if !rewards.canAfford(RewardsStore.accentPrice) {
                                 petalGap = PetalGap(name: "the custom accent color",
                                                     price: RewardsStore.accentPrice)
+                            } else {
+                                pendingBuy = PendingBuy(name: "the custom accent color",
+                                                        price: RewardsStore.accentPrice) {
+                                    _ = rewards.buyAccent()
+                                }
                             }
                         } label: {
                             Label("\(RewardsStore.accentPrice)", systemImage: "sparkle")
@@ -223,6 +251,95 @@ struct ThemeEditorSheet: View {
                     Spacer(minLength: 4)
                     FFSwitch(isOn: $petalsOnRing)
                         .accessibilityLabel("Falling petals around the cycle ring")
+                }
+            }
+        }
+    }
+
+    // Gentle reminders — opt-in, local-only nudges she controls completely.
+    private var remindersSection: some View {
+        VStack(alignment: .leading, spacing: FFSpace.s3) {
+            sectionTitle("Gentle reminders")
+            FFCard {
+                VStack(alignment: .leading, spacing: FFSpace.s3) {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Stretch nudge")
+                                .font(ffBody(FFType.md, weight: .semibold))
+                                .foregroundStyle(theme.color(.text))
+                            Text("One soft daily reminder at your time")
+                                .font(ffBody(FFType.xs))
+                                .foregroundStyle(theme.color(.muted))
+                        }
+                        Spacer(minLength: 4)
+                        FFSwitch(isOn: $stretchReminder)
+                            .accessibilityLabel("Daily stretch reminder")
+                    }
+                    if stretchReminder {
+                        DatePicker("Remind me at", selection: stretchTimeBinding,
+                                   displayedComponents: .hourAndMinute)
+                            .font(ffBody(FFType.sm, weight: .medium))
+                            .foregroundStyle(theme.color(.text))
+                            .tint(theme.color(.primaryStrong))
+                    }
+                    Rectangle().fill(theme.color(.line)).frame(height: 1)
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Period heads-up")
+                                .font(ffBody(FFType.md, weight: .semibold))
+                                .foregroundStyle(theme.color(.text))
+                            Text("A note two days before it's expected")
+                                .font(ffBody(FFType.xs))
+                                .foregroundStyle(theme.color(.muted))
+                        }
+                        Spacer(minLength: 4)
+                        FFSwitch(isOn: $periodReminder)
+                            .accessibilityLabel("Period heads-up reminder")
+                    }
+                    Text("Reminders are scheduled on this phone only — nothing leaves it.")
+                        .font(ffBody(FFType.xs2))
+                        .foregroundStyle(theme.color(.muted))
+                }
+            }
+        }
+    }
+
+    /// stretchMinutes (minutes past midnight) <-> a Date for the picker.
+    private var stretchTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: stretchMinutes / 60,
+                                      minute: stretchMinutes % 60,
+                                      second: 0, of: Date()) ?? Date()
+            },
+            set: {
+                let c = Calendar.current.dateComponents([.hour, .minute], from: $0)
+                stretchMinutes = (c.hour ?? 18) * 60 + (c.minute ?? 0)
+            }
+        )
+    }
+
+    // Privacy — the optional Face ID / passcode lock.
+    private var privacySection: some View {
+        VStack(alignment: .leading, spacing: FFSpace.s3) {
+            sectionTitle("Privacy")
+            FFCard {
+                HStack(spacing: 10) {
+                    Image(systemName: "faceid")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(theme.color(.primaryStrong))
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Lock with Face ID")
+                            .font(ffBody(FFType.md, weight: .semibold))
+                            .foregroundStyle(theme.color(.text))
+                        Text("Your garden opens only for you — Face ID or your passcode")
+                            .font(ffBody(FFType.xs))
+                            .foregroundStyle(theme.color(.muted))
+                    }
+                    Spacer(minLength: 4)
+                    FFSwitch(isOn: $appLock)
+                        .accessibilityLabel("Lock the app with Face ID")
                 }
             }
         }

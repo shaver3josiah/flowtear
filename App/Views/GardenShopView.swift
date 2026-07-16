@@ -115,6 +115,7 @@ struct GardenShopView: View {
     @State private var showShare = false
     @State private var buyBurst = 0
     @State private var petalGap: PetalGap?
+    @State private var pendingBuy: PendingBuy?
 
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: FFSpace.s3)]
 
@@ -139,6 +140,7 @@ struct GardenShopView: View {
                 onGoEarn?()
             })
         }
+        .petalPurchaseConfirm($pendingBuy, balance: rewards.balance)
     }
 
     private var header: some View {
@@ -179,11 +181,15 @@ struct GardenShopView: View {
         return Button {
             if owned {
                 rewards.activeSticker = equipped ? nil : f.id
-            } else if rewards.buyFlower(f.id) {
-                buyBurst += 1
-                rewards.playCelebrationIfOwned()
-            } else {
+            } else if !affordable {
                 petalGap = PetalGap(name: "the \(f.name)", price: f.price)
+            } else {
+                pendingBuy = PendingBuy(name: "the \(f.name)", price: f.price) {
+                    if rewards.buyFlower(f.id) {
+                        buyBurst += 1
+                        rewards.playCelebrationIfOwned()
+                    }
+                }
             }
         } label: {
             VStack(spacing: 6) {
@@ -241,8 +247,13 @@ struct GardenShopView: View {
                 Spacer(minLength: 4)
                 Button {
                     if owned { rewards.activeSticker = equipped ? nil : "posey" }
-                    else if rewards.buyPosey() { buyBurst += 1 }
-                    else { petalGap = PetalGap(name: "Posey herself", price: RewardsStore.poseyPrice) }
+                    else if !rewards.canAfford(RewardsStore.poseyPrice) {
+                        petalGap = PetalGap(name: "Posey herself", price: RewardsStore.poseyPrice)
+                    } else {
+                        pendingBuy = PendingBuy(name: "Posey herself", price: RewardsStore.poseyPrice) {
+                            if rewards.buyPosey() { buyBurst += 1 }
+                        }
+                    }
                 } label: {
                     Group {
                         if equipped { Label("Worn", systemImage: "checkmark") }
@@ -268,23 +279,24 @@ struct GardenShopView: View {
                 unlockRow(icon: nil, swatch: Theme.swatch(for: name),
                           title: "\(Theme.label(for: name)) palette",
                           owned: rewards.themeOwned(name), price: RewardsStore.themePrice) {
-                    if rewards.buyTheme(name) { buyBurst += 1 }
-                    else { petalGap = PetalGap(name: "the \(Theme.label(for: name)) palette",
-                                               price: RewardsStore.themePrice) }
+                    confirmOrGap(name: "the \(Theme.label(for: name)) palette",
+                                 price: RewardsStore.themePrice) {
+                        if rewards.buyTheme(name) { buyBurst += 1 }
+                    }
                 }
             }
             unlockRow(icon: "paintpalette.fill", swatch: nil, title: "Custom accent color",
                       owned: rewards.accentUnlocked, price: RewardsStore.accentPrice) {
-                if rewards.buyAccent() { buyBurst += 1 }
-                else { petalGap = PetalGap(name: "the custom accent color",
-                                           price: RewardsStore.accentPrice) }
+                confirmOrGap(name: "the custom accent color", price: RewardsStore.accentPrice) {
+                    if rewards.buyAccent() { buyBurst += 1 }
+                }
             }
             soundShelf
             unlockRow(icon: "slider.horizontal.3", swatch: nil, title: "Color Studio — recolor nearly everything",
                       owned: rewards.colorStudioUnlocked, price: RewardsStore.colorStudioPrice) {
-                if rewards.buyColorStudio() { buyBurst += 1 }
-                else { petalGap = PetalGap(name: "the Color Studio",
-                                           price: RewardsStore.colorStudioPrice) }
+                confirmOrGap(name: "the Color Studio", price: RewardsStore.colorStudioPrice) {
+                    if rewards.buyColorStudio() { buyBurst += 1 }
+                }
             }
             Text("Cherry, Rose and Dark are always free. Unlocked colors live in the pencil settings on Today.")
                 .font(ffBody(FFType.xs2)).foregroundStyle(theme.color(.muted))
@@ -316,10 +328,10 @@ struct GardenShopView: View {
                 if owned {
                     rewards.activeSound = active ? nil : item.id
                     rewards.playCelebrationIfOwned()
-                } else if rewards.buySoundItem(item.id) {
-                    buyBurst += 1
                 } else {
-                    petalGap = PetalGap(name: "the \(item.name) sound", price: item.price)
+                    confirmOrGap(name: "the \(item.name) sound", price: item.price) {
+                        if rewards.buySoundItem(item.id) { buyBurst += 1 }
+                    }
                 }
             } label: {
                 Group {
@@ -339,6 +351,16 @@ struct GardenShopView: View {
         .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
             .strokeBorder(theme.color(.line), lineWidth: 1))
         .accessibilityLabel("\(item.name) sound, \(owned ? (active ? "on" : "owned") : "\(item.price) points")")
+    }
+
+    /// Affordable → one confirm step; short on petals → the splash. Mis-taps
+    /// never spend anything.
+    private func confirmOrGap(name: String, price: Int, buy: @escaping () -> Void) {
+        if rewards.canAfford(price) {
+            pendingBuy = PendingBuy(name: name, price: price, buy: buy)
+        } else {
+            petalGap = PetalGap(name: name, price: price)
+        }
     }
 
     private func unlockRow(icon: String?, swatch: Color?, title: String,

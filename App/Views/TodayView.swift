@@ -17,6 +17,7 @@ struct TodayView: View {
     private var today: Date { Date() }
     @State private var showThemeEditor = false
     @State private var showAbout = false
+    @State private var showTips = false
     @State private var paneIndex = 0
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
@@ -55,6 +56,7 @@ struct TodayView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAbout) { AboutView() }
+        .sheet(isPresented: $showTips) { TipsSheet() }
     }
 
     // MARK: Header (weekday + date + the pencil, like Bloom)
@@ -75,6 +77,9 @@ struct TodayView: View {
                     .foregroundStyle(theme.color(.muted))
             }
             Spacer(minLength: 0)
+            FFIconButton("lightbulb") { showTips = true }
+                .glitterHint("tips")
+                .accessibilityLabel("Tips and hidden features")
             FFIconButton("pencil") { showThemeEditor = true }
                 .glitterHint("themeEditor")
                 .accessibilityLabel("Theme settings")
