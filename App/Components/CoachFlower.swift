@@ -9,6 +9,8 @@ struct CoachFlower: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let message: String
+    var celebrateToken: Int = 0
+    var lastAward: Int = 0
     static let name = "Posey"
 
     @State private var sway = false
@@ -16,6 +18,10 @@ struct CoachFlower: View {
     @State private var blink = false
     @State private var bounce = false
     @State private var tilt = false
+    @State private var watering = false
+    @State private var balloon = false
+    @State private var starBurst = 0
+    @State private var showAward = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -55,6 +61,18 @@ struct CoachFlower: View {
                     }
                 }
                 .accessibilityHidden(true)
+                .overlay(alignment: .top) { wateringOverlay }
+                .overlay(SparkleBurst(trigger: starBurst, count: 14).offset(y: 20))
+                .overlay(alignment: .top) {
+                    if showAward {
+                        Text("+\(lastAward)")
+                            .font(ffNumber(FFType.lg, weight: .semibold))
+                            .foregroundStyle(theme.color(.flowerCenter))
+                            .offset(y: -26)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .onChange(of: celebrateToken) { _, _ in celebrate() }
 
             // Her speech bubble, with a nameplate.
             VStack(alignment: .leading, spacing: 4) {
@@ -87,6 +105,35 @@ struct CoachFlower: View {
         }
     }
 
+    // Points! Water her, she swells with pride, stars fly, the number floats up.
+    private func celebrate() {
+        guard !reduceMotion else { starBurst += 1; return }
+        withAnimation(.easeIn(duration: 0.25)) { watering = true }
+        Task {
+            try? await Task.sleep(for: .seconds(0.5))
+            withAnimation(.easeOut(duration: 0.2)) { watering = false }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.5)) { balloon = true }
+            starBurst += 1
+            withAnimation(FFMotion.spring) { showAward = true }
+            try? await Task.sleep(for: .seconds(0.9))
+            withAnimation(.easeOut(duration: 0.35)) { balloon = false; showAward = false }
+        }
+    }
+
+    @ViewBuilder private var wateringOverlay: some View {
+        if watering {
+            VStack(spacing: 2) {
+                Image(systemName: "drop.fill")
+                Image(systemName: "drop.fill").font(.system(size: 7))
+                Image(systemName: "drop.fill").font(.system(size: 5))
+            }
+            .font(.system(size: 9))
+            .foregroundStyle(theme.color(.phaseFertile))
+            .offset(y: -14)
+            .transition(.opacity)
+        }
+    }
+
     private func doWave() {
         withAnimation(.easeInOut(duration: 0.35).repeatCount(5, autoreverses: true)) { wave = true }
         Task {
@@ -112,6 +159,7 @@ struct CoachFlower: View {
 
             FlowerMark(size: 46)
                 .rotationEffect(.degrees(tilt ? 10 : 0), anchor: .bottom)
+                .scaleEffect(balloon ? 1.18 : 1, anchor: .bottom)
                 .offset(y: bounce ? -5 : 0)
             face
                 .rotationEffect(.degrees(tilt ? 10 : 0), anchor: .bottom)

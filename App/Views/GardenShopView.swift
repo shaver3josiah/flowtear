@@ -4,6 +4,80 @@ import SwiftUI
 // + Posey), theme/accent/Color-Studio unlocks, sticker equipping, the rules
 // sheet, and the shareable lifetime card.
 
+// MARK: - Sticker art (the bouquet is a fan of red roses, not the emoji bundle)
+
+struct StickerView: View {
+    let id: String
+    var size: CGFloat = 24
+
+    var body: some View {
+        if id == "posey" {
+            FlowerMark(size: size)
+        } else if id == "bouquet" {
+            ZStack {
+                Text("🌹").font(.system(size: size * 0.8)).rotationEffect(.degrees(-24)).offset(x: -size * 0.22)
+                Text("🌹").font(.system(size: size * 0.8)).rotationEffect(.degrees(24)).offset(x: size * 0.22)
+                Text("🌹").font(.system(size: size * 0.9)).offset(y: -size * 0.06)
+            }
+            .frame(width: size * 1.4, height: size)
+        } else {
+            Text(RewardsStore.flowers.first { $0.id == id }?.emoji ?? "🌸")
+                .font(.system(size: size))
+        }
+    }
+}
+
+// MARK: - First-open tutorial: short, warm, and it hands her the Daisy
+
+struct StretchTutorialView: View {
+    @Environment(Theme.self) private var theme
+    @Environment(RewardsStore.self) private var rewards
+    @Environment(\.dismiss) private var dismiss
+    var onClaim: () -> Void = {}
+
+    var body: some View {
+        VStack(spacing: FFSpace.s5) {
+            Spacer()
+            CoachFlower(message: "Welcome to the stretch garden! Stretch a little, earn petals, grow something lovely.")
+            VStack(alignment: .leading, spacing: FFSpace.s3) {
+                tutorialRow("checkmark.circle.fill", "Check off a pose, earn petal points")
+                tutorialRow("bag.fill", "Spend petals on flowers, colors — even me")
+                tutorialRow("gift.fill", "Here's 100 petals to start. Your Daisy awaits!")
+            }
+            .padding(FFSpace.s4)
+            .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: FFRadius.card, style: .continuous)
+                .strokeBorder(theme.color(.line), lineWidth: 1))
+            FFButton("Claim 100 petals & pick my flower", style: .primary, icon: "sparkle") {
+                rewards.completeTutorialWithGift()
+                dismiss()
+                onClaim()
+            }
+            FFButton("Maybe later", style: .ghost, size: .sm) {
+                rewards.completeTutorialWithGift()   // the gift is hers either way
+                dismiss()
+            }
+            Spacer()
+        }
+        .padding(FFSpace.s5)
+        .background(theme.color(.bg))
+        .interactiveDismissDisabled()
+    }
+
+    private func tutorialRow(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(theme.color(.primaryStrong))
+                .frame(width: 26)
+            Text(text)
+                .font(ffBody(FFType.sm, weight: .medium))
+                .foregroundStyle(theme.color(.text))
+            Spacer(minLength: 0)
+        }
+    }
+}
+
 // MARK: - Points pill (lives in the Stretch header)
 
 struct PointsPill: View {
@@ -97,10 +171,11 @@ struct GardenShopView: View {
                 rewards.activeSticker = equipped ? nil : f.id
             } else if rewards.buyFlower(f.id) {
                 buyBurst += 1
+                rewards.playCelebrationIfOwned()
             }
         } label: {
             VStack(spacing: 6) {
-                Text(f.emoji).font(.system(size: 34))
+                StickerView(id: f.id, size: 34)
                     .saturation(owned || affordable ? 1 : 0.35)
                 Text(f.name)
                     .font(ffBody(FFType.sm, weight: .semibold))
@@ -181,6 +256,10 @@ struct GardenShopView: View {
                           owned: rewards.themeOwned(name), price: RewardsStore.themePrice) {
                     if rewards.buyTheme(name) { buyBurst += 1 }
                 }
+            }
+            unlockRow(icon: "music.note", swatch: nil, title: "Celebration chime",
+                      owned: rewards.soundUnlocked, price: RewardsStore.soundPrice) {
+                if rewards.buySound() { buyBurst += 1 }
             }
             unlockRow(icon: "paintpalette.fill", swatch: nil, title: "Custom accent color",
                       owned: rewards.accentUnlocked, price: RewardsStore.accentPrice) {
@@ -274,11 +353,13 @@ struct StretchRulesView: View {
                 ])
 
                 rulesCard("Spending", "bag", [
-                    "Ten flowers of rising rarity — Daisy (100) up to Bouquet (7,500). Own one, wear it as a sticker on your Today tab.",
+                    "Your first 100 petals are a welcome gift — enough for the Daisy.",
+                    "Ten flowers of rising rarity — Daisy (100) up to the red rose bouquet (7,500). Own one, wear it as a sticker and drag it anywhere around your Today ring.",
                     "Posey herself is the legendary sticker: 10,000.",
+                    "Celebration chime: 1,200 — completions ring out sweetly.",
                     "Palettes — Pink, Peony, Soft, Light: 600 each. Cherry, Rose and Dark are always free.",
                     "Custom accent color: 1,500 — tint the whole app any color you like.",
-                    "Color Studio: 8,000 — recolor nearly everything, one color at a time.",
+                    "Color Studio: 4,000 — recolor nearly everything, one color at a time.",
                 ])
 
                 rulesCard("The fine print (the kind you'll like)", "heart", [
@@ -348,7 +429,7 @@ struct ShareCardView: View {
                 if !rewards.ownedFlowers.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(RewardsStore.flowers.filter { rewards.ownedFlowers.contains($0.id) }) { f in
-                            Text(f.emoji).font(.system(size: 24))
+                            StickerView(id: f.id, size: 22)
                         }
                         if rewards.poseyOwned { FlowerMark(size: 24) }
                     }

@@ -34,6 +34,22 @@ extension View {
 #Preview("Garden shop") { GardenShopView().previewEnv() }
 #Preview("Rules") { StretchRulesView().previewEnv() }
 #Preview("Share card") { ShareCardView().previewEnv() }
+#Preview("Tutorial") { StretchTutorialView().previewEnv() }
+#Preview("Pose figures") {
+    let moves = StretchPlan.days.flatMap { $0.moves }
+    var seen = Set<String>()
+    let unique = moves.filter { seen.insert($0.name).inserted }
+    return ScrollView {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(unique) { m in
+                HStack(spacing: 12) {
+                    PoseFigure(move: m, size: 34, color: Sample.theme.color(.phaseLuteal))
+                    Text(m.name).font(ffBody(FFType.sm))
+                }
+            }
+        }.padding()
+    }.previewEnv()
+}
 #Preview("Stretch session") {
     StretchSessionView(day: StretchPlan.days[2], finishTitle: "Day 3 done").previewEnv()
 }

@@ -12,6 +12,10 @@ struct StretchCoachView: View {
     @State private var playing = false
     @State private var showShop = false
     @State private var showRules = false
+    @State private var showShare = false
+    @State private var showTutorial = false
+    @State private var celebrationToken = 0
+    @State private var lastAward = 0
     @State private var burstToken = 0
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
@@ -45,7 +49,7 @@ struct StretchCoachView: View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
                 gardenHeader
-                CoachFlower(message: coachLine)
+                CoachFlower(message: coachLine, celebrateToken: celebrationToken, lastAward: lastAward)
                 SampleBanner()
                 if let s = todaySession {
                     todayCard(s, heading: "TODAY · DAY \(StretchPlan.planDay(s, tier: tier)) OF \(tier.totalDays)")
@@ -71,6 +75,13 @@ struct StretchCoachView: View {
         }
         .sheet(isPresented: $showShop) { GardenShopView() }
         .sheet(isPresented: $showRules) { StretchRulesView() }
+        .sheet(isPresented: $showShare) { ShareCardView() }
+        .sheet(isPresented: $showTutorial) {
+            StretchTutorialView(onClaim: { showShop = true })
+        }
+        .onAppear {
+            if !rewards.tutorialSeen { showTutorial = true }
+        }
     }
 
     // Points pill + the shop, with the RULES in the top-right corner.
@@ -80,6 +91,8 @@ struct StretchCoachView: View {
             Spacer(minLength: 0)
             FFIconButton("bag") { showShop = true }
                 .accessibilityLabel("Garden shop")
+            FFIconButton("square.and.arrow.up") { showShare = true }
+                .accessibilityLabel("Share your garden")
             FFIconButton("book") { showRules = true }
                 .accessibilityLabel("How points and unlocks work")
         }
@@ -184,25 +197,26 @@ struct StretchCoachView: View {
             let wasFullDay = doneBefore == session.moves.count
             let completedDay = store.toggleStretchMove(index, on: today, totalMoves: session.moves.count)
             if !checked {
-                rewards.awardPose(alreadyDone: doneBefore, total: session.moves.count,
-                                  multiplier: multiplier)
+                lastAward = rewards.awardPose(alreadyDone: doneBefore, total: session.moves.count,
+                                              multiplier: multiplier)
                 burstToken += 1                      // checking ON celebrates
+                celebrationToken += 1                // Posey gets watered
             } else {
                 rewards.revokePose(remainingDone: max(doneBefore - 1, 0),
                                    total: session.moves.count,
                                    wasFullDay: wasFullDay, multiplier: multiplier)
             }
-            if completedDay { dayBurstToken += 1 }   // finishing the set celebrates louder
+            if completedDay {
+                dayBurstToken += 1                   // finishing the set celebrates louder
+                rewards.playCelebrationIfOwned()
+            }
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: checked ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(theme.color(checked ? .good : .line))
                     .padding(.top, 1)
-                Image(systemName: m.icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.color(.phaseLuteal))
-                    .frame(width: 22)
+                PoseFigure(move: m, size: 24, color: theme.color(.phaseLuteal))
                     .padding(.top, 2)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
@@ -384,10 +398,7 @@ struct StretchCoachView: View {
                 VStack(alignment: .leading, spacing: FFSpace.s2) {
                     ForEach(day.moves) { m in
                         HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: m.icon)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(theme.color(.phaseLuteal))
-                                .frame(width: 22)
+                            PoseFigure(move: m, size: 24, color: theme.color(.phaseLuteal))
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
                                     Text(m.name).font(ffBody(FFType.base, weight: .semibold)).foregroundStyle(theme.color(.text))
@@ -410,31 +421,47 @@ struct StretchCoachView: View {
 
     private var evidenceCard: some View {
         FFCard {
-            VStack(alignment: .leading, spacing: 8) {
+            DisclosureGroup {
+                evidenceBody.padding(.top, FFSpace.s2)
+            } label: {
                 Text("Why this may help")
                     .font(ffBody(FFType.md, weight: .semibold)).foregroundStyle(theme.color(.deep))
+            }
+            .tint(theme.color(.primaryStrong))
+        }
+    }
+
+    private var evidenceBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
                 Text(StretchPlan.evidenceNote)
                     .font(ffBody(FFType.sm)).foregroundStyle(theme.color(.text)).lineSpacing(3)
                 Text(StretchPlan.dosingNote)
                     .font(ffBody(FFType.xs)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
                 Text(StretchPlan.disclaimer)
                     .font(ffBody(FFType.xs, weight: .medium)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
-            }
         }
     }
 
     private var safetyCard: some View {
         FFCard(variant: .outline) {
-            VStack(alignment: .leading, spacing: 8) {
+            DisclosureGroup {
+                safetyBody.padding(.top, FFSpace.s2)
+            } label: {
                 Label("Before you start", systemImage: "exclamationmark.circle")
                     .font(ffBody(FFType.md, weight: .semibold)).foregroundStyle(theme.color(.deep))
+            }
+            .tint(theme.color(.primaryStrong))
+        }
+    }
+
+    private var safetyBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
                 ForEach(StretchPlan.contraindications, id: \.self) { item in
                     HStack(alignment: .top, spacing: 8) {
                         Circle().fill(theme.color(.primary)).frame(width: 5, height: 5).padding(.top, 6)
                         Text(item).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.text)).lineSpacing(2)
                     }
                 }
-            }
         }
     }
 }

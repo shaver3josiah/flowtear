@@ -1,4 +1,5 @@
 import SwiftUI
+import AudioToolbox
 
 // The stretch-garden economy. Points are earned by stretching, spent on flower
 // stickers, themes, the custom accent, the Color Studio, and Posey herself.
@@ -30,7 +31,12 @@ final class RewardsStore {
     private(set) var accentUnlocked = false
     private(set) var colorStudioUnlocked = false
     private(set) var poseyOwned = false
+    private(set) var soundUnlocked = false
+    private(set) var tutorialSeen = false
     var activeSticker: String? { didSet { save() } }  // flower id or "posey"
+    /// Where her sticker sits around the Today ring (normalized -1…1 offsets).
+    var stickerX: Double = 0.78 { didSet { save() } }
+    var stickerY: Double = -0.72 { didSet { save() } }
 
     private static let key = "flowtear.rewards.v1"
 
@@ -48,12 +54,14 @@ final class RewardsStore {
         FlowerItem(id: "hibiscus",  emoji: "🌺", name: "Hibiscus",  price: 2600, rarity: "Rare"),
         FlowerItem(id: "sunflower", emoji: "🌻", name: "Sunflower", price: 3600, rarity: "Rare"),
         FlowerItem(id: "lotus",     emoji: "🪷", name: "Lotus",     price: 5000, rarity: "Precious"),
-        FlowerItem(id: "bouquet",   emoji: "💐", name: "Bouquet",   price: 7500, rarity: "Precious"),
+        FlowerItem(id: "bouquet",   emoji: "🌹", name: "Red rose bouquet", price: 7500, rarity: "Precious"),
     ]
     static let poseyPrice = 10000
     static let themePrice = 600          // pink, peony, soft, light (cherry/rose/dark are free)
     static let accentPrice = 1500
-    static let colorStudioPrice = 8000
+    static let colorStudioPrice = 4000
+    static let soundPrice = 1200
+    static let starterGift = 100          // exactly a Daisy — her first unlock
     static let freeThemes: Set<String> = ["cherry", "rose", "dark"]
 
     /// The emoji for the sticker she has equipped (Posey shows as her bloom).
@@ -61,6 +69,20 @@ final class RewardsStore {
         guard let s = activeSticker else { return nil }
         if s == "posey" { return "🌸" }
         return Self.flowers.first { $0.id == s }?.emoji
+    }
+
+    /// First open of the Stretch tab: mark the tutorial seen and gift exactly
+    /// enough petals for the Daisy, once ever.
+    func completeTutorialWithGift() {
+        guard !tutorialSeen else { return }
+        tutorialSeen = true
+        earn(Self.starterGift)
+    }
+
+    /// The celebration chime, if she owns it. (System chime — asset-free.)
+    func playCelebrationIfOwned() {
+        guard soundUnlocked else { return }
+        AudioServicesPlaySystemSound(SystemSoundID(1025))
     }
 
     // MARK: earning
@@ -147,6 +169,15 @@ final class RewardsStore {
     }
 
     @discardableResult
+    func buySound() -> Bool {
+        guard !soundUnlocked, canAfford(Self.soundPrice) else { return false }
+        balance -= Self.soundPrice
+        soundUnlocked = true
+        playCelebrationIfOwned()
+        save(); return true
+    }
+
+    @discardableResult
     func buyColorStudio() -> Bool {
         guard !colorStudioUnlocked, canAfford(Self.colorStudioPrice) else { return false }
         balance -= Self.colorStudioPrice
@@ -163,13 +194,19 @@ final class RewardsStore {
         var ownedThemes: Set<String> = []
         var accentUnlocked = false, colorStudioUnlocked = false, poseyOwned = false
         var activeSticker: String?
+        var soundUnlocked: Bool? = false
+        var tutorialSeen: Bool? = false
+        var stickerX: Double? = 0.78
+        var stickerY: Double? = -0.72
     }
 
     private func save() {
         let b = Blob(balance: balance, lifetime: lifetime, guidedSeen: guidedSeen,
                      ownedFlowers: ownedFlowers, ownedThemes: ownedThemes,
                      accentUnlocked: accentUnlocked, colorStudioUnlocked: colorStudioUnlocked,
-                     poseyOwned: poseyOwned, activeSticker: activeSticker)
+                     poseyOwned: poseyOwned, activeSticker: activeSticker,
+                     soundUnlocked: soundUnlocked, tutorialSeen: tutorialSeen,
+                     stickerX: stickerX, stickerY: stickerY)
         guard let data = try? JSONEncoder().encode(b) else { return }
         if let prev = UserDefaults.standard.data(forKey: Self.key) {
             UserDefaults.standard.set(prev, forKey: Self.key + ".backup")
@@ -185,6 +222,10 @@ final class RewardsStore {
                 ownedFlowers = b.ownedFlowers; ownedThemes = b.ownedThemes
                 accentUnlocked = b.accentUnlocked; colorStudioUnlocked = b.colorStudioUnlocked
                 poseyOwned = b.poseyOwned; activeSticker = b.activeSticker
+                soundUnlocked = b.soundUnlocked ?? false
+                tutorialSeen = b.tutorialSeen ?? false
+                stickerX = b.stickerX ?? 0.78
+                stickerY = b.stickerY ?? -0.72
                 return
             }
         }

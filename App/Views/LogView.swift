@@ -12,9 +12,13 @@ struct LogView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var date: Date
     var onLogged: () -> Void = {}
+    var onOpenStretch: () -> Void = {}
+    var onOpenCalendar: () -> Void = {}
+    var onOpenInsights: () -> Void = {}
 
     @State private var draft = DayLog(dateKey: "")
     @State private var loadedKey = ""
+    @State private var showAllSet = false
     @FocusState private var noteFocused: Bool
 
     private let cal = Calendar.current
@@ -102,7 +106,7 @@ struct LogView: View {
 
                 // The commit gesture lives at the END of the log — she scrolls
                 // down to it when she's finished, like signing at the bottom.
-                SlideToLog(enabled: dirty) { commit(); onLogged() }
+                SlideToLog(enabled: dirty) { commit(); showAllSet = true }
                     .padding(.top, FFSpace.s2)
             }
             .padding(.horizontal, FFSpace.s4)
@@ -122,6 +126,34 @@ struct LogView: View {
             reload()
         }
         .onDisappear { commitIfDirty() }
+        .overlay { if showAllSet { allSetOverlay } }
+    }
+
+    // After the slide: a proud moment, then three clear places to go next.
+    private var allSetOverlay: some View {
+        ZStack {
+            theme.color(.bg).opacity(0.96).ignoresSafeArea()
+            PetalRain(count: 12)
+            VStack(spacing: FFSpace.s4) {
+                Spacer()
+                CoachFlower(message: "You're all set, petal! Every pose you check in Stretch grows your flower garden.")
+                FFButton("Grow flowers in Stretch", style: .primary, icon: "figure.cooldown") {
+                    showAllSet = false; onOpenStretch()
+                }
+                FFButton("Calendar — your month at a glance", style: .soft, size: .sm, icon: "calendar") {
+                    showAllSet = false; onOpenCalendar()
+                }
+                FFButton("Insights — your patterns over time", style: .soft, size: .sm, icon: "chart.bar.fill") {
+                    showAllSet = false; onOpenInsights()
+                }
+                FFButton("Back to Today", style: .ghost, size: .sm) {
+                    showAllSet = false; onLogged()
+                }
+                Spacer()
+            }
+            .padding(FFSpace.s5)
+        }
+        .transition(.opacity)
     }
 
     // MARK: header — serif date with day-stepping

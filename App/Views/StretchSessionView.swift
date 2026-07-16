@@ -59,9 +59,7 @@ struct StretchSessionView: View {
                     .rotationEffect(.degrees(-90))
                     .animation(reduceMotion ? nil : .linear(duration: 1), value: progress)
                 VStack(spacing: 6) {
-                    Image(systemName: move.icon)
-                        .font(.system(size: 44, weight: .medium))
-                        .foregroundStyle(theme.color(.phaseLuteal))
+                    PoseFigure(move: move, size: 62, color: theme.color(.phaseLuteal))
                     Text(timeText)
                         .font(ffNumber(FFType.xl3, weight: .semibold))
                         .foregroundStyle(theme.color(.deep))

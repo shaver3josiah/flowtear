@@ -33,9 +33,14 @@ struct RootView: View {
             VStack(spacing: FFSpace.s3) {
                 Group {
                     switch tab {
-                    case .today:    TodayView(onLog: openLog, onOpenStretch: { switchTo(.stretch) })
+                    case .today:    TodayView(onLog: openLog, onOpenStretch: { switchTo(.stretch) },
+                                              onOpenInsights: { switchTo(.insights) },
+                                              onOpenCalendar: { switchTo(.calendar) })
                     case .calendar: CalendarView(onLog: openLog)
-                    case .log:      LogView(date: $logDate, onLogged: { switchTo(.today) })
+                    case .log:      LogView(date: $logDate, onLogged: { switchTo(.today) },
+                                            onOpenStretch: { switchTo(.stretch) },
+                                            onOpenCalendar: { switchTo(.calendar) },
+                                            onOpenInsights: { switchTo(.insights) })
                     case .stretch:  StretchCoachView()
                     case .insights: InsightsView()
                     }

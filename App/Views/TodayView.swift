@@ -10,10 +10,15 @@ struct TodayView: View {
     @Environment(RewardsStore.self) private var rewards
     var onLog: (Date) -> Void
     var onOpenStretch: () -> Void = {}
+    var onOpenInsights: () -> Void = {}
+    var onOpenCalendar: () -> Void = {}
 
     private var p: CyclePrediction { store.prediction() }
     private var today: Date { Date() }
     @State private var showThemeEditor = false
+    @State private var paneIndex = 0
+    @State private var stickerDrag: CGSize = .zero
+    private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
@@ -23,14 +28,14 @@ struct TodayView: View {
                 if p.hasHistory {
                     hero
                     quickLog
-                    StretchPlanCard(action: onOpenStretch)
+                    rotatingPane
                     FertileWindowCard()
                 } else if store.hasAnyLogs {
                     // She's logging (moods, temps…) but hasn't recorded a period
                     // yet — say so honestly instead of "nothing logged yet".
                     startedState
                     quickLog
-                    StretchPlanCard(action: onOpenStretch)
+                    rotatingPane
                 } else {
                     emptyState
                 }
@@ -51,11 +56,6 @@ struct TodayView: View {
     private var header: some View {
         HStack(spacing: 11) {
             FlowerMark(size: 38)
-                .overlay(alignment: .topTrailing) {
-                    if let e = rewards.activeStickerEmoji {
-                        Text(e).font(.system(size: 15)).offset(x: 8, y: -6)
-                    }
-                }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(today.formatted(.dateTime.weekday(.wide)))
@@ -89,8 +89,88 @@ struct TodayView: View {
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)
             }
+
+            stickerOverlay
         }
         .padding(.vertical, 2)
+    }
+
+    // Her flower sticker, placeable anywhere around the ring: drag it, it stays.
+    @ViewBuilder private var stickerOverlay: some View {
+        if let id = rewards.activeSticker {
+            let radius: CGFloat = 118
+            StickerView(id: id, size: 32)
+                .offset(x: CGFloat(rewards.stickerX) * radius + stickerDrag.width,
+                        y: CGFloat(rewards.stickerY) * radius + stickerDrag.height)
+                .highPriorityGesture(
+                    DragGesture()
+                        .onChanged { v in stickerDrag = v.translation }
+                        .onEnded { v in
+                            let nx = rewards.stickerX + Double(v.translation.width / radius)
+                            let ny = rewards.stickerY + Double(v.translation.height / radius)
+                            rewards.stickerX = min(max(nx, -1.15), 1.15)
+                            rewards.stickerY = min(max(ny, -1.15), 1.15)
+                            stickerDrag = .zero
+                        }
+                )
+                .accessibilityLabel("Your flower sticker")
+                .accessibilityHint("Drag to place it around the ring")
+        }
+    }
+
+    // The bottom pane takes turns: the stretch plan, then a peek at Insights,
+    // then the Calendar — a fresh nudge every ten seconds, all tappable.
+    private var rotatingPane: some View {
+        Group {
+            switch paneIndex {
+            case 1:
+                teaserCard(icon: "chart.bar.fill", tint: .primaryStrong,
+                           title: "Insights",
+                           line: "Your averages, rhythms and top symptoms — all from what you log.",
+                           action: onOpenInsights)
+            case 2:
+                teaserCard(icon: "calendar", tint: .phaseFertile,
+                           title: "Calendar",
+                           line: "Your whole month at a glance — periods, fertile days, stretches.",
+                           action: onOpenCalendar)
+            default:
+                StretchPlanCard(action: onOpenStretch)
+            }
+        }
+        .id(paneIndex)
+        .transition(.ffViewIn)
+        .onReceive(paneTimer) { _ in
+            withAnimation(FFMotion.signature) { paneIndex = (paneIndex + 1) % 3 }
+        }
+    }
+
+    private func teaserCard(icon: String, tint: Tok, title: String,
+                            line: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            FFCard {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(theme.color(tint))
+                        .frame(width: 30)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(ffBody(FFType.md, weight: .semibold))
+                            .foregroundStyle(theme.color(.deep))
+                        Text(line)
+                            .font(ffBody(FFType.sm))
+                            .foregroundStyle(theme.color(.muted))
+                            .lineLimit(2).minimumScaleFactor(0.85)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.color(.muted))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens \(title)")
     }
 
     private var nextPeriodLine: String {

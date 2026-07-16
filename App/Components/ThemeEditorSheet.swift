@@ -8,6 +8,7 @@ struct ThemeEditorSheet: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
     @Environment(\.dismiss) private var dismiss
+    @State private var showShop = false
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: FFSpace.s3)]
 
@@ -15,6 +16,9 @@ struct ThemeEditorSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: FFSpace.section) {
                 header
+                FFButton("Garden shop — spend your petal points", style: .soft, icon: "bag") {
+                    showShop = true
+                }
                 presetSection
                 accentSection
                 studioSection
@@ -25,6 +29,7 @@ struct ThemeEditorSheet: View {
             .padding(FFSpace.s5)
         }
         .background(theme.color(.bg))
+        .sheet(isPresented: $showShop) { GardenShopView() }
     }
 
     private var header: some View {

@@ -60,8 +60,8 @@ struct FFTabBar: View {
                 Image(systemName: tab.icon)
                     .font(.system(size: 17, weight: .semibold))
                     .overlay(alignment: .topTrailing) {
-                        if tab == .today, let e = rewards.activeStickerEmoji {
-                            Text(e).font(.system(size: 10)).offset(x: 9, y: -6)
+                        if tab == .today, let id = rewards.activeSticker {
+                            StickerView(id: id, size: 10).offset(x: 9, y: -6)
                         }
                     }
                 Text(tab.title)
