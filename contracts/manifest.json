@@ -1,7 +1,7 @@
 {
   "product": "Uncorked (Flowtear)",
-  "contractsVersion": "1.0.0",
-  "updated": "2026-07-15",
+  "contractsVersion": "1.1.0",
+  "updated": "2026-07-16",
   "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
   "platforms": {
     "ios": {
@@ -31,8 +31,28 @@
     { "id": "insights", "since": "1.0.0", "ios": "App/Views/InsightsView.swift", "web": "web/screens/insights.js" },
     { "id": "stretch-coach", "since": "1.0.0", "ios": "App/Views/StretchCoachView.swift", "web": "web/screens/stretch.js" },
     { "id": "stretch-session", "since": "1.0.0", "ios": "App/Views/StretchSessionView.swift", "web": "web/screens/stretchSession.js" },
-    { "id": "garden-shop", "since": "1.0.0", "ios": "App/Views/GardenShopView.swift", "web": "web/screens/garden.js" }
+    { "id": "garden-shop", "since": "1.0.0", "ios": "App/Views/GardenShopView.swift", "web": "web/screens/garden.js" },
+    { "id": "reminders", "since": "1.1.0", "ios": "App/Core/Reminders.swift", "web": null },
+    { "id": "cycle-report-csv", "since": "1.1.0", "ios": "App/Core/CycleReport.swift", "web": null },
+    { "id": "tips-sheet", "since": "1.1.0", "ios": "App/Components/TipsSheet.swift", "web": null },
+    { "id": "ring-sticker", "since": "1.1.0", "ios": "App/Components/RingSticker.swift", "web": null },
+    { "id": "about", "since": "1.1.0", "ios": "App/Views/AboutView.swift", "web": null },
+    { "id": "faceid-lock", "since": "1.1.0", "ios": "App/FlowtearApp.swift", "web": null }
   ],
+  "knownGaps": {
+    "note": "As of contracts v1.1.0 the WEB/Android build is deliberately behind iOS. The web app was ported at v1.0.0 (main@0e95081); iOS has since landed ~2,200 lines across 5 commits. `npm run check:parity` reports web as an outdated version until these are ported and web/core/version.js is bumped to 1.1.0.",
+    "stillInSync": [
+      "App/Core/CycleEngine.swift — unchanged; web/core/engine.js still reproduces every golden vector",
+      "App/Core/CycleModels.swift — unchanged; the logged-data models still match",
+      "App/Design/Theme.swift — unchanged; tokens still match contracts/tokens.json"
+    ],
+    "webBehindOn": [
+      "RewardsStore.swift (+141 lines) — petals economy changed; web/core/rewards.js is at the v1.0.0 shape",
+      "StretchLibrary.swift (+15) — plan/move data changed; web/core/stretchLibrary.js is behind",
+      "CycleStore.swift (+27) — new state added; web/core/store.js is behind",
+      "New iOS-only features with no web counterpart: reminders, cycle-report-csv, tips-sheet, ring-sticker, about, faceid-lock (see features[] with web: null)"
+    ]
+  },
   "howToStaySynced": [
     "1. Change shared behavior in ONE place first (algorithm in engine.js + CycleEngine.swift, tokens in tokens.json, models in both models files).",
     "2. Bump contractsVersion here, and the matching version stamp in the platform(s) you updated (web/core/version.js and/or App/Core/ContractsVersion.swift).",

@@ -6,5 +6,5 @@ import Foundation
 // contracts/manifest.json and web/core/version.js whenever shared behavior —
 // the cycle algorithm, the logged-data models, or the design tokens — changes.
 enum Contracts {
-    static let version = "1.0.0"
+    static let version = "1.1.0"
 }
