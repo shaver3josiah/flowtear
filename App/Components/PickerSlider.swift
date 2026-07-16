@@ -73,15 +73,13 @@ struct FFPickerSlider<Option: Hashable>: View {
                             .animation(reduceMotion ? nil : FFMotion.fast, value: liveIndex)
                     }
 
-                    // The knob.
+                    // The knob — a solid bead: tint-filled when something is
+                    // picked, the quiet "none" shade at the leftmost stop. A
+                    // hairline surface ring lifts it off the filled track
+                    // without reading as a bullseye.
                     Circle()
-                        .fill(theme.color(.surface))
-                        .overlay(Circle().strokeBorder(theme.color(tint), lineWidth: 3))
-                        .overlay(
-                            Circle().fill(theme.color(tint))
-                                .frame(width: 8, height: 8)
-                                .opacity(liveIndex == 0 ? 0.25 : 1)
-                        )
+                        .fill(theme.color(liveIndex == 0 ? .flowNone : tint))
+                        .overlay(Circle().strokeBorder(theme.color(.surface), lineWidth: 2))
                         .frame(width: knobSize, height: knobSize)
                         .shadow(color: theme.shadow, radius: touching ? 6 : 2, y: 1)
                         .scaleEffect(touching ? 1.15 : 1)

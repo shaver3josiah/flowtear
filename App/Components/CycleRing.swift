@@ -61,49 +61,58 @@ struct CycleRing: View {
                 arcSheen((Double(c.ovDay) - 0.6) / cl, (Double(c.ovDay) + 0.6) / cl, reveal, width: stroke)
             }
 
-            // A slow glint that circles the band — the light catching polished
-            // metal as it turns. One narrow highlight, long rests implied by the
-            // slow lap; masked to the ring so it never touches the readout.
+            // One shimmer every 7 seconds — each pass lights a DIFFERENT phase
+            // arc (bleed, fertile, ovulation, round and round), a single soft
+            // gleam traveling that arc alone. Never two at once; long rests.
             if !reduceMotion {
-                RingGlint(inset: stroke)
+                ArcShimmer(segments: [
+                    (from: 0, to: Double(periodLength) / cl),
+                    (from: Double(c.fertileStart - 1) / cl, to: Double(c.ovDay + 1) / cl),
+                    (from: (Double(c.ovDay) - 0.6) / cl, to: (Double(c.ovDay) + 0.6) / cl),
+                ], stroke: stroke)
             }
 
             // Today pip — only shown (muted) when the focus has moved off today,
-            // so she can always find her way home to the current day.
-            Circle().fill(theme.color(.surface))
-                .overlay(Circle().strokeBorder(theme.color(.muted), lineWidth: 2 * k))
-                .frame(width: stroke * 0.7, height: stroke * 0.7)
+            // so she can always find her way home to the current day. A solid
+            // dot: quiet, unmistakable, no bullseye.
+            Circle().fill(theme.color(.muted))
+                // A hairline surface rim (not a bullseye ring) so the dot stays
+                // findable even sitting ON a phase arc — period days especially.
+                .overlay(Circle().strokeBorder(theme.color(.surface), lineWidth: 1.5))
+                .frame(width: stroke * 0.55, height: stroke * 0.55)
                 .position(x: tx, y: ty)
-                .opacity(focused == todayDay ? 0 : 0.9)
+                .opacity(focused == todayDay ? 0 : 1)
 
-            // Draggable focus marker (phase-colored, grows while dragging).
+            // Draggable focus marker — a SOLID phase-colored bead (no target
+            // rings), with a single specular kiss so it still reads as glass.
             // On today it wears its jewel setting: a gold halo that breathes
             // and two tiny twinkles — the day she's on is the ring's gem.
             ZStack {
                 if focused == todayDay {
                     TodayGlimmer(diameter: stroke + 22 * k)
                 }
-                Circle().fill(theme.color(.surface))
-                    .overlay(Circle().strokeBorder(theme.color(Self.tint(focusedPhase)), lineWidth: 4 * k))
-                    .overlay(
-                        // Specular top-left kiss, so the marker is metal too.
-                        Circle().strokeBorder(
-                            LinearGradient(colors: [.white.opacity(0.55), .clear, .clear],
-                                           startPoint: .topLeading, endPoint: .bottomTrailing),
-                            lineWidth: 1.5 * k
-                        )
-                    )
-                    .frame(width: stroke + 10 * k, height: stroke + 10 * k)
                 Circle()
                     .fill(focused == todayDay
                           ? AnyShapeStyle(LinearGradient(
                                 colors: [theme.color(.flowerCenter), theme.color(Self.tint(focusedPhase))],
                                 startPoint: .topLeading, endPoint: .bottomTrailing))
                           : AnyShapeStyle(theme.color(Self.tint(focusedPhase))))
-                    .frame(width: 7 * k, height: 7 * k)
+                    // The slider-knob treatment: a hairline surface rim so the
+                    // solid bead separates from pale tracks AND from its own
+                    // arc color, in every light preset.
+                    .overlay(Circle().strokeBorder(theme.color(.surface), lineWidth: 2))
+                    .overlay(
+                        // Specular top-left kiss, so the bead is polished too.
+                        Circle().strokeBorder(
+                            LinearGradient(colors: [.white.opacity(0.55), .clear, .clear],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1.5 * k
+                        )
+                    )
+                    .frame(width: stroke + 8 * k, height: stroke + 8 * k)
             }
             .scaleEffect((dragging ? 1.15 : 1) * reveal)
-            .shadow(color: theme.shadow, radius: dragging ? 6 : 0)
+            .shadow(color: theme.shadow, radius: dragging ? 6 : 2, x: 0, y: 1)
             .position(x: fx, y: fy)
 
             centerReadout
@@ -254,31 +263,44 @@ struct CycleRing: View {
     }
 }
 
-// A slow glint that laps the band once every ~9 seconds — a narrow white
-// highlight rotating continuously around the ring, masked to the band itself.
-// It's the light catching polished metal as the bangle slowly turns: always
-// somewhere on the band, never bright (peak 0.5 over a narrow window), and
-// mounted only when motion is allowed.
-private struct RingGlint: View {
-    let inset: CGFloat
-    @State private var angle: Double = 0
+// One gleam every 7 seconds, taking turns around the phases: a narrow soft
+// highlight sweeps ONE phase arc from start to end (~1.1s), then the band
+// rests until the next phase's turn. Deterministic cadence, one shimmer at a
+// time, mounted only when motion is allowed. Hidden from hit-testing.
+private struct ArcShimmer: View {
+    let segments: [(from: Double, to: Double)]
+    let stroke: CGFloat
+
+    @State private var seg = 0
+    @State private var head: Double = 0
+    @State private var sweeping = false
 
     var body: some View {
-        AngularGradient(stops: [
-            .init(color: .clear, location: 0),
-            .init(color: .clear, location: 0.42),
-            .init(color: .white.opacity(0.22), location: 0.48),
-            .init(color: .white.opacity(0.5), location: 0.5),
-            .init(color: .white.opacity(0.22), location: 0.52),
-            .init(color: .clear, location: 0.58),
-            .init(color: .clear, location: 1),
-        ], center: .center)
-        .rotationEffect(.degrees(angle))
-        .mask(Circle().inset(by: inset / 2).stroke(lineWidth: inset).padding(inset / 2))
-        .allowsHitTesting(false)
-        .onAppear {
-            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) { angle = 360 }
-        }
+        let s = segments[seg % max(segments.count, 1)]
+        PhaseArc(fromFrac: max(head - 0.05, s.from), toFrac: min(head, s.to), reveal: 1)
+            .stroke(
+                LinearGradient(colors: [.white.opacity(0.0), .white.opacity(0.55), .white.opacity(0.0)],
+                               startPoint: .leading, endPoint: .trailing),
+                style: StrokeStyle(lineWidth: stroke, lineCap: .round)
+            )
+            .opacity(sweeping ? 1 : 0)
+            .allowsHitTesting(false)
+            .task {
+                guard !segments.isEmpty else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(5.9))   // + ~1.1s sweep = 7s cadence
+                    let s = segments[seg % segments.count]
+                    head = s.from
+                    sweeping = true
+                    let steps = 36
+                    for i in 0...steps {
+                        head = s.from + (s.to - s.from + 0.05) * Double(i) / Double(steps)
+                        try? await Task.sleep(for: .milliseconds(30))
+                    }
+                    sweeping = false
+                    seg += 1
+                }
+            }
     }
 }
 

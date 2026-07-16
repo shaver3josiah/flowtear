@@ -21,8 +21,7 @@ struct StretchCoachView: View {
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
     @State private var playingDay: StretchDay? = nil   // any schedule day, guided
-    /// Life happens: while paused, missed plan days are excused, never charged.
-    @AppStorage("flowtear.planPaused") private var planPaused = false
+    @State private var anytimeExpanded = false         // the no-schedule card rests folded
     /// When the current lock-in plan was (re)chosen, as a startOfDay timestamp.
     /// Penalties never reach behind this line — so switching tiers, the first
     /// prediction remapping the window into the past, or toggling tiers while
@@ -70,8 +69,10 @@ struct StretchCoachView: View {
                 } else {
                     outOfWindowCard
                     // Stretching is never locked: any day, she can run and check
-                    // off a session — it logs to today like any other.
-                    todayCard(anytimeSession, heading: "ANYTIME SESSION · NO SCHEDULE NEEDED")
+                    // off a session — it logs to today like any other. Folded by
+                    // default so the schedule below leads; one tap opens it.
+                    todayCard(anytimeSession, heading: "ANYTIME SESSION · NO SCHEDULE NEEDED",
+                              collapsible: true)
                 }
                 if tier != .trio { scheduleCard }
                 evidenceCard
@@ -81,16 +82,20 @@ struct StretchCoachView: View {
             .padding(.top, FFSpace.s2)
             .padding(.bottom, FFSpace.s6)
         }
+        .background(StretchGardenBackdrop().ignoresSafeArea())
         .fullScreenCover(isPresented: $playing) {
             StretchSessionView(day: activeSession, finishTitle: sessionFinishTitle,
                                multiplier: multiplier)
         }
-        // Any day of the plan can be run guided, right from the schedule list.
+        // Any day of the plan can be run guided, right from the schedule list —
+        // completions and petals land on THAT day's date, matching the row's
+        // own checkboxes (no lost completions, no double-earning).
         .fullScreenCover(item: $playingDay) { day in
             StretchSessionView(day: day,
                                finishTitle: day.daysBeforePeriod == todaySession?.daysBeforePeriod
                                    ? sessionFinishTitle : "Session done",
-                               multiplier: multiplier)
+                               multiplier: multiplier,
+                               logDate: date(forPlanDay: StretchPlan.planDay(day, tier: tier)) ?? today)
         }
         .sheet(isPresented: $showShop) { GardenShopView() }
         .sheet(isPresented: $showRules) { StretchRulesView() }
@@ -107,30 +112,10 @@ struct StretchCoachView: View {
             }
             applyLockInPenalties()
         }
-        // Pausing grants amnesty immediately; UNpausing forgives everything
-        // missed up to that moment first (days that elapsed while paused must
-        // never be billed), then normal accounting resumes.
-        .onChange(of: planPaused) { wasPaused, isPaused in
-            if wasPaused && !isPaused { excusePauseWindow() }
-            applyLockInPenalties()
-        }
         // Re-run the accounting on a tier switch so the penalty note never
         // shows a stale count from the previous plan.
         .onChange(of: store.stretchTierRaw) { _, _ in
             applyLockInPenalties()
-        }
-    }
-
-    /// Amnesty at unpause: every past, un-done plan day is excused for good —
-    /// the plan only charges for days missed AFTER the pause lifts.
-    private func excusePauseWindow() {
-        guard tier.locksIn, tier.totalDays > 0 else { return }
-        let startOfToday = Calendar.current.startOfDay(for: today)
-        for d in 1...tier.totalDays {
-            guard let date = date(forPlanDay: d), date < startOfToday else { continue }
-            if !store.stretchDone(on: date) {
-                rewards.excuseMissedDay(store.key(for: date))
-            }
         }
     }
 
@@ -155,7 +140,7 @@ struct StretchCoachView: View {
         for d in 1...tier.totalDays {
             guard let date = date(forPlanDay: d), date < startOfToday else { continue }
             guard !store.stretchDone(on: date) else { continue }
-            if planPaused || date < activation {
+            if date < activation {
                 rewards.excuseMissedDay(store.key(for: date))
             } else if rewards.penalizeMissedDay(store.key(for: date)) {
                 charged += 1
@@ -176,19 +161,9 @@ struct StretchCoachView: View {
     // and points multiplier; the line beneath explains the one she's on.
     private var planBar: some View {
         VStack(alignment: .leading, spacing: FFSpace.s2) {
-            HStack {
-                Text("YOUR PLAN")
-                    .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
-                    .foregroundStyle(theme.color(.muted))
-                Spacer()
-                if planPaused && tier.locksIn {
-                    Text("paused")
-                        .font(ffBody(FFType.xs2, weight: .bold))
-                        .foregroundStyle(theme.color(.deep))
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(theme.color(.surfaceSoft), in: Capsule())
-                }
-            }
+            Text("YOUR PLAN")
+                .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
+                .foregroundStyle(theme.color(.muted))
 
             HStack(spacing: 4) {
                 planSegment(.trio,    name: "Anytime")
@@ -210,9 +185,6 @@ struct StretchCoachView: View {
                     .layoutPriority(1)
             }
 
-            if tier.locksIn {
-                pauseRow
-            }
             Text("Switching keeps every point and completion.")
                 .font(ffBody(FFType.xs2))
                 .foregroundStyle(theme.color(.muted))
@@ -268,30 +240,6 @@ struct StretchCoachView: View {
         case .full:    "the full two weeks before your period, 5 petals lost per missed day"
         }
         return "\(t.label), \(how), up to \(maxDailyPoints(t)) petals a day"
-    }
-
-    // Her plan, her terms: pausing excuses missed days instead of charging them.
-    private var pauseRow: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "pause.circle")
-                .font(.system(size: 17))
-                .foregroundStyle(theme.color(planPaused ? .primaryStrong : .muted))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Pause my plan")
-                    .font(ffBody(FFType.sm, weight: .bold))
-                    .foregroundStyle(theme.color(.deep))
-                Text("Life happens — missed days cost nothing while paused")
-                    .font(ffBody(FFType.xs))
-                    .foregroundStyle(theme.color(.muted))
-            }
-            Spacer(minLength: 4)
-            FFSwitch(isOn: $planPaused)
-                .accessibilityLabel("Pause my plan")
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
-            .strokeBorder(theme.color(.line), lineWidth: 1))
     }
 
     /// Best day's pose points on a tier: 15·m + 5·(m−1) + 10, times the multiplier.
@@ -355,76 +303,99 @@ struct StretchCoachView: View {
 
     // MARK: today's session — day checkbox + per-move checkboxes with bursts
 
-    private func todayCard(_ s: StretchDay, heading: String) -> some View {
+    private func todayCard(_ s: StretchDay, heading: String, collapsible: Bool = false) -> some View {
         let movesDone = store.stretchMovesDone(on: today)
         let dayDone = store.stretchDone(on: today)
+        let open = !collapsible || anytimeExpanded
         return FFCard {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(heading)
-                            .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
-                            .foregroundStyle(theme.color(.muted))
-                        Text(s.focus)
-                            .font(ffDisplay(FFType.lg, weight: .semibold))
-                            .foregroundStyle(theme.color(.deep))
-                    }
-                    Spacer()
-                    Text("\(s.minutes) min")
-                        .font(ffBody(FFType.sm, weight: .semibold))
-                        .foregroundStyle(theme.color(.phaseLuteal))
-                }
-
-                // Each stretch is its own little victory.
-                ForEach(Array(s.moves.enumerated()), id: \.element.id) { i, m in
-                    moveCheckRow(m, index: i, checked: movesDone.contains(i), session: s)
-                }
-
-                if !dayDone {
-                    FFButton("Start guided session", style: .primary, icon: "play.fill") {
-                        playing = true
-                    }
-                }
-
-                // The whole-day checkbox.
+                // Collapsible cards fold to just this header — one tap opens.
                 Button {
-                    let finishing = !dayDone
-                    store.setStretchDone(finishing, on: today)
-                    if finishing { dayBurstToken += 1 }
+                    guard collapsible else { return }
+                    withAnimation(FFMotion.fast) { anytimeExpanded.toggle() }
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: dayDone ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 19, weight: .medium))
-                            .foregroundStyle(theme.color(dayDone ? .good : .muted))
-                        Text(dayDone ? "Today's stretching — done" : "Mark the whole day done")
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(heading)
+                                .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
+                                .foregroundStyle(theme.color(.muted))
+                            Text(s.focus)
+                                .font(ffDisplay(FFType.lg, weight: .semibold))
+                                .foregroundStyle(theme.color(.deep))
+                        }
+                        Spacer()
+                        Text("\(s.minutes) min")
                             .font(ffBody(FFType.sm, weight: .semibold))
-                            .foregroundStyle(theme.color(.text))
-                        Spacer(minLength: 0)
+                            .foregroundStyle(theme.color(.phaseLuteal))
+                        if collapsible {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(theme.color(.muted))
+                                .rotationEffect(.degrees(open ? 180 : 0))
+                        }
                     }
                     .contentShape(Rectangle())
-                    .frame(minHeight: FFSpace.tapMin)
                 }
                 .buttonStyle(.plain)
-                .sensoryFeedback(.success, trigger: dayBurstToken)
-                .accessibilityAddTraits(dayDone ? .isSelected : [])
+                .disabled(!collapsible)
+                .accessibilityHint(collapsible ? (open ? "Collapses the session" : "Opens the session") : "")
+
+                if open {
+                    // Each stretch is its own little victory.
+                    ForEach(Array(s.moves.enumerated()), id: \.element.id) { i, m in
+                        moveCheckRow(m, index: i, checked: movesDone.contains(i), session: s)
+                    }
+
+                    if !dayDone {
+                        FFButton("Start guided session", style: .primary, icon: "play.fill") {
+                            playing = true
+                        }
+                    }
+
+                    // The whole-day checkbox.
+                    Button {
+                        let finishing = !dayDone
+                        store.setStretchDone(finishing, on: today)
+                        if finishing { dayBurstToken += 1 }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: dayDone ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 19, weight: .medium))
+                                .foregroundStyle(theme.color(dayDone ? .good : .muted))
+                            Text(dayDone ? "Today's stretching — done" : "Mark the whole day done")
+                                .font(ffBody(FFType.sm, weight: .semibold))
+                                .foregroundStyle(theme.color(.text))
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                        .frame(minHeight: FFSpace.tapMin)
+                    }
+                    .buttonStyle(.plain)
+                    .sensoryFeedback(.success, trigger: dayBurstToken)
+                    .accessibilityAddTraits(dayDone ? .isSelected : [])
+                }
             }
             .overlay(SparkleBurst(trigger: dayBurstToken, count: 22))
         }
     }
 
-    private func moveCheckRow(_ m: StretchMove, index: Int, checked: Bool, session: StretchDay) -> some View {
-        Button {
-            let doneBefore = store.stretchMovesDone(on: today).count
+    /// One pose, one checkmark. `on date` defaults to today; schedule rows pass
+    /// their own day so every plan day's poses check off (and pay) on that date.
+    private func moveCheckRow(_ m: StretchMove, index: Int, checked: Bool,
+                              session: StretchDay, on date: Date? = nil) -> some View {
+        let day = date ?? today
+        return Button {
+            let doneBefore = store.stretchMovesDone(on: day).count
             let wasFullDay = doneBefore == session.moves.count
-            let completedDay = store.toggleStretchMove(index, on: today, totalMoves: session.moves.count)
+            let completedDay = store.toggleStretchMove(index, on: day, totalMoves: session.moves.count)
             if !checked {
-                lastAward = rewards.awardPose(dateKey: store.key(for: today),
+                lastAward = rewards.awardPose(dateKey: store.key(for: day),
                                               alreadyDone: doneBefore, total: session.moves.count,
                                               multiplier: multiplier)
                 burstToken += 1                      // checking ON celebrates
                 celebrationToken += 1                // Posey gets watered
             } else {
-                rewards.revokePose(dateKey: store.key(for: today),
+                rewards.revokePose(dateKey: store.key(for: day),
                                    remainingDone: max(doneBefore - 1, 0),
                                    total: session.moves.count,
                                    wasFullDay: wasFullDay, multiplier: multiplier)
@@ -627,22 +598,15 @@ struct StretchCoachView: View {
                 .padding(.bottom, FFSpace.s3)
                 .transition(.opacity)
             } else if expanded {
+                // Every plan day's poses get their own checkmarks, checked off
+                // (and paid) on THAT day's date — back-fill or work ahead.
                 VStack(alignment: .leading, spacing: FFSpace.s2) {
-                    ForEach(day.moves) { m in
-                        HStack(alignment: .top, spacing: 10) {
-                            PoseFigure(move: m, size: 24, color: theme.color(.phaseLuteal))
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(m.name).font(ffBody(FFType.base, weight: .semibold)).foregroundStyle(theme.color(.text))
-                                    Spacer(minLength: 8)
-                                    Text(m.hold).font(ffBody(FFType.xs, weight: .medium)).foregroundStyle(theme.color(.muted))
-                                }
-                                Text(m.cue).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.muted)).lineSpacing(2)
-                            }
-                        }
+                    ForEach(Array(day.moves.enumerated()), id: \.element.id) { i, m in
+                        moveCheckRow(m, index: i,
+                                     checked: date(forPlanDay: planDay)
+                                        .map { store.stretchMovesDone(on: $0).contains(i) } ?? false,
+                                     session: day, on: date(forPlanDay: planDay))
                     }
-                    // Off-schedule days still open the guided player — the whole
-                    // system is hers to explore; completions log to today.
                     FFButton("Do this session now", style: .soft, size: .sm, icon: "play.fill") {
                         playingDay = day
                     }
@@ -730,5 +694,35 @@ struct StretchCoachView: View {
                     }
                 }
         }
+    }
+}
+
+// A quiet garden wash behind the Stretch screen: the plan's own lavender
+// breathing down from the top, and two faint hand-drawn blooms resting in the
+// corners like pressed flowers. Purely decorative and fully static — no
+// motion, nothing to gate — and whisper-faint so every card stays legible.
+private struct StretchGardenBackdrop: View {
+    @Environment(Theme.self) private var theme
+
+    var body: some View {
+        ZStack {
+            theme.color(.bg)
+            LinearGradient(
+                colors: [theme.color(.phaseLutealSoft).opacity(0.55),
+                         theme.color(.phaseLutealSoft).opacity(0.0)],
+                startPoint: .top, endPoint: .center)
+            FlowerArt(id: "camellia", size: 210)
+                .rotationEffect(.degrees(-14))
+                .opacity(0.06)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .offset(x: 60, y: -24)
+            FlowerArt(id: "daisy", size: 170)
+                .rotationEffect(.degrees(18))
+                .opacity(0.05)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .offset(x: -46, y: 36)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 }

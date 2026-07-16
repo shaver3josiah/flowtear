@@ -147,6 +147,11 @@ struct TodayView: View {
                 // concentric, never offset.
                 ZStack {
                     CycleRing(prediction: p, size: 244)
+                    // Her daisy chain rides the ring beneath the draggable bead.
+                    if !rewards.ringChain.isEmpty {
+                        RingChainView(chain: rewards.ringChain,
+                                      radius: CycleRing.trackRadius(for: 244))
+                    }
                     RingSticker(radius: CycleRing.trackRadius(for: 244),
                                 periodFraction: periodFraction(p))
                 }
@@ -289,6 +294,10 @@ struct TodayView: View {
         VStack(spacing: 8) {
             ZStack {
                 CycleRing(prediction: store.previewPrediction(), size: 220)
+                if !rewards.ringChain.isEmpty {
+                    RingChainView(chain: rewards.ringChain,
+                                  radius: CycleRing.trackRadius(for: 220))
+                }
                 RingSticker(radius: CycleRing.trackRadius(for: 220),
                             periodFraction: periodFraction(store.previewPrediction()))
             }

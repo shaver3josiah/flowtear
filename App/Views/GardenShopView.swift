@@ -125,6 +125,7 @@ struct GardenShopView: View {
                 header
                 stickerNote
                 flowerGrid
+                chainCard
                 poseyCard
                 themeSection
                 shareButton
@@ -228,6 +229,81 @@ struct GardenShopView: View {
         .buttonStyle(FFPressButtonStyle(scale: 0.96))
         .sensoryFeedback(.success, trigger: rewards.ownedFlowers.contains(f.id))
         .accessibilityLabel("\(f.name), \(f.rarity), \(owned ? (equipped ? "worn" : "owned") : "\(f.price) points")")
+    }
+
+    // The daisy chain: owned blooms she taps into a chain that circles her
+    // Today ring together. Three or more and Posey can wear it as a crown.
+    private var chainCard: some View {
+        let ownedList = RewardsStore.flowers.filter { rewards.ownedFlowers.contains($0.id) }
+        return FFCard {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                Label("Your flower chain", systemImage: "link")
+                    .font(ffBody(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                Text("Tap owned blooms into a chain — they circle your Today ring together. Three or more make a crown Posey can wear.")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+                if ownedList.isEmpty {
+                    Text("Flowers you own will appear here, ready to chain.")
+                        .font(ffBody(FFType.xs, weight: .medium))
+                        .foregroundStyle(theme.color(.muted))
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: FFSpace.s2)],
+                              spacing: FFSpace.s2) {
+                        ForEach(ownedList) { f in
+                            chainChip(f)
+                        }
+                    }
+                }
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Posey wears the crown")
+                            .font(ffBody(FFType.sm, weight: .semibold))
+                            .foregroundStyle(theme.color(.text))
+                        Text(rewards.ringChain.count >= 3
+                             ? "Your chain, resting on her petals"
+                             : "Chain \(3 - rewards.ringChain.count) more bloom\(rewards.ringChain.count == 2 ? "" : "s") to crown her")
+                            .font(ffBody(FFType.xs))
+                            .foregroundStyle(theme.color(.muted))
+                    }
+                    Spacer(minLength: 4)
+                    FFSwitch(isOn: crownBinding)
+                        .disabled(rewards.ringChain.count < 3)
+                        .opacity(rewards.ringChain.count < 3 ? 0.45 : 1)
+                        .accessibilityLabel("Posey wears the flower crown")
+                }
+            }
+        }
+    }
+
+    private var crownBinding: Binding<Bool> {
+        Binding(get: { rewards.poseyCrowned }, set: { rewards.poseyCrowned = $0 })
+    }
+
+    private func chainChip(_ f: FlowerItem) -> some View {
+        let chained = rewards.inChain(f.id)
+        return Button {
+            withAnimation(FFMotion.fast) { rewards.toggleChain(f.id) }
+        } label: {
+            VStack(spacing: 3) {
+                StickerView(id: f.id, size: 24)
+                    .frame(height: 30)
+                Image(systemName: chained ? "checkmark.circle.fill" : "plus.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.color(chained ? .good : .muted))
+            }
+            .frame(maxWidth: .infinity, minHeight: FFSpace.tapMin + 8)
+            .background(theme.color(chained ? .surfaceSoft : .surface),
+                        in: RoundedRectangle(cornerRadius: FFRadius.sm, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: FFRadius.sm, style: .continuous)
+                    .strokeBorder(chained ? theme.color(.primaryStrong) : theme.color(.line),
+                                  lineWidth: chained ? 1.5 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(f.name)\(chained ? ", in your chain" : ", not in your chain")")
+        .accessibilityHint(chained ? "Removes it from the chain" : "Adds it to the chain")
     }
 
     private var poseyCard: some View {
