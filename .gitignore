@@ -26,3 +26,29 @@ AuthKey_*.p8
 
 # Design system delivered as a zip; the extracted design-system/ folder is tracked
 *.zip
+
+# ── Web app / Capacitor / Android (the com.shaver.flowtear Android build) ──
+# Node deps (restore with `npm install`)
+node_modules/
+npm-debug.log*
+
+# Capacitor-generated Android project build artifacts. The android/ project
+# itself is regenerable with `npx cap add android`; we ignore the heavy/secret
+# and machine-specific parts and keep the source. Build outputs never commit.
+android/build/
+android/app/build/
+android/.gradle/
+android/captures/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+.gradle/
+
+# Built APKs/AABs
+*.apk
+*.aab
+
+# Capacitor asset-generation temp
+web/vendor/node_modules/
+

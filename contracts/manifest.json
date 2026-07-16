@@ -1,0 +1,42 @@
+{
+  "product": "Uncorked (Flowtear)",
+  "contractsVersion": "1.0.0",
+  "updated": "2026-07-15",
+  "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
+  "platforms": {
+    "ios": {
+      "impl": "App/  (SwiftUI, ships via .github/workflows to TestFlight)",
+      "engine": "App/Core/CycleEngine.swift",
+      "models": "App/Core/CycleModels.swift",
+      "tokens": "App/Design/Theme.swift",
+      "versionStampFile": "App/Core/ContractsVersion.swift"
+    },
+    "web": {
+      "impl": "web/  (Capacitor -> android/ -> APK)",
+      "engine": "web/core/engine.js",
+      "models": "web/core/models.js",
+      "tokens": "web/styles/tokens.css",
+      "versionStampFile": "web/core/version.js"
+    }
+  },
+  "sharedTruth": {
+    "algorithm": "cycle-vectors.json — golden input->output vectors for the predictor. Both engines MUST reproduce these. Regenerate from the JS engine with `npm run gen:vectors` after an intentional algorithm change, then port the same change to CycleEngine.swift.",
+    "tokens": "tokens.json — design tokens (colors, radii, type). The web tokens.css and Swift Theme.swift both mirror these values.",
+    "models": "The logged-data enums (Flow, Mood, Symptom, Discharge, Phase) and the DayLog shape must match between web/core/models.js and App/Core/CycleModels.swift. Persistence blob key is `flowtear.state.v1` on both."
+  },
+  "features": [
+    { "id": "today", "since": "1.0.0", "ios": "App/Views/TodayView.swift", "web": "web/screens/today.js" },
+    { "id": "calendar", "since": "1.0.0", "ios": "App/Views/CalendarView.swift", "web": "web/screens/calendar.js" },
+    { "id": "log", "since": "1.0.0", "ios": "App/Views/LogView.swift", "web": "web/screens/log.js" },
+    { "id": "insights", "since": "1.0.0", "ios": "App/Views/InsightsView.swift", "web": "web/screens/insights.js" },
+    { "id": "stretch-coach", "since": "1.0.0", "ios": "App/Views/StretchCoachView.swift", "web": "web/screens/stretch.js" },
+    { "id": "stretch-session", "since": "1.0.0", "ios": "App/Views/StretchSessionView.swift", "web": "web/screens/stretchSession.js" },
+    { "id": "garden-shop", "since": "1.0.0", "ios": "App/Views/GardenShopView.swift", "web": "web/screens/garden.js" }
+  ],
+  "howToStaySynced": [
+    "1. Change shared behavior in ONE place first (algorithm in engine.js + CycleEngine.swift, tokens in tokens.json, models in both models files).",
+    "2. Bump contractsVersion here, and the matching version stamp in the platform(s) you updated (web/core/version.js and/or App/Core/ContractsVersion.swift).",
+    "3. If you changed the algorithm, run `npm run gen:vectors` to refresh cycle-vectors.json.",
+    "4. Run `npm run check:parity`. It flags any platform whose stamp is behind contractsVersion, and fails if the web engine no longer matches the golden vectors."
+  ]
+}
