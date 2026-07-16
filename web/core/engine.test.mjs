@@ -51,4 +51,14 @@ const irr = predict(
 );
 assert.equal(irr.averageCycleLength, 28, "avg of 30 and 26");
 
+// lockCycleLength: her numbers beat the logged averages — BOTH of them.
+const locked = predict(periodKeys.map(dateFromKey), dateFromKey("2026-06-10"),
+  { ...S, defaultCycleLength: 31, defaultPeriodLength: 6, lockCycleLength: true });
+assert.equal(locked.averageCycleLength, 31, "locked cycle length wins");
+assert.equal(locked.averagePeriodLength, 6, "locked period length wins");
+assert.equal(keyFromDate(locked.nextPeriodStart), "2026-06-27", "next period from HER cycle length");
+// And absent/false lock keeps the logged averages (old blobs decode with lock unset).
+assert.equal(predict(periodKeys.map(dateFromKey), dateFromKey("2026-06-10"),
+  { ...S, defaultCycleLength: 31 }).averageCycleLength, 28, "unlocked still averages");
+
 console.log("engine.test.mjs: all assertions passed");

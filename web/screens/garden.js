@@ -86,7 +86,9 @@ export default function GardenScreen({ ctx }) {
   // A small pill button used across the shop for buy / wear / owned states.
   const pill = (label, { onClick, tone = "soft", icon } = {}) => {
     const bg = tone === "strong" ? "var(--primary-strong)" : "var(--surface-soft)";
-    const fg = tone === "strong" ? "var(--surface)"
+    // Swift moved these pills from .white to theme.color(.onPrimary) so the
+    // label stays readable on every palette's primary — same token here.
+    const fg = tone === "strong" ? "var(--text-on-primary)"
       : tone === "muted" ? "var(--muted)"
       : tone === "primary" ? "var(--primary-strong)" : "var(--deep)";
     return html`<button onClick=${onClick}

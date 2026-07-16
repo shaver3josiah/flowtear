@@ -15,6 +15,8 @@
 //   flowtear.theme.accent    "#RRGGBB"          Theme.accentKey
 //   flowtear.theme.studio    { token: "#RRGGBB" } Theme.studioKey
 //   flowtear.petalsOnRing    bool (default on)
+//   flowtear.quiet           bool (default off) — rewards.js reads it before
+//                            playing a celebration sound
 
 import { rewards, PRICES } from "../core/rewards.js";
 import * as remind from "../core/reminders.js";
@@ -25,15 +27,25 @@ const { useState, useEffect } = window.React;
 const ACCENT_KEY = "flowtear.theme.accent";
 const STUDIO_KEY = "flowtear.theme.studio";
 const PETALS_KEY = "flowtear.petalsOnRing";
+const QUIET_KEY = "flowtear.quiet";
+const PRESET_KEY = "flowtear.theme.preset";   // Theme.presetKey — the shell owns writes
 
-// The presets styles/tokens.css ships (Swift also has pink / light / dark; they
-// have no [data-theme] block here yet, so the sheet offers what the CSS knows).
+// Every preset Theme.swift ships, in Swift's order (Theme.presetNames): the
+// dark family first — Plum Night is the house default — then the lights.
+// Ownership is NOT encoded here; it's asked of rewards.themeOwned() live.
 const PRESETS = [
+  { id: "dark", label: "Plum Night" },
+  { id: "midnight", label: "Midnight" },
   { id: "cherry", label: "Cherry" },
+  { id: "pink", label: "Pink" },
   { id: "rose", label: "Rose" },
   { id: "peony", label: "Peony" },
   { id: "soft", label: "Soft" },
+  { id: "light", label: "Light" },
 ];
+
+// Theme.darkPresets — the accent ramp scales differently on a dark scheme.
+const DARK_PRESETS = ["dark", "midnight"];
 
 // Swift's Theme.studioTokens (Tok raw value) -> the CSS custom property + label.
 const STUDIO_TOKENS = [
@@ -63,11 +75,13 @@ function write(key, value) {
   } catch { /* private mode — it just won't stick */ }
 }
 const readPetals = () => read(PETALS_KEY) !== "false";   // Swift's @AppStorage default: true
+const readQuiet = () => read(QUIET_KEY) === "true";      // Swift's @AppStorage default: false
 const readStudio = () => { try { return JSON.parse(read(STUDIO_KEY) || "{}") || {}; } catch { return {}; } };
 
 // ---- the custom-accent ramp (a port of Theme.accentRamp) ----
-// Derive primary / primaryStrong / deep from one picked color. Every preset the
-// web ships is a light palette, so only Swift's light branch applies here.
+// Derive primary / primaryStrong / deep from one picked color, scaled by
+// scheme. On light: strong is darker, deep darker still (contrast on white).
+// On dark: strong is brighter, deep light (contrast on near-black).
 
 const clamp01 = (n) => Math.min(Math.max(n, 0), 1);
 
@@ -100,11 +114,18 @@ function hsvToHex(h, s, v) {
   return `#${f(5)}${f(3)}${f(1)}`;
 }
 
-function accentRamp(hex) {
+function accentRamp(hex, dark) {
   const rgb = parseHex(hex);
   if (!rgb) return null;
   const { h, s, v } = rgbToHsv(rgb);
   const mk = (ss, vv) => hsvToHex(h, clamp01(ss), clamp01(vv));
+  if (dark) {
+    return {
+      "--primary": mk(s * 0.95, Math.min(v * 1.05, 1)),
+      "--primary-strong": mk(s * 0.90, Math.min(v * 1.18, 1)),
+      "--deep": mk(Math.max(s * 0.55, 0.18), Math.max(v * 1.40, 0.82)),
+    };
+  }
   return {
     "--primary": mk(Math.min(s * 1.02, 1), v),
     "--primary-strong": mk(Math.min(s * 1.14, 1), v * 0.84),
@@ -113,11 +134,15 @@ function accentRamp(hex) {
 }
 
 /// Lay the saved accent + studio overrides onto <html>. Idempotent: it clears
-/// what it set first, so it doubles as the reset.
-export function applyStoredTheming() {
+/// what it set first, so it doubles as the reset. `preset` names the palette
+/// the ramp is built for; when omitted it reads the live data-theme attribute
+/// (falling back to the stored preset — at import time the shell hasn't set
+/// the attribute yet).
+export function applyStoredTheming(preset) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  const ramp = accentRamp(read(ACCENT_KEY));
+  const active = preset || root.getAttribute("data-theme") || read(PRESET_KEY) || "dark";
+  const ramp = accentRamp(read(ACCENT_KEY), DARK_PRESETS.includes(active));
   for (const cssVar of ["--primary", "--primary-strong", "--deep"]) {
     if (ramp) root.style.setProperty(cssVar, ramp[cssVar]);
     else root.style.removeProperty(cssVar);
@@ -151,6 +176,7 @@ export default function ThemeEditor({ ctx }) {
   const r = useRewards();
 
   const [petals, setPetals] = useState(readPetals);
+  const [quiet, setQuiet] = useState(readQuiet);
   const [stretchOn, setStretchOn] = useState(remind.getStretchOn);
   const [stretchMinutes, setStretchMins] = useState(remind.getStretchMinutes);
   const [periodOn, setPeriodOn] = useState(remind.getPeriodOn);
@@ -201,8 +227,12 @@ export default function ThemeEditor({ ctx }) {
     const owned = r.themeOwned(p.id);
     return html`<button key=${p.id}
       aria-pressed=${selected}
-      aria-label=${`${p.label} palette`}
-      onClick=${() => (owned ? nav.setTheme(p.id) : nav.open("garden"))}
+      aria-label=${`${p.label} palette${owned ? "" : `, locked, ${PRICES.theme} petals`}`}
+      onClick=${() => {
+        if (!owned) return nav.open("garden");
+        nav.setTheme(p.id);
+        applyStoredTheming(p.id);   // rebuild the accent ramp for the new scheme
+      }}
       style=${{
         display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 12px",
         borderRadius: 16, cursor: "pointer", textAlign: "left",
@@ -357,12 +387,21 @@ export default function ThemeEditor({ ctx }) {
       ${studioSection()}
 
       ${section("Little touches", html`<${Card}>
-        ${toggleRow(
-          "Falling petals",
-          "Petals drift around your cycle ring on Today",
-          html`<${Switch} checked=${petals} label="Falling petals around the cycle ring"
-            onChange=${(next) => { setPetals(next); write(PETALS_KEY, next ? "true" : "false"); }} />`,
-        )}
+        <div style=${{ display: "grid", gap: 12 }}>
+          ${toggleRow(
+            "Falling petals",
+            "Petals drift around your cycle ring on Today",
+            html`<${Switch} checked=${petals} label="Falling petals around the cycle ring"
+              onChange=${(next) => { setPetals(next); write(PETALS_KEY, next ? "true" : "false"); }} />`,
+          )}
+          <div style=${{ height: 1, background: "var(--line)" }} />
+          ${toggleRow(
+            "Quiet mode",
+            "Celebration sounds stay silent — the sparkle stays",
+            html`<${Switch} checked=${quiet} label="Quiet mode, silence celebration sounds"
+              onChange=${(next) => { setQuiet(next); write(QUIET_KEY, next ? "true" : "false"); }} />`,
+          )}
+        </div>
       </${Card}>`)}
 
       ${remindersSection()}

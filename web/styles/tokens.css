@@ -61,13 +61,21 @@
   --surface-soft: #FBE4EE;
   --surface-2: #FDF0F5;
   --primary: #F06FA7;
-  --primary-strong: #E2417F;
+  /* primary-strong deep enough that white text on it clears 4.5:1 */
+  --primary-strong: #D23070;
   --deep: #B01B58;
   --text: #421527;
   --muted: #885B6D;
   --line: #F2CEDF;
   --flower-center: #FFC966;
   --good: #17703B;
+  /* Posy's face ink — a deep rose that reads on her pink petals in BOTH
+     schemes (dark presets brighten the petals, so dark ink still lands). */
+  --bloom-ink: #5E1434;
+  /* Text/icon color on primary/primary-strong/deep fills. White on light
+     presets; the dark presets BRIGHTEN those fills to light pinks, so they
+     override this to a deep plum ink (~5.5:1 on their primary-strong). */
+  --on-primary: #FFFFFF;
 
   --shadow: rgba(176, 27, 88, .16);
   --ripple: rgba(255, 255, 255, .55);
@@ -91,13 +99,14 @@
   --flow-medium: #E85C90;
   --flow-heavy: #BE2C60;
   --flow-none: #D9C4CE;
+  --flow-soft: #FBDCE6; /* alias of --phase-menstrual-soft; dark presets override */
 
   /* ---- Semantic aliases ------------------------------------------------- */
   --text-body: var(--text);
   --text-muted: var(--muted);
   --text-heading: var(--deep);
-  --text-on-primary: #FFFFFF;
-  --text-on-accent: #FFFFFF;
+  --text-on-primary: var(--on-primary);
+  --text-on-accent: var(--on-primary);
 
   --surface-page: var(--bg);
   --surface-card: var(--surface);
@@ -202,6 +211,20 @@
   --hover-lift: -2px;
 }
 
+/* ---- Pink preset (candy-bright but no longer neon) ------------------------ */
+[data-theme="pink"] {
+  --bg: #FEF1F7;
+  --surface-soft: #FCDDEC;
+  --surface-2: #FEEAF3;
+  --primary: #F9679E;
+  --primary-strong: #D62C74;
+  --deep: #B01A60;
+  --text: #43132C;
+  --muted: #8C526F;
+  --line: #F9CFE2;
+  --flower-center: #FFC55A;
+}
+
 /* ---- Rose preset --------------------------------------------------------- */
 [data-theme="rose"] {
   --bg: #FDF2F1;
@@ -238,13 +261,88 @@
   --surface-soft: #FBE7ED;
   --surface-2: #FDF1F4;
   --primary: #EE9DBB;
-  --primary-strong: #DB6E93;
+  --primary-strong: #C14E73;
   --deep: #B04266;
   --text: #4A2533;
   --muted: #82606D;
   --line: #F4D8E1;
   --flower-center: #FFD488;
   --shadow: rgba(176, 66, 102, .14);
+}
+
+/* ---- Light preset (airy near-neutral) ------------------------------------- */
+[data-theme="light"] {
+  --bg: #FBFAFB;
+  --surface: #FFFFFF;
+  --surface-soft: #F3EEF1;
+  --surface-2: #F8F5F7;
+  --primary: #E75C93;
+  --primary-strong: #CE3B76;
+  --deep: #8A2A54;
+  --text: #2A2430;
+  --muted: #726A75;
+  --line: #E9E2E8;
+  --flower-center: #F5B342;
+}
+
+/* ---- Dark preset — "Plum Night", the house default ------------------------
+   Full dark palette: warm plum surfaces, rosier accents, creamier text. The
+   vivid phase/flow tints carry through from base; the SOFT washes go dark so
+   phase cells/badges don't glow. on-primary flips to deep plum ink because
+   the brand fills brighten to light pinks. */
+[data-theme="dark"] {
+  --bg: #171118;
+  --surface: #221925;
+  --surface-soft: #302433;
+  --surface-2: #291E2D;
+  --primary: #F792BC;
+  --primary-strong: #F26AA2;
+  --deep: #F8CCDF;
+  --text: #F8EDF3;
+  --muted: #C7A9B8;
+  --line: #3F3140;
+  --flower-center: #FFCE73;
+  --good: #55C389;
+  --on-primary: #40122B;
+
+  --phase-menstrual-soft: #3E2433;
+  --phase-follicular-soft: #372230;
+  --phase-fertile-soft: #3C2F20;
+  --phase-ovulation-soft: #3C2D1C;
+  --phase-luteal-soft: #32263D;
+
+  --flow-none: #5E4D56;
+  --flow-soft: #3E2433;
+
+  --shadow: rgba(0, 0, 0, .5);
+}
+
+/* ---- Midnight preset (ink and moonlight — cooler, deeper dark) ------------ */
+[data-theme="midnight"] {
+  --bg: #0F0F14;
+  --surface: #181820;
+  --surface-soft: #23232F;
+  --surface-2: #1E1E29;
+  --primary: #E48BB3;
+  --primary-strong: #ED6FA4;
+  --deep: #F0C4D8;
+  --text: #F1EDF4;
+  --muted: #ABA1B6;
+  --line: #31313F;
+  --flower-center: #F3C76F;
+  --good: #4EBD8C;
+  --on-primary: #40122B;
+
+  --phase-menstrual-soft: #391F2E;
+  --phase-follicular-soft: #32202C;
+  --phase-fertile-soft: #372B1E;
+  --phase-ovulation-soft: #362919;
+  --phase-luteal-soft: #2B2338;
+
+  --flow-none: #555064;
+  --flow-soft: #391F2E;
+
+  --shadow: rgba(0, 0, 0, .5);
 }
 
 /* ---- Shared keyframes (from effects.css) --------------------------------- */

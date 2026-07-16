@@ -1,16 +1,45 @@
 // Today — the home screen. Faithful port of App/Views/TodayView.swift:
 // header (bloom + date + tips + theme pencil), the CycleRing hero with drifting
 // petals and her pluckable ring sticker, the current phase badge (tap → phase
-// sheet), a next-period line, a quick flow log, a rotating teaser pane
-// (stretch → insights → calendar), and the fertile window + basal-temperature
-// card. Before her first confirmed period the ring still shows, as a labelled
-// best guess. All state reads/writes go through the store.
+// sheet), a next-period line, a quick flow log with a one-tap "My period
+// started" CTA when it's due (undo toast gives one gentle chance to take it
+// back), a rotating teaser pane (stretch → insights → calendar), and the
+// fertile window + basal-temperature card. Before her first confirmed period
+// the ring still shows, as a labelled best guess. The vendored DS CycleRing
+// can't be edited, so the Swift ring's jewelry pass (metal sheen, lapping
+// glint, today glimmer) is an overlay sharing the ring's box — same pattern as
+// RingSticker. All state reads/writes go through the store.
 import { rewards } from "../core/rewards.js";
+import { emptyLog } from "../core/models.js";
 import { RingSticker, trackRadius } from "../components/ringSticker.js";
 import { GlitterHint } from "../components/glitterHint.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
+const mhtml = window.htm.bind(React.createElement);
+
+const reduceMotion = () =>
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// This screen owns the ring-polish + toast keyframes; no build step folds them
+// into the shared stylesheet (same pattern as glitterHint.js).
+const STYLE_ID = "ft-today-css";
+if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
+  const el = document.createElement("style");
+  el.id = STYLE_ID;
+  el.textContent = [
+    // RingGlint: one narrow highlight lapping the band every 9s (CycleRing.swift).
+    "@keyframes ft-ring-glint { to { transform: rotate(360deg); } }",
+    // TodayGlimmer: the gold halo breathes, the two twinkles alternate.
+    "@keyframes ft-halo-breathe { from { transform: scale(.98); opacity: .95; } to { transform: scale(1.12); opacity: .55; } }",
+    "@keyframes ft-twinkle-hi { from { opacity: .15; } to { opacity: 1; } }",
+    "@keyframes ft-twinkle-lo { from { opacity: 1; } to { opacity: .2; } }",
+    // Undo toast: move(edge: .top) + opacity (TodayView.swift).
+    "@keyframes ft-toast-in { from { opacity: 0; transform: translate(-50%, -12px); } }",
+  ].join("\n");
+  document.head.appendChild(el);
+}
 
 // She can switch the drifting petals off in the pencil settings — same key and
 // default-on reading as the theme editor writes (Swift: @AppStorage).
@@ -37,6 +66,90 @@ const monthDay = (fmt, d) => `${fmt.monthShort(d.getMonth())} ${d.getDate()}`;
 // A tap target that carries no button chrome (the child DS pill/ring is the look).
 const bareBtn = { background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer", font: "inherit", display: "block" };
 
+// ---------------------------------------------------------------------------
+// RingPolish — the CycleRing.swift jewelry pass, overlaid on the vendored DS
+// ring (which we can't edit). Shares the ring's box and geometry (track at
+// 84/200 of the size, 15/200 stroke), pointer-transparent and aria-hidden:
+//   • metal sheen — the "single lamp" top-left wash masked to the band, so
+//     track and arcs read as one polished piece (Swift strokes the same wash
+//     over the track and each arc; one band-masked wash approximates that);
+//   • RingGlint — a narrow white highlight lapping the band every ~9s,
+//     mounted only when motion is allowed (Swift: if !reduceMotion);
+//   • TodayGlimmer — a breathing gold halo + two alternating four-point
+//     twinkles on the today marker, plus the gold→phase gradient center dot.
+//     Reduce Motion keeps the halo and one lit twinkle, static.
+// ---------------------------------------------------------------------------
+
+// FFTwinkle (CycleRing.swift) — the same concave four-point star GlitterHint uses.
+const Twinkle = ({ size, style }) => mhtml`
+  <svg width=${size} height=${size} viewBox="0 0 10 10" aria-hidden="true"
+    style=${{ position: "absolute", ...style }}>
+    <path d="M5 0C5.6 3.2 6.8 4.4 10 5C6.8 5.6 5.6 6.8 5 10C4.4 6.8 3.2 5.6 0 5C3.2 4.4 4.4 3.2 5 0Z"
+      fill="var(--flower-center)" />
+  </svg>`;
+
+function RingPolish({ size, day, cycleLength, phase }) {
+  const k = size / 200;
+  const r = trackRadius(size);
+  const w = 15 * k; // the DS ring's stroke width
+  const still = reduceMotion();
+
+  // Mask that keeps a layer only on the drawn band.
+  const band = `radial-gradient(circle, transparent ${r - w / 2 - 0.5}px, #000 ${r - w / 2}px, #000 ${r + w / 2}px, transparent ${r + w / 2 + 0.5}px)`;
+  const banded = (extra) => ({
+    position: "absolute", inset: 0, pointerEvents: "none",
+    WebkitMaskImage: band, maskImage: band, ...extra,
+  });
+
+  // Today marker position — same polar math as the vendored knob.
+  const a = ((((day - 0.5) / cycleLength) * 360 - 90) * Math.PI) / 180;
+  const mx = size / 2 + r * Math.cos(a);
+  const my = size / 2 + r * Math.sin(a);
+
+  const d = w + 22 * k; // glimmer halo diameter (Swift: stroke + 22k)
+  const haloBand = `radial-gradient(circle, transparent ${d / 2 - 3}px, #000 ${d / 2 - 2.5}px, #000 ${d / 2}px, transparent ${d / 2 + 0.5}px)`;
+  const dot = 7 * k;    // marker center dot (Swift: 7k, gold→phase gradient on today)
+
+  // ponytail: web theme presets have no dark mode, so the sheen's shadow end
+  // is the Swift light value (.16); revisit if a dark preset lands.
+  return mhtml`
+    <div aria-hidden="true" style=${{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      <div style=${banded({
+        background: "linear-gradient(135deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.08) 35%, transparent 55%, rgba(0,0,0,.16) 100%)",
+      })} />
+      ${!still && mhtml`<div style=${banded({
+        background: "conic-gradient(from 0deg, transparent 0% 42%, rgba(255,255,255,.22) 48%, rgba(255,255,255,.5) 50%, rgba(255,255,255,.22) 52%, transparent 58% 100%)",
+        animation: "ft-ring-glint 9s linear infinite",
+      })} />`}
+
+      <div style=${{ position: "absolute", left: mx, top: my, width: 0, height: 0 }}>
+        <div style=${{
+          position: "absolute", left: -d / 2, top: -d / 2, width: d, height: d,
+          borderRadius: "50%",
+          background: "conic-gradient(from 0deg, transparent, var(--flower-center) 25%, transparent 50%, var(--flower-center) 75%, transparent)",
+          WebkitMaskImage: haloBand, maskImage: haloBand,
+          opacity: still ? 0.95 : undefined,
+          animation: still ? "none" : "ft-halo-breathe 2.2s ease-in-out infinite alternate",
+        }} />
+        <${Twinkle} size=${7} style=${{
+          left: -d * 0.42 - 3.5, top: -d * 0.34 - 3.5,
+          opacity: 0.15,
+          animation: still ? "none" : "ft-twinkle-hi 1.4s ease-in-out infinite alternate",
+        }} />
+        <${Twinkle} size=${5} style=${{
+          left: d * 0.44 - 2.5, top: d * 0.28 - 2.5,
+          opacity: 1,
+          animation: still ? "none" : "ft-twinkle-lo 1.4s ease-in-out infinite alternate",
+        }} />
+        <div style=${{
+          position: "absolute", left: -dot / 2, top: -dot / 2, width: dot, height: dot,
+          borderRadius: "50%",
+          background: `linear-gradient(135deg, var(--flower-center), var(--phase-${phase || "menstrual"}))`,
+        }} />
+      </div>
+    </div>`;
+}
+
 export default function TodayScreen({ ctx }) {
   const { store, html, ui, Icon, fmt, today, nav } = ctx;
   const { Card, Button, FlowerMark, IconButton, PetalRain, CycleRing, PhaseBadge, FlowScale } = ui;
@@ -51,6 +164,50 @@ export default function TodayScreen({ ctx }) {
     const t = setInterval(() => setPane((i) => (i + 1) % 3), 10000);
     return () => clearInterval(t);
   }, []);
+
+  // Undo toast — one gentle chance to take a quick action back (TodayView.swift
+  // UndoAction). role="status" speaks the message for AT; the web can't detect
+  // a running screen reader, so everyone gets the 5s grace (Swift gives
+  // VoiceOver 20s — no web equivalent of UIAccessibility.isVoiceOverRunning).
+  const [undoToast, setUndoToast] = useState(null); // { id, message, undo }
+  useEffect(() => {
+    if (!undoToast) return;
+    const t = setTimeout(() => setUndoToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [undoToast]);
+
+  const toast = undoToast && html`
+    <div role="status" style=${{
+      position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 10px)", left: "50%",
+      transform: "translateX(-50%)", zIndex: 30,
+      display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
+      padding: "4px 6px 4px 16px", borderRadius: 999,
+      background: "var(--surface)", border: "1px solid var(--line)",
+      boxShadow: "0 6px 10px var(--shadow)",
+      animation: reduceMotion() ? "none" : "ft-toast-in var(--dur-base) var(--ease-signature)",
+    }}>
+      <span style=${{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text)" }}>${undoToast.message}</span>
+      <button onClick=${() => { undoToast.undo(); setUndoToast(null); }}
+        style=${{ ...bareBtn, minWidth: 44, minHeight: 44, fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--primary-strong)" }}>
+        Undo
+      </button>
+    </div>`;
+
+  // One tap when it matters most: her period is due (or late) and nothing is
+  // logged yet — no slider hunting on a crampy morning (TodayView.showPeriodCTA).
+  const daysUntil = p.daysUntilNextPeriod;
+  const showPeriodCTA = flow == null && daysUntil != null && daysUntil <= 2;
+  const logPeriodStart = () => {
+    const l = { ...(store.logFor(today) ?? emptyLog(store.key(today))), flow: "medium" };
+    store.upsert(l);
+    setUndoToast({
+      id: Date.now(),
+      message: "Logged a medium flow for today",
+      // Swift's undo clears flow unconditionally (the CTA only shows when it
+      // was empty); an all-empty log is dropped by upsert, as if never logged.
+      undo: () => store.upsert({ ...(store.logFor(today) ?? emptyLog(store.key(today))), flow: null }),
+    });
+  };
 
   // The bloom is a double-tap easter egg (Swift: onTapGesture(count: 2)), but it
   // still answers a keyboard/AT activation — `e.detail === 0` is a click with no
@@ -96,17 +253,31 @@ export default function TodayScreen({ ctx }) {
 
   // The sticker shares the ring's box so its orbit center IS the ring's center,
   // and it rides the drawn track's exact radius — concentric, never offset.
+  // RingPolish shares the same box for the Swift ring's sheen/glint/glimmer.
   const ring = (pred, size, onOpen) => {
+    const cl = pred.averageCycleLength;
+    const day = Math.min(Math.max(pred.cycleDay || 1, 1), cl);
+    // On the tappable hero the center invites the tap, exactly like the Swift
+    // readout ("tap for today's insight" — the web ring is always on today).
+    // Label color is .deep for contrast, per the Swift centerReadout.
+    const readout = onOpen ? html`
+      <span style=${{ fontFamily: "var(--font-body)", fontWeight: 600, fontSize: "var(--text-xs)",
+        letterSpacing: "var(--tracking-label)", textTransform: "uppercase", color: "var(--deep)" }}>${fmt.phaseLabel(pred.phase)}</span>
+      <span style=${{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: size * 0.26,
+        lineHeight: 1, color: "var(--deep)", margin: "2px 0" }}>${day}</span>
+      <span style=${{ fontFamily: "var(--font-body)", fontSize: "var(--text-sm)", color: "var(--muted)" }}>tap for today's insight</span>` : null;
     const dial = html`<${CycleRing}
-      cycleDay=${Math.min(Math.max(pred.cycleDay || 1, 1), pred.averageCycleLength)}
-      cycleLength=${pred.averageCycleLength}
+      cycleDay=${day}
+      cycleLength=${cl}
       periodLength=${pred.averagePeriodLength}
-      size=${size} />`;
+      size=${size}>${readout}</${CycleRing}>`;
     return html`
       <div style=${{ position: "relative", width: size, height: size }}>
         ${onOpen
-          ? html`<button style=${bareBtn} onClick=${onOpen} aria-label="Explore this phase">${dial}</button>`
+          ? html`<button style=${bareBtn} onClick=${onOpen}
+              aria-label=${`Cycle ring — day ${day} of ${cl}, ${fmt.phaseLabel(pred.phase)} phase, today. Opens today's insight`}>${dial}</button>`
           : dial}
+        <${RingPolish} size=${size} day=${day} cycleLength=${cl} phase=${pred.phase} />
         <${RingSticker} radius=${trackRadius(size)} periodFraction=${periodFraction(pred)} />
       </div>`;
   };
@@ -134,6 +305,12 @@ export default function TodayScreen({ ctx }) {
   const quickLog = html`
     <${Card}>
       <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
+        ${showPeriodCTA && html`
+          <${Button} variant="primary" block=${true}
+            iconLeft=${html`<${Icon} name="droplet" size=${16} />`}
+            onClick=${logPeriodStart}>
+            ${daysUntil < 0 ? "My period started" : "My period started today"}
+          </${Button}>`}
         <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)" }}>How's your flow today?</span>
           <${FlowScale} value=${flow} onChange=${(lvl) => store.toggleFlow(lvl, today)} />
@@ -193,6 +370,7 @@ export default function TodayScreen({ ctx }) {
 
   return html`
     <div style=${{ display: "flex", flexDirection: "column", gap: "var(--gap-card)" }}>
+      ${toast}
       ${header}
       ${sampleBanner}
       ${p.hasHistory

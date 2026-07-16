@@ -89,7 +89,7 @@ export function text(store, today = new Date()) {
     for (const n of notes) lines.push(`• ${n}`);
   }
   lines.push("");
-  lines.push("From my Uncorked tracker. Estimates, not medical advice.");
+  lines.push("From my cycle tracker. Estimates, not medical advice.");
   return lines.join("\n");
 }
 

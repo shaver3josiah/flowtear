@@ -7,7 +7,7 @@
 // The garden header (points pill, shop, share, rules, tutorial sheets) is the garden
 // feature and lives on its own screen — see web/screens/garden.js.
 import * as lib from "../core/stretchLibrary.js";
-import { addDays, startOfDay } from "../core/dates.js";
+import { addDays, startOfDay, isSameDay } from "../core/dates.js";
 import { rewards } from "../core/rewards.js";
 
 const React = window.React;
@@ -15,6 +15,18 @@ const { useState, useEffect } = React;
 
 // Mirrors @AppStorage("flowtear.planPaused") in StretchCoachView.
 const PAUSE_KEY = "flowtear.planPaused";
+// Mirrors @AppStorage("flowtear.planActivatedAt"): the dateKey of the day the
+// current lock-in plan was (re)chosen. Penalties never reach behind this line —
+// so switching tiers, or the first prediction remapping the window into the
+// past, can never retroactively bill days the plan wasn't active for.
+// ("Switching keeps every point and completion" has to be TRUE.)
+const ACTIVATION_KEY = "flowtear.planActivatedAt";
+
+// rewards' per-day pose ledger is dateKey-first (see rewards.js awardPose).
+const awardPose = (dateKey, alreadyDone, total, multiplier) =>
+  rewards.awardPose(dateKey, alreadyDone, total, multiplier);
+const revokePose = (dateKey, remainingDone, total, wasFullDay, multiplier) =>
+  rewards.revokePose(dateKey, remainingDone, total, wasFullDay, multiplier);
 
 // Inline pose figure (ported PoseShape geometry) or a themed icon fallback.
 function PoseFigure({ ctx, move, size = 24, color = "var(--phase-luteal)" }) {
@@ -46,10 +58,10 @@ function CoachFlower({ ctx, message }) {
         ${FlowerMark ? html`<${FlowerMark} size=${46} />` : html`<div style=${{ width: 46, height: 46, borderRadius: "50%", background: "var(--primary)" }} />`}
         <div style=${{ position: "absolute", left: 0, right: 0, top: "52%", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
           <div style=${{ display: "flex", gap: 5 }}>
-            <span style=${{ width: 3, height: 5, borderRadius: 3, background: "var(--deep)" }} />
-            <span style=${{ width: 3, height: 5, borderRadius: 3, background: "var(--deep)" }} />
+            <span style=${{ width: 3, height: 5, borderRadius: 3, background: "var(--bloom-ink, var(--deep))" }} />
+            <span style=${{ width: 3, height: 5, borderRadius: 3, background: "var(--bloom-ink, var(--deep))" }} />
           </div>
-          <div style=${{ width: 9, height: 5, borderBottom: "1.4px solid var(--deep)", borderRadius: "0 0 9px 9px" }} />
+          <div style=${{ width: 6, height: 3, borderBottom: "1.1px solid var(--bloom-ink, var(--deep))", borderRadius: "0 0 6px 6px", opacity: 0.75 }} />
         </div>
       </div>
       <div style=${{ width: 3, height: 20, background: "var(--good)", borderRadius: 3 }} />
@@ -76,7 +88,9 @@ function MoveRow({ ctx, move, checked, onToggle }) {
       <div style=${{ fontSize: "var(--text-sm)", color: "var(--muted)", lineHeight: 1.5, marginTop: 2 }}>${move.cue}</div>
     </div>
   </div>`;
-  return html`<button onClick=${onToggle} aria-pressed=${checked} aria-label=${move.name}
+  // The label carries the hold time with the name (the coaching cue is the
+  // visible text below), mirroring StretchCoachView's VoiceOver label + hint.
+  return html`<button onClick=${onToggle} aria-pressed=${checked} aria-label=${`${move.name}, ${move.hold}`}
     style=${{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "6px 0", cursor: "pointer", minHeight: "var(--tap-min)" }}>${inner}</button>`;
 }
 
@@ -95,16 +109,10 @@ function MoveDetail({ ctx, move }) {
   </div>`;
 }
 
-// The ×N points-multiplier pill.
-function MultiplierPill({ ctx, tier }) {
-  return ctx.html`<span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--surface)", background: "var(--phase-luteal)", borderRadius: 999, padding: "1px 6px", flex: "0 0 auto" }}>×${tier.multiplier}</span>`;
-}
-
 export default function StretchScreen({ ctx }) {
   const { store, nav, html, ui, Icon, today } = ctx;
   const { Card, Button, Switch } = ui;
   const [expandedDay, setExpandedDay] = useState(null);
-  const [planExpanded, setPlanExpanded] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
   const [showSafety, setShowSafety] = useState(false);
   const [planPaused, setPlanPaused] = useState(() => localStorage.getItem(PAUSE_KEY) === "true");
@@ -127,12 +135,11 @@ export default function StretchScreen({ ctx }) {
   const dayDone = store.stretchDone(today);
 
   // Date that a given plan-day falls on (for schedule + window done-state).
-  const dateForPlanDay = (pd) =>
-    p.nextPeriodStart ? addDays(addDays(p.nextPeriodStart, -tier.totalDays), pd - 1) : null;
-  const isDone = (pd) => {
-    const d = dateForPlanDay(pd);
-    return d && d <= today ? store.stretchDone(d) : false;
-  };
+  // Every plan day always maps to a real date — with no prediction the window
+  // starts today — so every schedule checkbox is always live (the extracted,
+  // self-checked math in stretchLibrary).
+  const dateForPlanDay = (pd) => lib.dateForPlanDay(pd, tier, p.nextPeriodStart, today);
+  const isDone = (pd) => store.stretchDone(dateForPlanDay(pd));
 
   // Past plan days in this window she didn't stretch — the lock-in's billable set.
   const missedKeys = () => {
@@ -141,24 +148,50 @@ export default function StretchScreen({ ctx }) {
     const keys = [];
     for (let pd = 1; pd <= tier.totalDays; pd++) {
       const d = dateForPlanDay(pd);
-      if (!d || d >= start) continue;
-      if (!store.stretchDone(d)) keys.push(store.key(d));
+      if (d < start && !store.stretchDone(d)) keys.push(store.key(d));
     }
     return keys;
   };
 
+  // Re-anchor the accounting to a given day: nothing before it is ever
+  // chargeable. The rewards side owns the penalty ledger; tell it too if it
+  // grows an anchor API (that change lands in parallel).
+  const setActivation = (dateKey) => {
+    localStorage.setItem(ACTIVATION_KEY, dateKey);
+  };
+
   // Lock-in accounting: a missed past plan day costs 5 petals, charged once ever
-  // per day. Trio never penalizes; while the plan is PAUSED those days are excused
-  // for good instead of charged. Runs on open and whenever the pause flips
-  // (StretchCoachView: onAppear / onChange(of: planPaused)).
+  // per day. Trio never penalizes; while the plan is PAUSED those days are
+  // excused for good instead of charged; days before the plan was activated are
+  // never chargeable at all. Runs on open, whenever the pause flips, and on a
+  // tier switch so the penalty note never shows a stale count from the previous
+  // plan (StretchCoachView: onAppear / onChange(of: planPaused) /
+  // onChange(of: stretchTierRaw)).
   useEffect(() => {
+    // Trio never penalizes — and must also clear any note left over from a
+    // lock-in tier, or the "petals drifted off" line goes stale on switch.
+    if (!tier.locksIn || tier.totalDays === 0) { setPenaltyCharged(0); return; }
+    const start = startOfDay(today);
+    // While there's no prediction the window is unknown (it slides with today
+    // and can never charge) — keep sliding the anchor too, so when the FIRST
+    // prediction lands and pins the window into real dates, it can only reach
+    // back to the last day the window was still unknown. Also anchors the very
+    // first run ever: nothing before "she started" is chargeable.
+    let activation = localStorage.getItem(ACTIVATION_KEY);
+    if (!activation || daysUntil == null) {
+      activation = store.key(start);
+      setActivation(activation);
+    }
     let charged = 0;
-    for (const k of missedKeys()) {
-      if (planPaused) rewards.excuseMissedDay(k);
+    for (let pd = 1; pd <= tier.totalDays; pd++) {
+      const d = dateForPlanDay(pd);
+      if (d >= start || store.stretchDone(d)) continue;
+      const k = store.key(d);
+      if (planPaused || k < activation) rewards.excuseMissedDay(k);
       else if (rewards.penalizeMissedDay(k)) charged += 1;
     }
     setPenaltyCharged(charged);
-  }, [planPaused]);
+  }, [planPaused, tier.key]);
 
   // Pausing grants amnesty immediately; UNpausing forgives everything missed up to
   // that moment first (days that elapsed while paused must never be billed), then
@@ -190,43 +223,59 @@ export default function StretchScreen({ ctx }) {
     const checked = before.includes(i);
     const wasFullDay = before.length === s.moves.length;
     const completedDay = store.toggleStretchMove(i, today, s.moves.length);
-    if (!checked) rewards.awardPose(before.length, s.moves.length, multiplier);
-    else rewards.revokePose(Math.max(before.length - 1, 0), s.moves.length, wasFullDay, multiplier);
+    if (!checked) awardPose(store.key(today), before.length, s.moves.length, multiplier);
+    else revokePose(store.key(today), Math.max(before.length - 1, 0), s.moves.length, wasFullDay, multiplier);
     if (completedDay) rewards.playCelebrationIfOwned();
   };
 
-  // ---- plan bar: her mode, right at the top ----
-  const rowShell = (selected) => ({
+  // ---- plan bar: her mode, right at the top — all three choices visible all
+  // the time, one tap to switch (no hidden menus to discover). The segments
+  // carry the name and points multiplier; the line beneath explains the one
+  // she's on.
+  const rowShell = () => ({
     display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-    background: selected ? "var(--surface-soft)" : "var(--surface)",
-    border: `${selected ? 1.5 : 1}px solid ${selected ? "var(--primary-strong)" : "var(--line)"}`,
+    background: "var(--surface)", border: "1px solid var(--line)",
     borderRadius: "var(--radius-md)", padding: "10px 14px", minHeight: "var(--tap-min)",
   });
 
-  const radio = (selected) => html`<span style=${{ width: 18, height: 18, borderRadius: "50%", flex: "0 0 auto",
-    border: `2px solid ${selected ? "var(--primary-strong)" : "var(--line)"}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-    ${selected && html`<span style=${{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary-strong)" }} />`}
-  </span>`;
+  const planNote = (t) =>
+    t.key === "trio" ? "Any day, no schedule, no pressure"
+    : t.key === "starter" ? "The 3 days before your period · −5 a missed day"
+    : "The full two weeks · −5 a missed day";
 
-  const modeRow = (t, note) => {
+  // Plain-prose plan description — no midpoints or minus glyphs for screen readers.
+  const planA11yLabel = (t) => {
+    const how = t.key === "trio" ? "any day, no schedule, no pressure"
+      : t.key === "starter" ? "the 3 days before your period, 5 petals lost per missed day"
+      : "the full two weeks before your period, 5 petals lost per missed day";
+    return `${t.label}, ${how}, up to ${lib.maxDailyPoints(t)} petals a day`;
+  };
+
+  const selectTier = (t) => {
+    if (t.key === tier.key) return;
+    // Re-anchor the accounting: a freshly chosen plan starts today, so its
+    // window days in the past can never be billed retroactively.
+    setActivation(store.key(startOfDay(today)));
+    store.stretchTier = t.key;
+    setExpandedDay(null);
+  };
+
+  const planSegment = (t, name) => {
     const selected = tier.key === t.key;
-    return html`<button key=${t.key} onClick=${() => { store.stretchTier = t.key; setPlanExpanded(false); setExpandedDay(null); }}
-      aria-pressed=${selected} aria-label=${`${t.label}, ${note}, up to ${lib.maxDailyPoints(t)} points a day`}
-      style=${{ ...rowShell(selected), cursor: "pointer" }}>
-      ${radio(selected)}
-      <span style=${{ flex: 1, minWidth: 0 }}>
-        <span style=${{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style=${{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--deep)" }}>${t.label}</span>
-          <${MultiplierPill} ctx=${ctx} tier=${t} />
-        </span>
-        <span style=${{ display: "block", fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: 1 }}>${note}</span>
-      </span>
-      <span style=${{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--deep)", flex: "0 0 auto" }}>up to ${lib.maxDailyPoints(t)}/day</span>
+    return html`<button key=${t.key} onClick=${() => selectTier(t)}
+      aria-pressed=${selected} aria-label=${planA11yLabel(t)}
+      style=${{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 1, padding: "7px 4px", minHeight: "var(--tap-min)", cursor: "pointer", border: "none",
+        background: selected ? "var(--primary-strong)" : "transparent", borderRadius: "var(--radius-sm)" }}>
+      <span style=${{ fontSize: "var(--text-sm)", fontWeight: 700, whiteSpace: "nowrap",
+        color: selected ? "var(--text-on-primary)" : "var(--text)" }}>${name}</span>
+      <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 600, whiteSpace: "nowrap",
+        color: selected ? "var(--text-on-primary)" : "var(--muted)" }}>×${t.multiplier} petals</span>
     </button>`;
   };
 
   // Her plan, her terms: pausing excuses missed days instead of charging them.
-  const pauseRow = () => html`<div style=${rowShell(false)}>
+  const pauseRow = () => html`<div style=${rowShell()}>
     <span style=${{ color: planPaused ? "var(--primary-strong)" : "var(--muted)", flex: "0 0 auto", display: "inline-flex" }}>
       <${Icon} name="clock" size=${17} /></span>
     <div style=${{ flex: 1, minWidth: 0 }}>
@@ -237,26 +286,22 @@ export default function StretchScreen({ ctx }) {
   </div>`;
 
   const planBar = () => html`<div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-    <button onClick=${() => setPlanExpanded(!planExpanded)} aria-expanded=${planExpanded}
-      aria-label=${`Current plan: ${tier.label}`}
-      style=${{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", cursor: "pointer",
-        background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: "11px 14px", minHeight: "var(--tap-min)" }}>
-      <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>PLAN</span>
-      <span style=${{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--deep)" }}>${tier.label}</span>
-      <${MultiplierPill} ctx=${ctx} tier=${tier} />
-      ${planPaused && tier.locksIn && html`<span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--deep)", background: "var(--surface-soft)", borderRadius: 999, padding: "1px 6px" }}>paused</span>`}
-      <span style=${{ flex: 1, minWidth: 4 }} />
+    <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>YOUR PLAN</span>
+      ${planPaused && tier.locksIn && html`<span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--deep)", background: "var(--surface-soft)", borderRadius: 999, padding: "2px 8px" }}>paused</span>`}
+    </div>
+    <div role="group" aria-label="Plan choices"
+      style=${{ display: "flex", gap: 4, padding: 4, background: "var(--surface-soft)", borderRadius: "var(--radius-md)" }}>
+      ${planSegment(lib.TIERS.trio, "Anytime")}
+      ${planSegment(lib.TIERS.starter, "3-day")}
+      ${planSegment(lib.TIERS.full, "14-day")}
+    </div>
+    <div style=${{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <span style=${{ flex: 1, fontSize: "var(--text-xs)", color: "var(--muted)" }}>${planNote(tier)}</span>
       <span style=${{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--deep)", flex: "0 0 auto" }}>up to ${lib.maxDailyPoints(tier)}/day</span>
-      <span style=${{ color: "var(--muted)", flex: "0 0 auto", display: "inline-flex", transform: planExpanded ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast)" }}>
-        <${Icon} name="chevron-down" size=${14} /></span>
-    </button>
-    ${planExpanded && html`<div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-      ${modeRow(lib.TIERS.trio, "Any day, no schedule, no pressure")}
-      ${modeRow(lib.TIERS.starter, "The 3 days before your period · −5 a missed day")}
-      ${modeRow(lib.TIERS.full, "The full two weeks · −5 a missed day")}
-      ${tier.locksIn && pauseRow()}
-      <div style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>Switching keeps every point and completion.</div>
-    </div>`}
+    </div>
+    ${tier.locksIn && pauseRow()}
+    <div style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>Switching keeps every point and completion.</div>
   </div>`;
 
   // ---- today's session card ----
@@ -305,7 +350,7 @@ export default function StretchScreen({ ctx }) {
   };
 
   const penaltyNote = () => html`<div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-    ${penaltyCharged * 5} petals drifted off for missed days — today's a fresh bloom.
+    ${penaltyCharged * 5} petals drifted off for ${penaltyCharged === 1 ? "a missed day" : "missed days"} — today's a fresh bloom.
   </div>`;
 
   // ---- out-of-window notice ----
@@ -331,44 +376,54 @@ export default function StretchScreen({ ctx }) {
   };
 
   // ---- schedule (per-mode, expandable, with day check-offs) ----
-  // Her own checkbox for each day — tappable for today and past plan days; future
-  // days wait their turn.
+  // The day's own checkbox — EVERY day is tappable: past days back-fill, today
+  // counts, and future days can be done early (her plan, her pace). Completing
+  // rings her chime. Full 44px hit target — the glyph stays 20px, only the
+  // touchable area grows (and pulls clear of the expand button).
   const dayCheckbox = (pd) => {
     const done = isDone(pd);
-    const d = dateForPlanDay(pd);
-    const tappable = d ? d <= today : false;
-    return html`<button disabled=${!tappable} aria-pressed=${done}
+    return html`<button aria-pressed=${done}
       aria-label=${done ? `Day ${pd} done` : `Mark day ${pd} done`}
       onClick=${() => {
-        if (!d) return;
+        const d = dateForPlanDay(pd);
         const finishing = !store.stretchDone(d);
         store.setStretchDone(finishing, d);
         if (finishing) rewards.playCelebrationIfOwned();
       }}
       style=${{ display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto",
-        width: 30, height: "var(--tap-min)", background: "none", border: "none", padding: 0,
-        cursor: tappable ? "pointer" : "default",
-        color: done ? "var(--good)" : (tappable ? "var(--muted)" : "var(--line)") }}>
+        width: "var(--tap-min)", height: "var(--tap-min)", background: "none", border: "none", padding: 0,
+        cursor: "pointer", color: done ? "var(--good)" : "var(--muted)" }}>
       <${Icon} name=${done ? "check" : "circle"} size=${20} />
     </button>`;
   };
 
+  // The full spoken row: screen readers hear the date and today-badge state the
+  // eyes get from the chips, so back-filling checkboxes stays navigable.
+  const scheduleRowLabel = (pd, d, isTodayRow, rowDate) => {
+    let label = `Day ${pd}`;
+    if (isTodayRow) label += ", today";
+    label += `, ${rowDate.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`;
+    return `${label}, ${d.focus}, ${d.minutes} minutes`;
+  };
+
   const scheduleRow = (d) => {
     const pd = lib.planDay(d, tier);
-    const isTodayRow = !!todaySession && todaySession.daysBeforePeriod === d.daysBeforePeriod;
-    const expanded = expandedDay === pd;
+    // Today is decided by the DATE the row writes to, so the badge also appears
+    // in the no-prediction fallback window (day 1 = today).
     const rowDate = dateForPlanDay(pd);
+    const isTodayRow = isSameDay(rowDate, today);
+    const expanded = expandedDay === pd;
     return html`<div key=${d.id}>
       <div style=${{ display: "flex", alignItems: "center", gap: 10, padding: "4px 0" }}>
         ${dayCheckbox(pd)}
         <button onClick=${() => setExpandedDay(expanded ? null : pd)}
-          aria-expanded=${expanded} aria-label=${`Day ${pd}, ${d.focus}, ${d.minutes} minutes`}
-          style=${{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "none", border: "none", padding: "5px 0", cursor: "pointer", textAlign: "left" }}>
+          aria-expanded=${expanded} aria-label=${scheduleRowLabel(pd, d, isTodayRow, rowDate)}
+          style=${{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "none", border: "none", padding: "5px 0", cursor: "pointer", textAlign: "left", minHeight: "var(--tap-min)" }}>
           <span style=${{ flex: 1, minWidth: 0 }}>
             <span style=${{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style=${{ fontSize: "var(--text-sm)", fontWeight: 700, color: isTodayRow ? "var(--primary-strong)" : "var(--deep)" }}>Day ${pd}</span>
-              ${isTodayRow && html`<span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--surface)", background: "var(--primary-strong)", borderRadius: 999, padding: "2px 7px" }}>today</span>`}
-              ${rowDate && html`<span style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>${ctx.fmt.monthShort(rowDate.getMonth())} ${rowDate.getDate()}</span>`}
+              ${isTodayRow && html`<span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--text-on-primary)", background: "var(--primary-strong)", borderRadius: 999, padding: "2px 7px" }}>today</span>`}
+              <span style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>${ctx.fmt.monthShort(rowDate.getMonth())} ${rowDate.getDate()}</span>
             </span>
             <span style=${{ display: "block", fontSize: "var(--text-sm)", color: "var(--text)" }}>${d.focus}</span>
           </span>
@@ -376,7 +431,7 @@ export default function StretchScreen({ ctx }) {
           <span style=${{ color: "var(--muted)", flex: "0 0 auto", display: "inline-flex", transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast)" }}><${Icon} name="chevron-down" size=${16} /></span>
         </button>
       </div>
-      ${expanded && html`<div style=${{ paddingLeft: 34, paddingBottom: 12, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+      ${expanded && html`<div style=${{ paddingLeft: 54, paddingBottom: 12, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
         ${isTodayRow
           // Today's moves are the real thing — check them off right here.
           ? html`${d.moves.map((m, i) => html`<${MoveRow} key=${m.id} ctx=${ctx} move=${m}
@@ -396,7 +451,7 @@ export default function StretchScreen({ ctx }) {
     const days = lib.daysFor(tier);
     return html`<${Card}>
       <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>${tier.key === "starter" ? "The 3 days" : "The 14 days"}</div>
-      <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", margin: "2px 0 6px" }}>Tap any day to open its moves — and run any session guided, whenever you like.</div>
+      <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", margin: "2px 0 6px" }}>Tap a day for its moves, run any session guided, and check off any day — even ahead of schedule.</div>
       ${days.map((d, i) => html`<div key=${d.id}>
         ${scheduleRow(d)}
         ${i < days.length - 1 && html`<div style=${{ height: 1, background: "var(--line)" }} />`}
@@ -414,8 +469,10 @@ export default function StretchScreen({ ctx }) {
     ${open && html`<div style=${{ marginTop: 12 }}>${body}</div>`}
   </${Card}>`;
 
+  // The readable short report first, then the specific citations.
   const evidenceBody = html`<div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-    <p style=${{ margin: 0, fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: 1.6 }}>${lib.evidenceNote}</p>
+    <p style=${{ margin: 0, fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: 1.6 }}>${lib.stretchingReport}</p>
+    <p style=${{ margin: 0, fontSize: "var(--text-xs)", color: "var(--muted)", lineHeight: 1.5 }}>${lib.evidenceNote}</p>
     <p style=${{ margin: 0, fontSize: "var(--text-xs)", color: "var(--muted)", lineHeight: 1.5 }}>${lib.dosingNote}</p>
     <p style=${{ margin: 0, fontSize: "var(--text-xs)", fontWeight: 500, color: "var(--muted)", lineHeight: 1.5 }}>${lib.disclaimer}</p>
   </div>`;

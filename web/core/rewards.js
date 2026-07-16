@@ -47,14 +47,16 @@ export const SOUNDS = [
 
 export const PRICES = {
   posey: 10000,
-  theme: 600,          // pink, peony, soft, light (cherry/rose/dark are free)
+  theme: 600,          // pink, peony, soft, light (cherry/rose/dark/midnight are free)
   accent: 1500,
   colorStudio: 4000,
   sound: 1200,         // legacy single-chime price; per-sound prices live in SOUNDS
   starterGift: 100,    // exactly a Daisy — her first unlock
 };
 
-export const FREE_THEMES = ["cherry", "rose", "dark"];
+// Both dark palettes stay free — dark is the house default, so choosing
+// between the two dark moods must never sit behind a paywall of petals.
+export const FREE_THEMES = ["cherry", "rose", "dark", "midnight"];
 // The paid palettes, per the Swift comment on themePrice.
 export const PAID_THEMES = ["pink", "peony", "soft", "light"];
 
@@ -72,6 +74,9 @@ export class RewardsStore {
     this.activeSound = null;
     this.penalizedDays = new Set();   // lock-in misses already charged
     this.periodLandDays = new Set();  // ring-landing bonuses already paid
+    // Per-day stack of pose awards actually paid (newest last) — the ledger
+    // revokePose refunds from, so award/refund stay symmetric across tier switches.
+    this.poseAwardLog = {};           // { "YYYY-MM-DD": [amounts] }
     this.tutorialSeen = false;
     this.activeSticker = null;        // flower id or "posey"
     // Where her plucked sticker rests near the Today ring (offsets from the ring
@@ -101,10 +106,22 @@ export class RewardsStore {
     this._earn(PRICES.starterGift);
   }
 
-  // Her chosen celebration sound, if she owns one.
+  // Her chosen celebration sound, if she owns one. Quiet mode (pencil settings)
+  // silences every celebration without touching which sound she owns or picked.
   playCelebrationIfOwned() {
+    if (this._quiet()) return;
     const s = this.activeSound ? this.sound(this.activeSound) : null;
     if (s) this._play(s);
+  }
+
+  // Same key as Swift's @AppStorage("flowtear.quiet"); same tolerant bool read
+  // as reminders.js. Read per call, never at import (Node-safe).
+  _quiet() {
+    try {
+      if (typeof localStorage === "undefined") return false;
+      const v = localStorage.getItem("flowtear.quiet");
+      return v === "true" || v === '"true"' || v === "1";
+    } catch { return false; }
   }
 
   soundOwned(id) { return this.ownedSounds.has(id); }
@@ -132,21 +149,38 @@ export class RewardsStore {
   // ---- earning ----
 
   // Points for checking ON a pose. Returns the points awarded (to celebrate).
-  awardPose(alreadyDone, total, multiplier) {
+  // Each award is also pushed onto the day's ledger so a later uncheck refunds
+  // EXACTLY what was paid — even if she switches plan tiers in between.
+  awardPose(dateKey, alreadyDone, total, multiplier) {
     let pts = 15;
     if (alreadyDone >= 1) pts += 5;                 // consecutive bonus
     if (alreadyDone + 1 === total) pts += 10;       // whole-day bonus
     const amount = pts * multiplier;
+    (this.poseAwardLog[dateKey] ??= []).push(amount);
     this._earn(amount);
     return amount;
   }
 
-  // Symmetric take-back when a pose is UNchecked, so toggling can't farm points.
-  revokePose(remainingDone, total, wasFullDay, multiplier) {
-    let pts = 15;
-    if (remainingDone >= 1) pts += 5;
-    if (wasFullDay) pts += 10;
-    this.balance = Math.max(0, this.balance - pts * multiplier);
+  // Symmetric take-back when a pose is UNchecked: pop the day's last recorded
+  // award (awards depend only on the checked COUNT, so a stack refunds the
+  // right amount in every toggle order — no farming, no unfair drain). Days
+  // checked before the ledger existed fall back to recomputing. Known,
+  // accepted ceiling: the refund clamps at a zero balance, so spending
+  // everything and then uncheck/recheck can mint back what the clamp ate —
+  // she'd only be gaming herself, and never loses petals to it.
+  revokePose(dateKey, remainingDone, total, wasFullDay, multiplier) {
+    let refund;
+    const log = this.poseAwardLog[dateKey];
+    if (log && log.length > 0) {
+      refund = log.pop();
+      if (log.length === 0) delete this.poseAwardLog[dateKey];
+    } else {
+      let pts = 15;
+      if (remainingDone >= 1) pts += 5;
+      if (wasFullDay) pts += 10;
+      refund = pts * multiplier;
+    }
+    this.balance = Math.max(0, this.balance - refund);
     this._save();
     this._notify();
   }
@@ -253,7 +287,7 @@ export class RewardsStore {
     this.balance -= s.price;
     this.ownedSounds.add(id);
     this.activeSound = id;
-    this._play(s);              // hear it at once
+    if (!this._quiet()) this._play(s);   // hear it at once (unless quiet mode)
     this._save();
     this._notify();
     return true;
@@ -309,9 +343,9 @@ export class RewardsStore {
   // saved blob is byte-shape-compatible across platforms. `soundUnlocked` is
   // written as false forever: it is the legacy single-chime flag, kept in the
   // blob only so an older iOS build can still decode it.
-  _save() {
-    if (typeof localStorage === "undefined") return; // Node import / SSR: in-memory only
-    const blob = {
+  // The persisted shape — Swift's makeBlob(). Also what backupData() exports.
+  _blob() {
+    return {
       balance: this.balance,
       lifetime: this.lifetime,
       guidedSeen: [...this.guidedSeen],
@@ -331,10 +365,15 @@ export class RewardsStore {
       stickerAngle: this.stickerAngle,
       periodLandDays: [...this.periodLandDays],
       stickerMode: this.stickerMode,
+      poseAwardLog: this.poseAwardLog,
     };
+  }
+
+  _save() {
+    if (typeof localStorage === "undefined") return; // Node import / SSR: in-memory only
     const prev = localStorage.getItem(K.state);
     if (prev != null) localStorage.setItem(K.backup, prev);
-    localStorage.setItem(K.state, JSON.stringify(blob));
+    localStorage.setItem(K.state, JSON.stringify(this._blob()));
   }
 
   _load() {
@@ -370,11 +409,47 @@ export class RewardsStore {
     this.stickerAngle = b.stickerAngle ?? -0.9;
     this.periodLandDays = new Set(b.periodLandDays ?? []);
     this.stickerMode = b.stickerMode ?? "ring";
+    this.poseAwardLog = b.poseAwardLog ?? {};
     // Migrate the old single-chime unlock into the crystal chime.
     if (b.soundUnlocked === true && this.ownedSounds.size === 0) {
       this.ownedSounds.add("crystal");
       if (this.activeSound == null) this.activeSound = "crystal";
     }
+  }
+
+  // ---- backup & restore (the whole garden, portable) ----
+  // Mirrors RewardsStore.backupData/isValidBackup/restore(from:). The web needs
+  // no `hydrated` guard: _hydrate assigns plain fields (no didSet observers),
+  // so nothing can rotate a half-restored blob into the .backup slot.
+
+  /// The whole garden as one JSON string — the same shape the store persists.
+  backupData() {
+    return JSON.stringify(this._blob());
+  }
+
+  /// True when `text` is a decodable garden backup — checked WITHOUT touching
+  /// the store, so a combined restore can be all-or-nothing across stores.
+  /// The required keys mirror the Swift Blob's non-optional fields.
+  static isValidBackup(text) {
+    try {
+      const b = JSON.parse(text);
+      return typeof b.balance === "number" && typeof b.lifetime === "number"
+        && Array.isArray(b.guidedSeen) && Array.isArray(b.ownedFlowers)
+        && Array.isArray(b.ownedThemes)
+        && typeof b.accentUnlocked === "boolean"
+        && typeof b.colorStudioUnlocked === "boolean"
+        && typeof b.poseyOwned === "boolean";
+    } catch { return false; }
+  }
+
+  /// Replace the whole garden from a backup blob. Validates before touching
+  /// anything; returns false (and changes nothing) if the data won't decode.
+  restore(text) {
+    if (!RewardsStore.isValidBackup(text)) return false;
+    this._hydrate(JSON.parse(text));
+    this._save();
+    this._notify();
+    return true;
   }
 }
 
@@ -385,13 +460,71 @@ export const rewards = new RewardsStore();
 export default rewards;
 
 // ---- self-check: `node web/core/rewards.js` (silent in the browser) ----
+// Mirrors Tests/RewardsStoreTests.swift: the pose-award ledger must refund
+// exactly what was paid (in any toggle order, across tier switches), penalties
+// must charge a day at most once ever, and the whole garden must survive a
+// backup → restore round trip.
 if (import.meta.main) {
   const assert = (await import("node:assert")).default;
   const r = new RewardsStore();
-  r.awardPose(0, 4, 2);                       // 15 × 2
-  r.awardPose(1, 4, 2);                       // (15+5) × 2
+  r.awardPose("2026-07-16", 0, 4, 2);         // 15 × 2
+  r.awardPose("2026-07-16", 1, 4, 2);         // (15+5) × 2
   assert.equal(r.balance, 70, "earning");
   assert.equal(r.lifetime, 70, "lifetime");
+
+  // LEDGER: tier switched ×2 → ×4 between check and uncheck — the refunds are
+  // the ×2 amounts actually paid (40 then 30), never the ×4 recomputation.
+  {
+    const l = new RewardsStore();
+    assert.equal(l.awardPose("2026-07-16", 0, 3, 2), 30, "first pose pays 15 × 2");
+    assert.equal(l.awardPose("2026-07-16", 1, 3, 2), 40, "second pose pays (15+5) × 2");
+    assert.equal(l.balance, 70, "ledger balance");
+    l.revokePose("2026-07-16", 1, 3, false, 4);
+    assert.equal(l.balance, 30, "refund is the recorded 40, not ×4");
+    l.revokePose("2026-07-16", 0, 3, false, 4);
+    assert.equal(l.balance, 0, "refund is the recorded 30, not ×4");
+    assert.equal(l.poseAwardLog["2026-07-16"], undefined, "drained day leaves the ledger");
+
+    // Days checked before the ledger existed have no entries — revoke falls
+    // back to recomputing from the passed state instead of refunding 0.
+    l.awardPeriodLanding("2026-07-01");        // +5 so there's balance to take
+    assert.equal(l.balance, 5, "ring landing seeds the fallback check");
+    l.revokePose("2026-07-15", 0, 3, false, 1);
+    assert.equal(l.balance, 0, "pre-ledger day recomputes 15, clamped at zero");
+  }
+
+  // ACTIVATION ANCHOR (rewards-side contract): the plan accounting excuses
+  // every day before the plan was chosen via excuseMissedDay — excusing never
+  // charges, and permanently blocks a later penalize for that day.
+  {
+    const a = new RewardsStore();
+    a._earn(20);
+    a.excuseMissedDay("2026-07-01");           // a pre-activation day
+    assert.equal(a.balance, 20, "anchored day is excused free of charge");
+    assert.equal(a.penalizeMissedDay("2026-07-01"), false, "and can never be billed later");
+    assert.equal(a.balance, 20, "not even after a re-run of the accounting");
+  }
+
+  // BACKUP round trip: the ledger survives, so refunds stay exact even after
+  // she moves to a new phone.
+  {
+    const src = new RewardsStore();
+    src.awardPose("2026-07-16", 0, 3, 2);
+    src.awardPose("2026-07-16", 1, 3, 2);
+    const blob = src.backupData();
+    assert.equal(RewardsStore.isValidBackup(blob), true, "own backup validates");
+    assert.equal(RewardsStore.isValidBackup("{nope"), false, "garbage rejected");
+    assert.equal(RewardsStore.isValidBackup('{"a":1}'), false, "wrong shape rejected");
+
+    const fresh = new RewardsStore();
+    assert.equal(fresh.balance, 0, "fresh store proves the restore does the work");
+    assert.equal(fresh.restore("{corrupt"), false, "corrupt restore refuses");
+    assert.equal(fresh.balance, 0, "and changes nothing");
+    assert.equal(fresh.restore(blob), true, "valid restore succeeds");
+    assert.equal(fresh.balance, 70, "restored balance");
+    fresh.revokePose("2026-07-16", 1, 3, false, 1);
+    assert.equal(fresh.balance, 30, "restored ledger refunds the recorded 40, newest first");
+  }
 
   assert.equal(r.buySoundItem("crystal"), false, "cannot afford the crystal chime");
   r._earn(1600 - r.balance);
@@ -423,11 +556,7 @@ if (import.meta.main) {
   assert.equal(legacy.stickerAngle, -0.9, "sticker angle default");
 
   const back = new RewardsStore();
-  back._hydrate(JSON.parse(JSON.stringify({
-    ...r, guidedSeen: [...r.guidedSeen], ownedFlowers: [...r.ownedFlowers],
-    ownedThemes: [...r.ownedThemes], ownedSounds: [...r.ownedSounds],
-    penalizedDays: [...r.penalizedDays], periodLandDays: [...r.periodLandDays],
-  })));
+  back._hydrate(JSON.parse(r.backupData()));
   assert.equal(back.balance, r.balance, "round-trip balance");
   assert.deepEqual([...back.penalizedDays].sort(), ["2026-07-14", "2026-07-15"], "round-trip lock-in days");
   assert.deepEqual([...back.ownedSounds], ["crystal"], "round-trip sounds");

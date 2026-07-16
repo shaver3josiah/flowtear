@@ -57,8 +57,16 @@ export function averagePeriodLength(periodDays, fallback) {
 export function predict(periodDays, today, settings) {
   today = startOfDay(today);
   const starts = periodStarts(periodDays);
-  const avgCycle = averageCycleLength(starts, 6, settings.defaultCycleLength);
-  const avgPeriod = averagePeriodLength(periodDays, settings.defaultPeriodLength);
+  // Her override wins over the logged averages when she's locked it in — BOTH
+  // numbers, or the period stepper would be a placebo for anyone with logged
+  // flow (CycleEngine.swift:78).
+  const locked = settings.lockCycleLength ?? false;
+  const avgCycle = locked
+    ? settings.defaultCycleLength
+    : averageCycleLength(starts, 6, settings.defaultCycleLength);
+  const avgPeriod = locked
+    ? settings.defaultPeriodLength
+    : averagePeriodLength(periodDays, settings.defaultPeriodLength);
 
   const last = starts.length ? starts[starts.length - 1] : null;
   if (!last) {

@@ -1,6 +1,6 @@
 {
   "product": "Uncorked (Flowtear)",
-  "contractsVersion": "1.1.0",
+  "contractsVersion": "1.2.0",
   "updated": "2026-07-16",
   "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
   "platforms": {
@@ -20,33 +20,141 @@
     }
   },
   "sharedTruth": {
-    "algorithm": "cycle-vectors.json — golden input->output vectors for the predictor. Both engines MUST reproduce these. Regenerate from the JS engine with `npm run gen:vectors` after an intentional algorithm change, then port the same change to CycleEngine.swift.",
-    "tokens": "tokens.json — design tokens (colors, radii, type). The web tokens.css and Swift Theme.swift both mirror these values.",
+    "algorithm": "cycle-vectors.json \u2014 golden input->output vectors for the predictor. Both engines MUST reproduce these. Regenerate from the JS engine with `npm run gen:vectors` after an intentional algorithm change, then port the same change to CycleEngine.swift.",
+    "tokens": "tokens.json \u2014 design tokens (colors, radii, type). The web tokens.css and Swift Theme.swift both mirror these values.",
     "models": "The logged-data enums (Flow, Mood, Symptom, Discharge, Phase) and the DayLog shape must match between web/core/models.js and App/Core/CycleModels.swift. Persistence blob key is `flowtear.state.v1` on both."
   },
   "features": [
-    { "id": "today", "since": "1.0.0", "ios": "App/Views/TodayView.swift", "web": "web/screens/today.js" },
-    { "id": "calendar", "since": "1.0.0", "ios": "App/Views/CalendarView.swift", "web": "web/screens/calendar.js" },
-    { "id": "log", "since": "1.0.0", "ios": "App/Views/LogView.swift", "web": "web/screens/log.js" },
-    { "id": "insights", "since": "1.0.0", "ios": "App/Views/InsightsView.swift", "web": "web/screens/insights.js" },
-    { "id": "stretch-coach", "since": "1.0.0", "ios": "App/Views/StretchCoachView.swift", "web": "web/screens/stretch.js" },
-    { "id": "stretch-session", "since": "1.0.0", "ios": "App/Views/StretchSessionView.swift", "web": "web/screens/stretchSession.js" },
-    { "id": "garden-shop", "since": "1.0.0", "ios": "App/Views/GardenShopView.swift", "web": "web/screens/garden.js" },
-    { "id": "reminders", "since": "1.1.0", "ios": "App/Core/Reminders.swift", "web": "web/core/reminders.js" },
-    { "id": "cycle-report-csv", "since": "1.1.0", "ios": "App/Core/CycleReport.swift", "web": "web/core/report.js" },
-    { "id": "tips-sheet", "since": "1.1.0", "ios": "App/Components/TipsSheet.swift", "web": "web/screens/tips.js" },
-    { "id": "ring-sticker", "since": "1.1.0", "ios": "App/Components/RingSticker.swift", "web": "web/components/ringSticker.js" },
-    { "id": "about", "since": "1.1.0", "ios": "App/Views/AboutView.swift", "web": "web/screens/about.js" },
-    { "id": "app-lock", "since": "1.1.0", "ios": "App/Components/AppLock.swift", "web": "web/core/appLock.js" }
+    {
+      "id": "today",
+      "since": "1.0.0",
+      "ios": "App/Views/TodayView.swift",
+      "web": "web/screens/today.js"
+    },
+    {
+      "id": "calendar",
+      "since": "1.0.0",
+      "ios": "App/Views/CalendarView.swift",
+      "web": "web/screens/calendar.js"
+    },
+    {
+      "id": "log",
+      "since": "1.0.0",
+      "ios": "App/Views/LogView.swift",
+      "web": "web/screens/log.js"
+    },
+    {
+      "id": "insights",
+      "since": "1.0.0",
+      "ios": "App/Views/InsightsView.swift",
+      "web": "web/screens/insights.js"
+    },
+    {
+      "id": "stretch-coach",
+      "since": "1.0.0",
+      "ios": "App/Views/StretchCoachView.swift",
+      "web": "web/screens/stretch.js"
+    },
+    {
+      "id": "stretch-session",
+      "since": "1.0.0",
+      "ios": "App/Views/StretchSessionView.swift",
+      "web": "web/screens/stretchSession.js"
+    },
+    {
+      "id": "garden-shop",
+      "since": "1.0.0",
+      "ios": "App/Views/GardenShopView.swift",
+      "web": "web/screens/garden.js"
+    },
+    {
+      "id": "reminders",
+      "since": "1.1.0",
+      "ios": "App/Core/Reminders.swift",
+      "web": "web/core/reminders.js"
+    },
+    {
+      "id": "cycle-report-csv",
+      "since": "1.1.0",
+      "ios": "App/Core/CycleReport.swift",
+      "web": "web/core/report.js"
+    },
+    {
+      "id": "tips-sheet",
+      "since": "1.1.0",
+      "ios": "App/Components/TipsSheet.swift",
+      "web": "web/screens/tips.js"
+    },
+    {
+      "id": "ring-sticker",
+      "since": "1.1.0",
+      "ios": "App/Components/RingSticker.swift",
+      "web": "web/components/ringSticker.js"
+    },
+    {
+      "id": "about",
+      "since": "1.1.0",
+      "ios": "App/Views/AboutView.swift",
+      "web": "web/screens/about.js"
+    },
+    {
+      "id": "app-lock",
+      "since": "1.1.0",
+      "ios": "App/Components/AppLock.swift",
+      "web": "web/core/appLock.js"
+    },
+    {
+      "id": "backup-restore",
+      "since": "1.2.0",
+      "ios": "App/Core/Backup.swift",
+      "web": "web/core/backup.js"
+    },
+    {
+      "id": "cycle-tuning",
+      "since": "1.2.0",
+      "ios": "App/Core/CycleEngine.swift (lockCycleLength)",
+      "web": "web/core/engine.js"
+    },
+    {
+      "id": "phase-research",
+      "since": "1.2.0",
+      "ios": "App/Core/PhaseResearch.swift",
+      "web": "web/core/phaseResearch.js"
+    },
+    {
+      "id": "one-tap-period-log",
+      "since": "1.2.0",
+      "ios": "App/Views/TodayView.swift",
+      "web": "web/screens/today.js"
+    },
+    {
+      "id": "pose-award-ledger",
+      "since": "1.2.0",
+      "ios": "App/Core/RewardsStore.swift",
+      "web": "web/core/rewards.js"
+    },
+    {
+      "id": "quiet-mode",
+      "since": "1.2.0",
+      "ios": "App/Components/ThemeEditorSheet.swift",
+      "web": "web/screens/themeEditor.js"
+    },
+    {
+      "id": "midnight-theme",
+      "since": "1.2.0",
+      "ios": "App/Design/Theme.swift",
+      "web": "web/styles/tokens.css"
+    }
   ],
   "platformDivergences": {
-    "note": "Both platforms are at contracts v1.1.0 — no version drift. These are deliberate, permanent differences where the platforms genuinely differ; they are NOT drift and do not need porting.",
+    "note": "Deliberate, permanent differences where the platforms genuinely differ; they are NOT drift and do not need porting. (Version sync is asserted by check:parity, not this note.)",
     "items": [
       "app-lock: iOS says 'Face ID', Android says 'biometrics' (fingerprint / face unlock / screen lock) via @aparajita/capacitor-biometric-auth. Same key (flowtear.appLock), same behaviour.",
       "reminders: iOS uses UNUserNotificationCenter, Android uses @capacitor/local-notifications. Same keys, same copy, same schedule. Capacitor needs numeric notification ids (1001/1002) where Swift uses strings.",
       "cycle-report-csv: identical CSV bytes. iOS shares via ShareLink; Android writes to the app cache (@capacitor/filesystem) and opens the system share sheet (@capacitor/share). A plain browser falls back to a Blob download.",
-      "theme presets: tokens.css ships cherry/rose/peony/soft. Swift additionally has pink/light/dark; those need [data-theme] blocks in tokens.css before the web sheet can offer them.",
-      "motion: several SwiftUI flourishes (Posey's animations, SparkleBurst) render as calmer static/CSS equivalents on web."
+      "motion: several SwiftUI flourishes (Posey's animations, SparkleBurst) render as calmer static/CSS equivalents on web.",
+      "larger-text: iOS raised its Dynamic Type clamp to xxxLarge (FlowtearApp.swift). The web uses fixed px type; honoring OS font scaling needs a rem-based type refactor \u2014 deliberate gap, not drift.",
+      "backup wire format: identical JSON (FFBackupFile v1, inner store blobs base64-encoded, ISO-8601 dates) \u2014 a backup from either platform restores on the other. Verified by web/core/store.test.mjs round-trip."
     ]
   },
   "howToStaySynced": [

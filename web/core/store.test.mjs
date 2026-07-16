@@ -74,4 +74,22 @@ const noFlow = fresh();
 noFlow.upsert({ ...emptyLog("2026-06-02"), note: "just a note" });
 assert.equal(noFlow.previewPrediction(today).hasHistory, true, "any log anchors a preview");
 
+// ---- backup & restore (v1.2.0) ----
+const src = fresh();
+src.upsert({ ...emptyLog("2026-05-01"), flow: "medium", note: "héllo — utf8 ✓" });
+src.updateSettings({ defaultCycleLength: 31, lockCycleLength: true });
+const blob = src.backupData();
+assert.equal(CycleStore.isValidBackup(blob), true, "own backup validates");
+assert.equal(CycleStore.isValidBackup("{nope"), false, "garbage rejected");
+assert.equal(CycleStore.isValidBackup('{"a":1}'), false, "wrong shape rejected");
+
+const dst = fresh();
+mem.set("flowtear.sample.seeded", "true"); // restoring real data retires the sample
+assert.equal(dst.restore("{corrupt"), false, "corrupt restore refuses");
+assert.equal(dst.hasAnyLogs, false, "refused restore changed nothing");
+assert.equal(dst.restore(blob), true, "valid restore succeeds");
+assert.equal(dst.logFor(dateFromKey("2026-05-01")).note, "héllo — utf8 ✓", "logs survive round-trip");
+assert.equal(dst.settings.lockCycleLength, true, "settings survive round-trip");
+assert.equal(mem.get("flowtear.sample.seeded"), "false", "sample banner retired on restore");
+
 console.log("store.test.mjs: all assertions passed");

@@ -29,6 +29,10 @@ export const DEFAULT_SETTINGS = {
   defaultCycleLength: 28,
   defaultPeriodLength: 5,
   lutealPhaseLength: 14, // ovulation ≈ nextPeriod − luteal
+  // When true, predictions use HER numbers (defaultCycleLength/PeriodLength)
+  // instead of the logged averages — for thin or irregular history she knows
+  // better than the math does. Nullable so old persisted blobs keep decoding.
+  lockCycleLength: false,
 };
 
 // An empty DayLog for `dateKey`. Mirrors DayLog's fields; Sets are arrays in JSON

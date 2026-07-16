@@ -2,8 +2,8 @@
   "appId": "com.shaver.flowtear",
   "appName": "Uncorked",
   "webDir": "web",
-  "backgroundColor": "#FDF2F7",
+  "backgroundColor": "#171118",
   "android": {
-    "backgroundColor": "#FDF2F7"
+    "backgroundColor": "#171118"
   }
 }

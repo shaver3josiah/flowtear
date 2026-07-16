@@ -29,15 +29,22 @@ const SCENARIOS = {
     periodKeys: ["2026-02-01", "2026-02-02", "2026-02-03", "2026-03-01", "2026-03-02", "2026-03-03"],
     today: "2026-03-14",
   },
+  // lockCycleLength: her 30/6 beats the logged 28/3 averages (contracts v1.2.0).
+  lockedCycleLength: {
+    periodKeys: ["2026-02-01", "2026-02-02", "2026-02-03", "2026-03-01", "2026-03-02", "2026-03-03"],
+    today: "2026-03-14",
+    settings: { defaultCycleLength: 30, defaultPeriodLength: 6, lutealPhaseLength: 14, lockCycleLength: true },
+  },
 };
 
 const isoOrNull = (d) => (d ? keyFromDate(d) : null);
 
 const vectors = {};
 for (const [name, s] of Object.entries(SCENARIOS)) {
-  const p = predict(s.periodKeys.map(dateFromKey), dateFromKey(s.today), S);
+  const settings = s.settings ?? S;
+  const p = predict(s.periodKeys.map(dateFromKey), dateFromKey(s.today), settings);
   vectors[name] = {
-    input: { periodKeys: s.periodKeys, today: s.today, settings: S },
+    input: { periodKeys: s.periodKeys, today: s.today, settings },
     expect: {
       averageCycleLength: p.averageCycleLength,
       averagePeriodLength: p.averagePeriodLength,

@@ -166,6 +166,40 @@ export class CycleStore {
     }
   }
 
+  // ---- backup & restore (her history + settings, portable) ----
+  // Mirrors CycleStore.backupData/isValidBackup/restore — the inner blob is the
+  // same Snapshot shape the store persists, so forward-compatible decoding
+  // guards backups too.
+
+  /// Everything the cycle side persists, as one JSON string.
+  backupData() {
+    return JSON.stringify({ logs: this.logsSnapshot, settings: this.settings });
+  }
+
+  /// True when `text` is a decodable cycle backup — checked WITHOUT touching
+  /// the store, so a combined restore can be all-or-nothing across stores.
+  static isValidBackup(text) {
+    try {
+      const snap = JSON.parse(text);
+      return Array.isArray(snap.logs) && typeof snap.settings === "object" && snap.settings !== null;
+    } catch { return false; }
+  }
+
+  /// Replace the whole store from a backup blob. Validates before touching
+  /// anything; returns false (and changes nothing) if the data won't decode.
+  /// Restoring real data also retires the first-launch sample banner.
+  restore(text) {
+    if (!CycleStore.isValidBackup(text)) return false;
+    const snap = JSON.parse(text);
+    this.logs = Object.fromEntries(snap.logs.map((l) => [l.dateKey, l]));
+    this.settings = { ...DEFAULT_SETTINGS, ...(snap.settings ?? {}) };
+    localStorage.setItem(K.seeded, "false");
+    this._save();
+    this._noteEdited();
+    this._notify();
+    return true;
+  }
+
   // ---- sample data (first-launch demo) ----
   get sampleActive() { return readBool(K.seeded) && this.hasAnyLogs; }
 

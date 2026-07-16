@@ -133,7 +133,8 @@ function App() {
   const lock = useAppLock();
   const [tab, setTab] = useState("today");
   const [overlay, setOverlay] = useState(null); // { name, props } | null
-  const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "cherry");
+  // Dark ("Plum Night") is the house default — anything she's picked wins.
+  const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "dark");
   const today = React.useMemo(() => new Date(), []);
 
   useEffect(() => { applyTheme(theme); localStorage.setItem(THEME_KEY, theme); }, [theme]);

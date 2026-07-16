@@ -12,6 +12,10 @@ import { rewards } from "../core/rewards.js";
 const React = window.React;
 const { useState, useEffect } = React;
 
+// rewards' per-day pose ledger is dateKey-first (see rewards.js awardPose).
+const awardPose = (dateKey, alreadyDone, total, multiplier) =>
+  rewards.awardPose(dateKey, alreadyDone, total, multiplier);
+
 // Inline pose figure (ported PoseShape geometry) or a themed icon fallback.
 // ponytail: small duplicate of stretch.js's figure — a shared helper would need a 4th
 // file the task scopes out; 12 lines is cheaper than the plumbing.
@@ -54,7 +58,7 @@ export default function StretchSession({ ctx }) {
     const doneBefore = store.stretchMovesDone(today);
     if (!doneBefore.includes(index)) {
       store.toggleStretchMove(index, today, moves.length);
-      rewards.awardPose(doneBefore.length, moves.length, multiplier);
+      awardPose(store.key(today), doneBefore.length, moves.length, multiplier);
     }
     rewards.awardGuidedFirstTime(move.name, multiplier);
     if (index + 1 < moves.length) {

@@ -190,6 +190,38 @@
         "daysUntilNextPeriod": 15,
         "hasHistory": true
       }
+    },
+    "lockedCycleLength": {
+      "input": {
+        "periodKeys": [
+          "2026-02-01",
+          "2026-02-02",
+          "2026-02-03",
+          "2026-03-01",
+          "2026-03-02",
+          "2026-03-03"
+        ],
+        "today": "2026-03-14",
+        "settings": {
+          "defaultCycleLength": 30,
+          "defaultPeriodLength": 6,
+          "lutealPhaseLength": 14,
+          "lockCycleLength": true
+        }
+      },
+      "expect": {
+        "averageCycleLength": 30,
+        "averagePeriodLength": 6,
+        "lastPeriodStart": "2026-03-01",
+        "nextPeriodStart": "2026-03-31",
+        "ovulationDate": "2026-03-17",
+        "fertileStart": "2026-03-12",
+        "fertileEnd": "2026-03-18",
+        "cycleDay": 14,
+        "phase": "fertile",
+        "daysUntilNextPeriod": 17,
+        "hasHistory": true
+      }
     }
   }
 }

@@ -7,6 +7,8 @@
 // Evidence (verified via PubMed) lives in the notes below; this is preventive
 // wellness guidance, not medical advice.
 
+import { addDays, startOfDay } from "./dates.js";
+
 // ---- shapes ----------------------------------------------------------------
 
 // StretchMove — id = name + hold (matches Swift StretchMove.id). Defaults mirror
@@ -141,6 +143,21 @@ export function session(daysUntilPeriod, tier) {
 // 1-based "Day N of the plan" for a session within a tier.
 export function planDay(d, tier) { return tier.totalDays + 1 - d.daysBeforePeriod; }
 
+// The calendar date for a 1-based plan day. Anchored so the window ends the day
+// before the predicted period when a prediction exists; otherwise the window
+// simply STARTS today (the plan starts when she does). Either way every plan day
+// maps to a real date, so every schedule checkbox is always live — a null here
+// is what once left whole plans' checkboxes dead. Pure and pinned by the
+// self-check below (mirrors StretchPlan.date(forPlanDay:) + StretchPlanTests);
+// completions are stored per calendar date, so remapping (e.g. a prediction
+// appearing later) never loses history.
+export function dateForPlanDay(planDayN, tier, nextPeriodStart, today) {
+  const start = nextPeriodStart
+    ? addDays(nextPeriodStart, -tier.totalDays)
+    : startOfDay(today);
+  return addDays(start, planDayN - 1);
+}
+
 // Off-schedule fallback so checking off stretches is always available — and the
 // whole of the trio mode.
 export const anytimeSession = starterDays[0];
@@ -158,6 +175,22 @@ export const summary =
   "A gentle 14-day routine for the two weeks before your period. Across the research, " +
   "low-intensity stretching and yoga can meaningfully ease period cramps — but it's " +
   "preventive, not a quick fix. Benefits build over a few weeks, so give it two cycles.";
+
+// The readable short report shown before the citations — verbatim from
+// PhaseResearch.stretching.body (the web has no PhaseResearch port, so the one
+// report the stretch screen needs lives here).
+export const stretchingReport =
+  "If cramps tend to visit you each cycle, gentle stretching may genuinely help. Randomized " +
+  "trials — including programs of simple active stretches done a few times a week — have found " +
+  "meaningful drops in menstrual pain intensity, and reviews pooling dozens of trials suggest " +
+  "most forms of movement, from stretching to yoga, ease period pain compared with doing " +
+  "nothing. Why might that be? Researchers think stretching may boost blood flow to your pelvic " +
+  "muscles, encourage your body's own endorphins, and nudge your nervous system toward its " +
+  "calmer, rest-and-digest mode — all of which could soften how cramps feel, though the exact " +
+  "mechanisms aren't fully settled. Benefits build over weeks of regular practice rather than " +
+  "one session, and results vary: many people notice a real difference, some notice little. " +
+  "Consistency matters more than intensity — a few relaxed minutes most days beats one long " +
+  "session. And if pain keeps disrupting your life despite these strategies, a clinician can help.";
 
 export const evidenceNote =
   "Why it may help: a Cochrane review found exercise lowered cramp pain; a 2011 trial of " +
@@ -276,5 +309,66 @@ if (typeof process !== "undefined" && process.argv && String(process.argv[1]).en
   assert(maxDailyPoints(TIERS.full) === 500, "full previews 500/day");
   assert(poseKind("Cat-Cow") === "allFours" && poseKind("Supported Fish") === "fish", "poseKind mapping");
   assert(starterDays[0].moves[0].id === "Cat-Cow45–60s flowing", "move id = name+hold");
+
+  // ---- plan-window math (mirrors Tests/StretchPlanTests.swift) ----
+  const D = (y, m, d) => new Date(y, m - 1, d);
+  const eq = (a, b) => a.getTime() === b.getTime();
+  const next = D(2026, 8, 1), today16 = D(2026, 7, 16);
+  // Anchored: the window ends the day before the predicted period.
+  assert(eq(dateForPlanDay(1, TIERS.full, next, today16), D(2026, 7, 18)), "full day 1 -> Jul 18");
+  assert(eq(dateForPlanDay(14, TIERS.full, next, today16), D(2026, 7, 31)), "full day 14 ends the day before the period");
+  assert(eq(dateForPlanDay(1, TIERS.starter, next, today16), D(2026, 7, 29)), "starter day 1 -> Jul 29");
+  assert(eq(dateForPlanDay(3, TIERS.starter, next, today16), D(2026, 7, 31)), "starter day 3 ends the day before the period");
+  // The regression that broke the checkboxes: with no prediction every day must
+  // STILL have a date, and the fallback window starts today — so no day ever
+  // precedes today, and the lock-in penalty loop (which only charges dates
+  // before today) is inert.
+  for (const t of [TIERS.starter, TIERS.full]) {
+    for (let n = 1; n <= t.totalDays; n++) {
+      const date = dateForPlanDay(n, t, null, today16);
+      assert(date instanceof Date && !Number.isNaN(date.getTime()), `plan day ${n} of ${t.label} lost its date`);
+      assert(date >= today16, `fallback day ${n} of ${t.label} precedes today`);
+    }
+  }
+  assert(eq(dateForPlanDay(1, TIERS.full, null, today16), D(2026, 7, 16)), "fallback window starts today");
+  assert(eq(dateForPlanDay(14, TIERS.full, null, today16), D(2026, 7, 29)), "fallback day 14 = today + 13");
+  // An afternoon "today" maps like midnight — time of day never shifts the window.
+  assert(eq(dateForPlanDay(1, TIERS.full, null, new Date(2026, 6, 16, 14, 30)), D(2026, 7, 16)), "fallback ignores time of day");
+
+  // planDay / session round-trips: the schedule labels and the per-day sessions
+  // agree on both tiers, and day numbers are exactly 1...totalDays, each once.
+  for (const t of [TIERS.starter, TIERS.full]) {
+    const nums = daysFor(t).map((s) => planDay(s, t)).sort((a, b) => a - b);
+    assert(nums.length === t.totalDays && nums.every((n, i) => n === i + 1), `plan days of ${t.label} are 1...${t.totalDays}`);
+    for (const s of daysFor(t)) {
+      assert(session(s.daysBeforePeriod, t)?.daysBeforePeriod === s.daysBeforePeriod, `session round-trip (${t.label})`);
+    }
+  }
+
+  // The schedule's "today" row maps through daysUntilNextPeriod, so pin the two
+  // engine behaviors StretchPlanTests also pins (dynamic import keeps the
+  // browser bundle clear of the engine).
+  const { predict } = await import("./engine.js");
+  const { DEFAULT_SETTINGS } = await import("./models.js");
+  // 14:30 on Jul 13 is still 16 calendar days before Jul 29, not 15 — a
+  // truncation here would silently shift which row wears the "today" badge.
+  const afternoon = new Date(2026, 6, 13, 14, 30);
+  const periodDays = [1, 2, 3, 4].map((d) => D(2026, 7, d));
+  const p = predict(periodDays, afternoon, DEFAULT_SETTINGS);
+  assert(eq(p.nextPeriodStart, D(2026, 7, 29)), "prediction lands Jul 29");
+  assert(p.daysUntilNextPeriod === 16, "daysUntilNextPeriod counts calendar days");
+  // Her locked numbers must beat the logged averages — BOTH of them, or the
+  // period stepper is a placebo for anyone with logged flow.
+  const twoCycles = [];
+  for (const start of [D(2026, 5, 1), D(2026, 5, 29)]) {
+    for (let off = 0; off < 4; off++) twoCycles.push(addDays(start, off));
+  }
+  const locked = { ...DEFAULT_SETTINGS, defaultCycleLength: 31, defaultPeriodLength: 6, lockCycleLength: true };
+  const pl = predict(twoCycles, D(2026, 6, 5), locked);
+  assert(pl.averageCycleLength === 31 && pl.averagePeriodLength === 6, "locked lengths override the averages");
+  assert(eq(pl.nextPeriodStart, D(2026, 6, 29)), "locked prediction = May 29 + 31");
+  const pu = predict(twoCycles, D(2026, 6, 5), { ...locked, lockCycleLength: false });
+  assert(pu.averageCycleLength === 28 && pu.averagePeriodLength === 4, "unlocking restores the averages");
+
   console.log("stretchLibrary self-check OK");
 }

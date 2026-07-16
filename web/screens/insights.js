@@ -1,23 +1,29 @@
 // Insights — full-parity port of App/Views/InsightsView.swift: a StatTile summary
-// grid, IntensityBar breakdown charts (rhythm + symptom frequency), the sample
-// banner, the empty state, and the shareable cycle report + CSV export, all in
-// warm second person. Adds the two web-only charts the brief asks for — flow
-// breakdown and a lightweight inline-SVG basal temperature curve. Everything
-// derives from the shared store; the only local effect marks insights seen on
-// mount (mirrors Swift .onAppear).
+// grid, the "right now" phase research card, IntensityBar breakdown charts
+// (rhythm + symptom frequency), the cycle-tuning controls, and the data doors
+// (cycle report, CSV export, full backup & restore), all in warm second person.
+// Adds the two web-only charts the brief asks for — flow breakdown and a
+// lightweight inline-SVG basal temperature curve. Everything derives from the
+// shared store; the only local effect marks insights seen on mount (mirrors
+// Swift .onAppear).
 import { periodStarts } from "../core/engine.js";
 import { FLOW } from "../core/models.js";
 import { flags as reportFlags, text as reportText, csv as reportCsv, CSV_FILENAME } from "../core/report.js";
 import { shareText, shareFile } from "../core/share.js";
+import { makeBackup, restoreBackup, backupFilename } from "../core/backup.js";
+import { rewards } from "../core/rewards.js";
+import { report as phaseReport } from "../core/phaseResearch.js";
 
 const React = window.React;
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 export default function InsightsScreen({ ctx }) {
   const { store, html, ui, Icon, fmt, today } = ctx;
-  const { Card, StatTile, IntensityBar, Button } = ui;
+  const { Card, StatTile, IntensityBar, Button, IconButton, Switch } = ui;
   const [shareNote, setShareNote] = useState(null); // fallback confirmations, no toast plumbing
   const [saved, setSaved] = useState(false);
+  const [backupNote, setBackupNote] = useState(null);
+  const restoreInput = useRef(null);
 
   useEffect(() => { store.markInsightsSeen(); }, []); // ponytail: mount-once, matches Swift .onAppear
 
@@ -32,8 +38,15 @@ export default function InsightsScreen({ ctx }) {
       ? `Your next period is about ${d} ${d === 1 ? "day" : "days"} away.`
       : "The patterns behind your cycle, gathered gently.";
 
+  // Real headings mirror Swift's .accessibilityAddTraits(.isHeader).
   const cardTitle = (t) =>
-    html`<div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>${t}</div>`;
+    html`<h2 style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)", margin: 0 }}>${t}</h2>`;
+  const cardLabel = (icon, t) => html`
+    <h2 style=${{ display: "flex", alignItems: "center", gap: 8, margin: 0,
+      fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>
+      <${Icon} name=${icon} size=${16} color="var(--deep)" />
+      <span>${t}</span>
+    </h2>`;
 
   // ---- header ----
   const header = html`
@@ -68,6 +81,33 @@ export default function InsightsScreen({ ctx }) {
       <${StatTile} value=${cyclesTracked} label="Cycles tracked" />
       <${StatTile} value=${logs.length} label="Days logged" />
     </div>`;
+
+  // ---- "right now" phase research card ----
+  // The research report for where she is right now — the same short report the
+  // ring's phase sheet shows, sitting right under the summary tiles so what
+  // this week feels like (and what the evidence says helps) is never more than
+  // one scroll away. (InsightsView.phaseReportCard)
+  const phaseReportCard = p.phase ? (() => {
+    const r = phaseReport(p.phase, p.cycleDay ?? 1, Math.max(p.averageCycleLength, 1));
+    const tint = `var(--phase-${p.phase})`;
+    return html`
+      <${Card}>
+        <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <h2 style=${{ display: "flex", alignItems: "center", gap: 8, margin: 0,
+            fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>
+            <span style=${{ width: 10, height: 10, borderRadius: "50%", background: tint, flex: "0 0 auto" }} />
+            <span>Right now · ${r.title}</span>
+          </h2>
+          <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: "var(--leading-normal)" }}>${r.body}</div>
+          ${r.tips.map((tip) => html`
+            <div key=${tip} style=${{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <span style=${{ width: 5, height: 5, marginTop: 7, borderRadius: "50%", background: tint, flex: "0 0 auto" }} />
+              <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)" }}>${tip}</div>
+            </div>`)}
+          <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", lineHeight: "var(--leading-normal)", marginTop: 2 }}>${r.evidenceNote}</div>
+        </div>
+      </${Card}>`;
+  })() : null;
 
   // ---- rhythm chart ----
   const rhythmCard = html`
@@ -122,6 +162,49 @@ export default function InsightsScreen({ ctx }) {
   // ---- basal temperature (inline SVG biphasic curve, shown in °F) ----
   const tempCard = temperatureCard(store, html, ui, fmt, cardTitle);
 
+  // ---- tune your cycle — her numbers beat the math whenever she says so ----
+  const s = store.settings;
+  const locked = !!s.lockCycleLength;
+  const step = (key, delta, lo, hi) => {
+    const next = Math.min(hi, Math.max(lo, s[key] + delta));
+    if (next !== s[key]) store.updateSettings({ [key]: next });
+  };
+  const stepperRow = (label, key, lo, hi) => html`
+    <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style=${{ flex: 1, fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text)" }}>
+        ${label} · ${s[key]} days
+      </div>
+      <${IconButton} label=${`Decrease ${label.toLowerCase()}`} size="sm"
+        disabled=${s[key] <= lo} onClick=${() => step(key, -1, lo, hi)}>
+        <${Icon} name="minus" size=${16} />
+      </${IconButton}>
+      <${IconButton} label=${`Increase ${label.toLowerCase()}`} size="sm"
+        disabled=${s[key] >= hi} onClick=${() => step(key, +1, lo, hi)}>
+        <${Icon} name="plus" size=${16} />
+      </${IconButton}>
+    </div>`;
+  const tuningCard = html`
+    <${Card}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
+        ${cardTitle("Tune your cycle")}
+        ${stepperRow("Cycle length", "defaultCycleLength", 18, 45)}
+        ${stepperRow("Period length", "defaultPeriodLength", 2, 10)}
+        <div style=${{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style=${{ flex: 1, minWidth: 0 }}>
+            <div style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)" }}>Use my numbers, not the averages</div>
+            <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+              ${locked
+                ? "Predictions follow both numbers above exactly."
+                : "Off, your logged averages take over as history grows."}
+            </div>
+          </div>
+          <${Switch} checked=${locked}
+            onChange=${(next) => store.updateSettings({ lockCycleLength: next })}
+            label="Use my cycle and period lengths instead of the logged averages" />
+        </div>
+      </div>
+    </${Card}>`;
+
   // ---- cycle report — pre-written text to hand to a partner or clinician ----
   const flags = reportFlags(store, today);
   const shareReport = async () => {
@@ -131,14 +214,10 @@ export default function InsightsScreen({ ctx }) {
   const reportCard = html`
     <${Card} variant=${flags.length ? "accent" : "plain"}>
       <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-        <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
-          <${Icon} name=${flags.length ? "bell" : "check"} size=${16} color="var(--deep)" />
-          <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>
-            ${flags.length
-              ? `Cycle report — ${flags.length} thing${flags.length === 1 ? "" : "s"} worth noting`
-              : "Cycle report — all quiet"}
-          </div>
-        </div>
+        ${cardLabel(flags.length ? "bell" : "check",
+          flags.length
+            ? `Cycle report — ${flags.length} thing${flags.length === 1 ? "" : "s"} worth noting`
+            : "Cycle report — all quiet")}
         ${flags.slice(0, 2).map((f) => html`
           <div key=${f} style=${{ display: "flex", alignItems: "flex-start", gap: 8 }}>
             <span style=${{ width: 5, height: 5, marginTop: 7, borderRadius: "50%",
@@ -160,10 +239,7 @@ export default function InsightsScreen({ ctx }) {
   const exportCard = html`
     <${Card}>
       <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-        <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
-          <${Icon} name="calendar" size=${16} color="var(--deep)" />
-          <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>Your data, your spreadsheet</div>
-        </div>
+        ${cardLabel("calendar", "Your data, your spreadsheet")}
         <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
           Everything from the calendar — flow, discharge, temps, moods, symptoms, stretches, notes — as a CSV file.
         </div>
@@ -175,14 +251,74 @@ export default function InsightsScreen({ ctx }) {
       </div>
     </${Card}>`;
 
+  // ---- backup & restore — one file with everything, hers to keep or carry to
+  // a new phone. Always visible: restore matters most when this phone is empty.
+  // (Swift's "externaldrive" glyph has no offline counterpart; the settings
+  // gear stands in as the data-management door.)
+  const saveBackup = async () => {
+    // The file is built the moment she shares — always current (Backup.swift's
+    // ShareItem promise).
+    const name = backupFilename();
+    const status = await shareFile({
+      filename: name, data: makeBackup(store, rewards),
+      mimeType: "application/json", dialogTitle: "Uncorked backup",
+    });
+    setBackupNote(status === "shared" ? `Shared as ${name}.` : `Saved to your downloads as ${name}.`);
+  };
+  const pickRestore = () => {
+    setBackupNote(null);
+    if (restoreInput.current) restoreInput.current.click();
+  };
+  const onRestoreFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // picking the same file again should re-fire
+    if (!file) return;
+    let text;
+    try { text = await file.text(); }
+    catch { setBackupNote("Couldn't read that file — try picking it again."); return; }
+    // The destructive confirm the Swift confirmationDialog gives her — this
+    // replaces everything on this phone, so she says so out loud first.
+    if (!window.confirm("Replace everything on this phone with this backup?\n\nYour current history, settings and garden will be replaced by the backup's.")) return;
+    const ok = restoreBackup(text, store, rewards); // all-or-nothing
+    setBackupNote(ok
+      ? "Restored — everything's home again."
+      : "That didn't look like a complete backup from this app — nothing was changed.");
+  };
+  const backupCard = html`
+    <${Card}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+        ${cardLabel("settings", "Backup & restore")}
+        <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+          One file with everything — history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.
+        </div>
+        <div style=${{ display: "flex", gap: 8 }}>
+          <${Button} variant="soft" size="sm" onClick=${saveBackup}>Save a backup</${Button}>
+          <${Button} variant="ghost" size="sm" onClick=${pickRestore}>Restore</${Button}>
+        </div>
+        <input ref=${restoreInput} type="file" accept="application/json,.json"
+          style=${{ display: "none" }} aria-hidden="true" tabIndex=${-1}
+          onChange=${onRestoreFile} />
+        ${backupNote && html`
+          <div role="status" style=${{ fontSize: "var(--text-xs)", fontWeight: 500, color: "var(--muted)" }}>${backupNote}</div>`}
+      </div>
+    </${Card}>`;
+
+  // When the cycle report has something worth noting, it IS the headline — it
+  // leads the screen. All quiet, it rests near the bottom with the other data
+  // doors. (InsightsView.body)
+  const reportLeads = store.hasAnyLogs && flags.length > 0;
+
   return html`
     <div style=${{ display: "flex", flexDirection: "column", gap: "var(--gap-section)" }}>
       ${header}
       ${sampleBanner}
+      ${reportLeads ? reportCard : null}
       ${p.hasHistory
-        ? html`${summaryGrid}${rhythmCard}${symptomsCard}${flowCard}${tempCard}`
+        ? html`${summaryGrid}${phaseReportCard}${rhythmCard}${symptomsCard}${flowCard}${tempCard}`
         : emptyCard(html, ui, Icon)}
-      ${store.hasAnyLogs ? html`${reportCard}${exportCard}` : null}
+      ${tuningCard}
+      ${store.hasAnyLogs ? html`${reportLeads ? null : reportCard}${exportCard}` : null}
+      ${backupCard}
     </div>`;
 }
 
@@ -232,7 +368,7 @@ function emptyCard(html, ui, Icon) {
         <${Icon} name="bar-chart-2" size=${26} color="var(--primary)" />
         <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>Your patterns will appear here</div>
         <div style=${{ fontSize: "var(--text-sm)", color: "var(--muted)", maxWidth: 280 }}>
-          Log a few cycles and Uncorked will show your average rhythm, the symptoms you feel most, and when your next period is due.
+          Log a few cycles and you'll see your average rhythm, the symptoms you feel most, and when your next period is due.
         </div>
       </div>
     </${Card}>`;

@@ -62,7 +62,12 @@ h1, h2, h3 { font-family: var(--font-display, var(--font-body)); margin: 0; }
   border-radius: 14px;
   transition: color .18s ease, transform .12s ease;
 }
-.tabbtn.active { color: var(--primary-strong, #d6407f); }
+/* deep, not primary-strong: the tiny active label sits on the surface-soft
+   pill, where deep clears 4.5:1 in every preset (TabBar.swift). */
+.tabbtn.active {
+  color: var(--deep, #b01b58);
+  background: var(--surface-soft, #fbe4ee);
+}
 .tabbtn:active { transform: scale(.94); }
 
 /* Overlay host — bottom sheet */
