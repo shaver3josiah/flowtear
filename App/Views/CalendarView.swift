@@ -143,23 +143,44 @@ struct CalendarView: View {
 
     // MARK: legend
 
-    // Two rows so all four badges fit a narrow screen (DS legend flex-wraps).
+    // Every state has its own SHAPE, not just a color, so the legend teaches
+    // the glyphs: drop = period, diamond = fertile, star = ovulation,
+    // dashed ring = predicted, leaf = stretched.
     private var legend: some View {
         FFCard(variant: .soft) {
-            VStack(spacing: FFSpace.s2) {
-                HStack(spacing: FFSpace.s3) {
-                    FFBadge("Period", tint: .phaseMenstrual, dot: true)
-                    FFBadge("Fertile", tint: .phaseFertile, dot: true)
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                HStack(spacing: FFSpace.s4) {
+                    legendGlyph("drop.fill", .phaseMenstrual, "Period")
+                    legendGlyph("diamond.fill", .phaseFertile, "Fertile")
+                    legendGlyph("star.fill", .phaseOvulation, "Ovulation")
                     Spacer(minLength: 0)
                 }
-                HStack(spacing: FFSpace.s3) {
-                    FFBadge("Ovulation", tint: .phaseOvulation, dot: true)
-                    FFBadge("Predicted", tint: .phaseMenstrual, dot: true)
-                    FFBadge("Stretched", tint: .phaseLuteal, dot: true)
+                HStack(spacing: FFSpace.s4) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .strokeBorder(theme.color(.phaseMenstrual),
+                                          style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                            .frame(width: 11, height: 11)
+                        legendText("Predicted")
+                    }
+                    legendGlyph("leaf.fill", .phaseLuteal, "Stretched")
                     Spacer(minLength: 0)
                 }
             }
         }
+    }
+
+    private func legendGlyph(_ icon: String, _ tint: Tok, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(theme.color(tint))
+            legendText(label)
+        }
+    }
+
+    private func legendText(_ t: String) -> some View {
+        Text(t).font(ffBody(FFType.xs, weight: .medium)).foregroundStyle(theme.color(.text))
     }
 
     // MARK: grid math

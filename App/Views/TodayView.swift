@@ -7,6 +7,7 @@ import SwiftUI
 struct TodayView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
+    @Environment(RewardsStore.self) private var rewards
     var onLog: (Date) -> Void
     var onOpenStretch: () -> Void = {}
 
@@ -49,7 +50,13 @@ struct TodayView: View {
 
     private var header: some View {
         HStack(spacing: 11) {
-            FlowerMark(size: 38).accessibilityHidden(true)
+            FlowerMark(size: 38)
+                .overlay(alignment: .topTrailing) {
+                    if let e = rewards.activeStickerEmoji {
+                        Text(e).font(.system(size: 15)).offset(x: 8, y: -6)
+                    }
+                }
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(today.formatted(.dateTime.weekday(.wide)))
                     .font(ffDisplay(FFType.xl, weight: .semibold))

@@ -4,12 +4,14 @@ import SwiftUI
 struct FlowtearApp: App {
     @State private var theme = Theme()
     @State private var store = CycleStore()
+    @State private var rewards = RewardsStore()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(theme)
                 .environment(store)
+                .environment(rewards)
                 .task {
                     // First open: seed 3 months of lived-in sample data so every
                     // screen previews rich. One-shot, clearable from Insights.

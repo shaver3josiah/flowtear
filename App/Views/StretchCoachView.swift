@@ -8,7 +8,10 @@ import SwiftUI
 struct StretchCoachView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
+    @Environment(RewardsStore.self) private var rewards
     @State private var playing = false
+    @State private var showShop = false
+    @State private var showRules = false
     @State private var burstToken = 0
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
@@ -24,6 +27,8 @@ struct StretchCoachView: View {
     /// Off-schedule fallback so checking off stretches is always available.
     private var anytimeSession: StretchDay { StretchPlan.starterDays[0] }
     private var activeSession: StretchDay { todaySession ?? anytimeSession }
+    /// Points multiplier: anytime x1, 3-day starter x2, full 14-day x4.
+    private var multiplier: Int { todaySession == nil ? 1 : (tier == .full ? 4 : 2) }
 
     private func date(forPlanDay planDay: Int) -> Date? {
         guard let next = p.nextPeriodStart,
@@ -39,6 +44,7 @@ struct StretchCoachView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.card) {
+                gardenHeader
                 CoachFlower(message: coachLine)
                 SampleBanner()
                 if let s = todaySession {
@@ -60,7 +66,22 @@ struct StretchCoachView: View {
             .padding(.bottom, FFSpace.s6)
         }
         .fullScreenCover(isPresented: $playing) {
-            StretchSessionView(day: activeSession, finishTitle: sessionFinishTitle)
+            StretchSessionView(day: activeSession, finishTitle: sessionFinishTitle,
+                               multiplier: multiplier)
+        }
+        .sheet(isPresented: $showShop) { GardenShopView() }
+        .sheet(isPresented: $showRules) { StretchRulesView() }
+    }
+
+    // Points pill + the shop, with the RULES in the top-right corner.
+    private var gardenHeader: some View {
+        HStack(spacing: FFSpace.s2) {
+            PointsPill()
+            Spacer(minLength: 0)
+            FFIconButton("bag") { showShop = true }
+                .accessibilityLabel("Garden shop")
+            FFIconButton("book") { showRules = true }
+                .accessibilityLabel("How points and unlocks work")
         }
     }
 
@@ -159,8 +180,18 @@ struct StretchCoachView: View {
 
     private func moveCheckRow(_ m: StretchMove, index: Int, checked: Bool, session: StretchDay) -> some View {
         Button {
+            let doneBefore = store.stretchMovesDone(on: today).count
+            let wasFullDay = doneBefore == session.moves.count
             let completedDay = store.toggleStretchMove(index, on: today, totalMoves: session.moves.count)
-            if !checked { burstToken += 1 }          // checking ON celebrates
+            if !checked {
+                rewards.awardPose(alreadyDone: doneBefore, total: session.moves.count,
+                                  multiplier: multiplier)
+                burstToken += 1                      // checking ON celebrates
+            } else {
+                rewards.revokePose(remainingDone: max(doneBefore - 1, 0),
+                                   total: session.moves.count,
+                                   wasFullDay: wasFullDay, multiplier: multiplier)
+            }
             if completedDay { dayBurstToken += 1 }   // finishing the set celebrates louder
         } label: {
             HStack(alignment: .top, spacing: 10) {

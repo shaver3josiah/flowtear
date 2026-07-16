@@ -28,16 +28,41 @@ final class Theme {
 
     private var tokens: [String: String]
 
+    /// Color Studio: per-token overrides laid over everything else. Persisted.
+    var studioOverrides: [String: String] { didSet { persist() } }
+
     private static let presetKey = "flowtear.theme.preset"
     private static let accentKey = "flowtear.theme.accent"
+    private static let studioKey = "flowtear.theme.studio"
 
     init() {
         let p = UserDefaults.standard.string(forKey: Theme.presetKey) ?? "cherry"
         let a = UserDefaults.standard.string(forKey: Theme.accentKey)
+        let o = UserDefaults.standard.dictionary(forKey: Theme.studioKey) as? [String: String] ?? [:]
         presetName = p
         customAccentHex = a
-        tokens = Theme.buildTokens(preset: p, accentHex: a)
+        studioOverrides = o
+        tokens = Theme.buildTokens(preset: p, accentHex: a).merging(o) { _, n in n }
     }
+
+    /// The tokens the Color Studio may recolor ("nearly everything") — the
+    /// semantic cycle/flow ramps stay fixed because their colors carry meaning.
+    static let studioTokens: [Tok] = [.bg, .surface, .surfaceSoft, .surface2,
+                                      .text, .muted, .line, .flowerCenter, .good, .phaseLuteal]
+
+    static func studioLabel(_ t: Tok) -> String {
+        switch t {
+        case .bg: "Background";        case .surface: "Cards"
+        case .surfaceSoft: "Soft fills"; case .surface2: "Accent panels"
+        case .text: "Text";            case .muted: "Soft text"
+        case .line: "Hairlines";       case .flowerCenter: "Gold accents"
+        case .good: "Success green";   case .phaseLuteal: "Stretch lavender"
+        default: t.rawValue
+        }
+    }
+
+    func setStudioColor(_ t: Tok, _ color: Color) { studioOverrides[t.rawValue] = Theme.hex(from: color) }
+    func resetStudio() { studioOverrides = [:] }
 
     // MARK: mutation (property observers do the persist + rebuild)
 
@@ -49,7 +74,9 @@ final class Theme {
         UserDefaults.standard.set(presetName, forKey: Theme.presetKey)
         if let a = customAccentHex { UserDefaults.standard.set(a, forKey: Theme.accentKey) }
         else { UserDefaults.standard.removeObject(forKey: Theme.accentKey) }
+        UserDefaults.standard.set(studioOverrides, forKey: Theme.studioKey)
         tokens = Theme.buildTokens(preset: presetName, accentHex: customAccentHex)
+            .merging(studioOverrides) { _, n in n }
     }
 
     // MARK: presets

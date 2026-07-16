@@ -20,6 +20,7 @@ enum FFTab: String, CaseIterable, Identifiable {
 struct FFTabBar: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
+    @Environment(RewardsStore.self) private var rewards
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: FFTab
 
@@ -58,6 +59,11 @@ struct FFTabBar: View {
             VStack(spacing: 3) {
                 Image(systemName: tab.icon)
                     .font(.system(size: 17, weight: .semibold))
+                    .overlay(alignment: .topTrailing) {
+                        if tab == .today, let e = rewards.activeStickerEmoji {
+                            Text(e).font(.system(size: 10)).offset(x: 9, y: -6)
+                        }
+                    }
                 Text(tab.title)
                     .font(ffBody(FFType.xs2, weight: .semibold))
             }

@@ -14,6 +14,8 @@ struct CoachFlower: View {
     @State private var sway = false
     @State private var wave = false
     @State private var blink = false
+    @State private var bounce = false
+    @State private var tilt = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -23,14 +25,33 @@ struct CoachFlower: View {
                 .task {
                     guard !reduceMotion else { return }
                     withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { sway = true }
-                    // A friendly wave on arrival…
-                    withAnimation(.easeInOut(duration: 0.35).repeatCount(5, autoreverses: true)) { wave = true }
-                    // …and the occasional blink, forever after.
+                    // A friendly wave on arrival, then a little something every
+                    // ~10 seconds so she always feels alive: wave, bounce, head
+                    // tilt, double-blink — round and round. Blinks in between.
+                    doWave()
+                    var antic = 0
                     while !Task.isCancelled {
-                        try? await Task.sleep(for: .seconds(3.2))
+                        try? await Task.sleep(for: .seconds(3.3))
                         withAnimation(.easeInOut(duration: 0.09)) { blink = true }
                         try? await Task.sleep(for: .seconds(0.12))
                         withAnimation(.easeInOut(duration: 0.09)) { blink = false }
+                        try? await Task.sleep(for: .seconds(3.3))
+                        withAnimation(.easeInOut(duration: 0.09)) { blink = true }
+                        try? await Task.sleep(for: .seconds(0.12))
+                        withAnimation(.easeInOut(duration: 0.09)) { blink = false }
+                        try? await Task.sleep(for: .seconds(3.3))
+                        switch antic % 3 {
+                        case 0: doWave()
+                        case 1:
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.45).repeatCount(3, autoreverses: true)) { bounce = true }
+                            try? await Task.sleep(for: .seconds(1.0))
+                            withAnimation(.easeOut(duration: 0.2)) { bounce = false }
+                        default:
+                            withAnimation(.easeInOut(duration: 0.5)) { tilt = true }
+                            try? await Task.sleep(for: .seconds(1.2))
+                            withAnimation(.easeInOut(duration: 0.5)) { tilt = false }
+                        }
+                        antic += 1
                     }
                 }
                 .accessibilityHidden(true)
@@ -66,6 +87,14 @@ struct CoachFlower: View {
         }
     }
 
+    private func doWave() {
+        withAnimation(.easeInOut(duration: 0.35).repeatCount(5, autoreverses: true)) { wave = true }
+        Task {
+            try? await Task.sleep(for: .seconds(1.8))
+            withAnimation(.easeOut(duration: 0.3)) { wave = false }
+        }
+    }
+
     // MARK: Posey herself — bloom, face, stem, one waving arm
 
     private var posey: some View {
@@ -82,7 +111,11 @@ struct CoachFlower: View {
                 .offset(x: 18, y: 58)
 
             FlowerMark(size: 46)
-            face.offset(y: 15)   // sits on the bloom's golden center
+                .rotationEffect(.degrees(tilt ? 10 : 0), anchor: .bottom)
+                .offset(y: bounce ? -5 : 0)
+            face
+                .rotationEffect(.degrees(tilt ? 10 : 0), anchor: .bottom)
+                .offset(y: 15 + (bounce ? -5 : 0))   // rides the bloom
         }
     }
 

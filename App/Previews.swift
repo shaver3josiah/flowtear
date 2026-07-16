@@ -8,6 +8,7 @@ import SwiftUI
 enum Sample {
     static let store = CycleStore.preview()
     static let theme = Theme()
+    static let rewards = RewardsStore()
     static var prediction: CyclePrediction { store.prediction() }
 }
 
@@ -16,6 +17,7 @@ extension View {
     func previewEnv() -> some View {
         self.environment(Sample.theme)
             .environment(Sample.store)
+            .environment(Sample.rewards)
             .preferredColorScheme(.light)
     }
 }
@@ -29,6 +31,9 @@ extension View {
 #Preview("Stretch coach") { StretchCoachView().previewEnv() }
 #Preview("Stretch card (Today)") { StretchPlanCard().previewEnv().padding() }
 #Preview("Theme editor") { ThemeEditorSheet().previewEnv() }
+#Preview("Garden shop") { GardenShopView().previewEnv() }
+#Preview("Rules") { StretchRulesView().previewEnv() }
+#Preview("Share card") { ShareCardView().previewEnv() }
 #Preview("Stretch session") {
     StretchSessionView(day: StretchPlan.days[2], finishTitle: "Day 3 done").previewEnv()
 }

@@ -37,6 +37,17 @@ struct DayCell: View {
                     Circle()
                         .strokeBorder(theme.color(.phaseOvulation), lineWidth: 2)
                         .frame(width: disc, height: disc)
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(theme.color(.phaseOvulation))
+                        .offset(x: 13, y: -13)
+                }
+
+                if isFertile && !isOvulation {
+                    Image(systemName: "diamond.fill")
+                        .font(.system(size: 6, weight: .bold))
+                        .foregroundStyle(theme.color(.phaseFertile))
+                        .offset(x: 13, y: -13)
                 }
 
                 Text("\(day)")
@@ -44,17 +55,17 @@ struct DayCell: View {
                     .foregroundStyle(numberColor)
 
                 if let flow {
-                    Circle()
-                        .fill(dotColor(flow))
-                        .frame(width: 5, height: 5)
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(dotColor(flow))
                         .offset(y: 12)
                 }
 
                 if stretchDone {
-                    Circle()
-                        .fill(theme.color(.phaseLuteal))
-                        .frame(width: 5, height: 5)
-                        .offset(y: -12)
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(theme.color(.phaseLuteal))
+                        .offset(x: -13, y: -13)
                 }
 
                 if isToday {

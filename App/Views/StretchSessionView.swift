@@ -7,11 +7,13 @@ import SwiftUI
 struct StretchSessionView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
+    @Environment(RewardsStore.self) private var rewards
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let day: StretchDay
     var finishTitle: String = "Session done"
+    var multiplier: Int = 1
 
     @State private var index = 0            // current move
     @State private var remaining = 0        // seconds left on this move
@@ -140,10 +142,15 @@ struct StretchSessionView: View {
 
     private func advance() {
         transitionToken += 1
-        // The move she just finished counts — check it off (never uncheck).
+        // The move she just finished counts — check it off (never uncheck),
+        // award its points, and pay the first-ever-guided bonus for this pose.
         if !store.stretchMovesDone(on: Date()).contains(index) {
+            let doneBefore = store.stretchMovesDone(on: Date()).count
             store.toggleStretchMove(index, on: Date(), totalMoves: day.moves.count)
+            rewards.awardPose(alreadyDone: doneBefore, total: day.moves.count,
+                              multiplier: multiplier)
         }
+        rewards.awardGuidedFirstTime(moveName: move.name, multiplier: multiplier)
         if index + 1 < day.moves.count {
             withAnimation(reduceMotion ? nil : FFMotion.signature) {
                 index += 1

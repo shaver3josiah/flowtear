@@ -99,24 +99,21 @@ struct LogView: View {
                         .tint(theme.color(.primaryStrong))
                         .focused($noteFocused)
                 }
+
+                // The commit gesture lives at the END of the log — she scrolls
+                // down to it when she's finished, like signing at the bottom.
+                SlideToLog(enabled: dirty) { commit(); onLogged() }
+                    .padding(.top, FFSpace.s2)
             }
             .padding(.horizontal, FFSpace.s4)
             .padding(.top, FFSpace.s2)
-            .padding(.bottom, FFSpace.s4)
+            .padding(.bottom, FFSpace.section)
         }
         // The progress row rides above the scroll — always visible.
         .safeAreaInset(edge: .top, spacing: 0) {
             glanceRow
                 .padding(.horizontal, FFSpace.s4)
                 .padding(.vertical, 6)
-                .background(theme.color(.bg).opacity(0.97))
-        }
-        // The commit gesture lives at the bottom, content scrolls beneath it.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SlideToLog(enabled: dirty) { commit(); onLogged() }
-                .padding(.horizontal, FFSpace.s4)
-                .padding(.top, 6)
-                .padding(.bottom, FFSpace.s2)
                 .background(theme.color(.bg).opacity(0.97))
         }
         .onAppear(perform: reload)

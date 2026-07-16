@@ -6,6 +6,7 @@ import SwiftUI
 // seam. Cycle-phase and flow colors stay fixed — they carry meaning.
 struct ThemeEditorSheet: View {
     @Environment(Theme.self) private var theme
+    @Environment(RewardsStore.self) private var rewards
     @Environment(\.dismiss) private var dismiss
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: FFSpace.s3)]
@@ -16,6 +17,7 @@ struct ThemeEditorSheet: View {
                 header
                 presetSection
                 accentSection
+                studioSection
                 Text("Period, fertile and phase colors never change — they mean something.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
@@ -55,8 +57,13 @@ struct ThemeEditorSheet: View {
 
     private func presetChip(_ name: String) -> some View {
         let selected = theme.presetName == name
+        let owned = rewards.themeOwned(name)
         return Button {
-            withAnimation(FFMotion.fast) { theme.setPreset(name) }
+            if owned {
+                withAnimation(FFMotion.fast) { theme.setPreset(name) }
+            } else if rewards.buyTheme(name) {
+                withAnimation(FFMotion.fast) { theme.setPreset(name) }
+            }
         } label: {
             HStack(spacing: 8) {
                 Circle()
@@ -71,6 +78,10 @@ struct ThemeEditorSheet: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(theme.color(.primaryStrong))
+                } else if !owned {
+                    Label("\(RewardsStore.themePrice)", systemImage: "sparkle")
+                        .font(ffBody(FFType.xs2, weight: .bold))
+                        .foregroundStyle(theme.color(rewards.canAfford(RewardsStore.themePrice) ? .deep : .muted))
                 }
             }
             .padding(.horizontal, 12)
@@ -90,7 +101,41 @@ struct ThemeEditorSheet: View {
 
     // MARK: custom accent
 
-    private var accentSection: some View {
+    @ViewBuilder private var accentSection: some View {
+        if rewards.accentUnlocked {
+            unlockedAccent
+        } else {
+            VStack(alignment: .leading, spacing: FFSpace.s3) {
+                sectionTitle("Your color")
+                FFCard(variant: .outline) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(theme.color(.muted))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Custom accent color")
+                                .font(ffBody(FFType.md, weight: .semibold))
+                                .foregroundStyle(theme.color(.text))
+                            Text("Unlock with petal points from stretching")
+                                .font(ffBody(FFType.xs)).foregroundStyle(theme.color(.muted))
+                        }
+                        Spacer(minLength: 4)
+                        Button {
+                            _ = rewards.buyAccent()
+                        } label: {
+                            Label("\(RewardsStore.accentPrice)", systemImage: "sparkle")
+                                .font(ffBody(FFType.xs, weight: .bold))
+                                .foregroundStyle(theme.color(rewards.canAfford(RewardsStore.accentPrice) ? .deep : .muted))
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(theme.color(.surfaceSoft), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var unlockedAccent: some View {
         VStack(alignment: .leading, spacing: FFSpace.s3) {
             sectionTitle("Your color")
             FFCard {
@@ -114,6 +159,39 @@ struct ThemeEditorSheet: View {
                 }
             }
         }
+    }
+
+    // Color Studio — recolor nearly everything, once unlocked in the shop.
+    @ViewBuilder private var studioSection: some View {
+        if rewards.colorStudioUnlocked {
+            VStack(alignment: .leading, spacing: FFSpace.s3) {
+                sectionTitle("Color Studio")
+                FFCard {
+                    VStack(alignment: .leading, spacing: FFSpace.s2) {
+                        ForEach(Theme.studioTokens, id: \.rawValue) { tok in
+                            ColorPicker(selection: studioBinding(tok), supportsOpacity: false) {
+                                Text(Theme.studioLabel(tok))
+                                    .font(ffBody(FFType.sm, weight: .medium))
+                                    .foregroundStyle(theme.color(.text))
+                            }
+                        }
+                        if !theme.studioOverrides.isEmpty {
+                            FFButton("Reset the studio", style: .ghost, size: .sm,
+                                     icon: "arrow.uturn.backward") {
+                                withAnimation(FFMotion.fast) { theme.resetStudio() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func studioBinding(_ tok: Tok) -> Binding<Color> {
+        Binding(
+            get: { theme.color(tok) },
+            set: { theme.setStudioColor(tok, $0) }
+        )
     }
 
     private var accentBinding: Binding<Color> {
