@@ -16,15 +16,17 @@ struct StretchCoachView: View {
     @State private var showTutorial = false
     @State private var celebrationToken = 0
     @State private var lastAward = 0
+    @State private var penaltyCharged = 0
     @State private var burstToken = 0
     @State private var dayBurstToken = 0
     @State private var expandedDay: Int? = nil
 
     private var today: Date { Date() }
     private var p: CyclePrediction { store.prediction() }
-    private var tier: StretchTier { store.fullStretchPlan ? .full : .starter }
+    private var tier: StretchTier { StretchTier(rawValue: store.stretchTierRaw) ?? .starter }
     private var daysUntil: Int? { p.daysUntilNextPeriod }
     private var todaySession: StretchDay? {
+        if tier == .trio { return anytimeSession }   // the trio is every day's session
         guard let d = daysUntil, d >= 1, d <= tier.totalDays else { return nil }
         return StretchPlan.session(daysUntilPeriod: d, tier: tier)
     }
@@ -32,7 +34,7 @@ struct StretchCoachView: View {
     private var anytimeSession: StretchDay { StretchPlan.starterDays[0] }
     private var activeSession: StretchDay { todaySession ?? anytimeSession }
     /// Points multiplier: anytime x1, 3-day starter x2, full 14-day x4.
-    private var multiplier: Int { todaySession == nil ? 1 : (tier == .full ? 4 : 2) }
+    private var multiplier: Int { (tier == .trio || todaySession == nil) ? 1 : tier.multiplier }
 
     private func date(forPlanDay planDay: Int) -> Date? {
         guard let next = p.nextPeriodStart,
@@ -52,16 +54,19 @@ struct StretchCoachView: View {
                 CoachFlower(message: coachLine, celebrateToken: celebrationToken, lastAward: lastAward)
                 SampleBanner()
                 if let s = todaySession {
-                    todayCard(s, heading: "TODAY · DAY \(StretchPlan.planDay(s, tier: tier)) OF \(tier.totalDays)")
-                    progressStrip
+                    todayCard(s, heading: tier == .trio
+                        ? "TODAY · THE CORE TRIO"
+                        : "TODAY · DAY \(StretchPlan.planDay(s, tier: tier)) OF \(tier.totalDays)")
+                    if tier != .trio { progressStrip }
+                    if penaltyCharged > 0 { penaltyNote }
                 } else {
                     outOfWindowCard
                     // Stretching is never locked: any day, she can run and check
                     // off a session — it logs to today like any other.
                     todayCard(anytimeSession, heading: "ANYTIME SESSION · NO SCHEDULE NEEDED")
                 }
-                planSwitchCard
-                scheduleCard
+                modeChooser
+                if tier != .trio { scheduleCard }
                 evidenceCard
                 safetyCard
             }
@@ -81,13 +86,104 @@ struct StretchCoachView: View {
         }
         .onAppear {
             if !rewards.tutorialSeen { showTutorial = true }
+            applyLockInPenalties()
         }
+    }
+
+    /// Lock-in accounting: past plan days in this window she didn't stretch cost
+    /// 5 petals each, charged once ever per day. Trio never penalizes.
+    private func applyLockInPenalties() {
+        guard tier.locksIn, tier.totalDays > 0 else { return }
+        let startOfToday = Calendar.current.startOfDay(for: today)
+        var charged = 0
+        for d in 1...tier.totalDays {
+            guard let date = date(forPlanDay: d), date < startOfToday else { continue }
+            if !store.stretchDone(on: date),
+               rewards.penalizeMissedDay(store.key(for: date)) {
+                charged += 1
+            }
+        }
+        penaltyCharged = charged
+    }
+
+    private var penaltyNote: some View {
+        Text("\(penaltyCharged * 5) petals drifted off for missed days — today's a fresh bloom.")
+            .font(ffBody(FFType.xs))
+            .foregroundStyle(theme.color(.muted))
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // The three ways to play, each with its point preview. Switching keeps
+    // every completion and every point.
+    private var modeChooser: some View {
+        VStack(alignment: .leading, spacing: FFSpace.s2) {
+            Text("Your plan")
+                .font(ffBody(FFType.md, weight: .semibold))
+                .foregroundStyle(theme.color(.deep))
+            modeRow(.trio,    note: "Any day, no schedule, no pressure")
+            modeRow(.starter, note: "The 3 days before your period · −5 a missed day")
+            modeRow(.full,    note: "The full two weeks · −5 a missed day")
+            Text("Switching keeps every point and completion.")
+                .font(ffBody(FFType.xs2))
+                .foregroundStyle(theme.color(.muted))
+        }
+    }
+
+    private func modeRow(_ t: StretchTier, note: String) -> some View {
+        let selected = tier == t
+        return Button {
+            withAnimation(FFMotion.fast) { store.stretchTierRaw = t.rawValue }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 17))
+                    .foregroundStyle(theme.color(selected ? .primaryStrong : .line))
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(t.label)
+                            .font(ffBody(FFType.sm, weight: .bold))
+                            .foregroundStyle(theme.color(.deep))
+                        Text("×\(t.multiplier)")
+                            .font(ffBody(FFType.xs2, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(theme.color(.phaseLuteal), in: Capsule())
+                    }
+                    Text(note)
+                        .font(ffBody(FFType.xs))
+                        .foregroundStyle(theme.color(.muted))
+                }
+                Spacer(minLength: 4)
+                Text("up to \(maxDailyPoints(t))/day")
+                    .font(ffBody(FFType.xs, weight: .bold))
+                    .foregroundStyle(theme.color(.deep))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(theme.color(selected ? .surfaceSoft : .surface),
+                        in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
+                    .strokeBorder(selected ? theme.color(.primaryStrong) : theme.color(.line),
+                                  lineWidth: selected ? 1.5 : 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(t.label), \(note), up to \(maxDailyPoints(t)) points a day")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Best day's pose points on a tier: 15·m + 5·(m−1) + 10, times the multiplier.
+    private func maxDailyPoints(_ t: StretchTier) -> Int {
+        let sessions = t == .trio ? [anytimeSession] : StretchPlan.days(for: t)
+        let m = sessions.map { $0.moves.count }.max() ?? 0
+        return (20 * m + 5) * t.multiplier
     }
 
     // Points pill + the shop, with the RULES in the top-right corner.
     private var gardenHeader: some View {
         HStack(spacing: FFSpace.s2) {
-            PointsPill()
+            PointsPill(action: { showShop = true })
             Spacer(minLength: 0)
             FFIconButton("bag") { showShop = true }
                 .accessibilityLabel("Garden shop")
@@ -99,7 +195,9 @@ struct StretchCoachView: View {
     }
 
     private var sessionFinishTitle: String {
-        if let s = todaySession { return "Day \(StretchPlan.planDay(s, tier: tier)) done" }
+        if tier != .trio, let s = todaySession {
+            return "Day \(StretchPlan.planDay(s, tier: tier)) done"
+        }
         return "Session done"
     }
 
@@ -266,32 +364,6 @@ struct StretchCoachView: View {
             }
         }
         .accessibilityElement(children: .combine)
-    }
-
-    // MARK: plan switcher — manual both ways, history always kept
-
-    private var planSwitchCard: some View {
-        FFCard(variant: .outline) {
-            VStack(alignment: .leading, spacing: FFSpace.s2) {
-                Text(tier == .starter ? "Loving it?" : "Want a lighter touch?")
-                    .font(ffBody(FFType.md, weight: .semibold))
-                    .foregroundStyle(theme.color(.deep))
-                Text(tier == .starter
-                     ? "You're on the 3-day starter. When it's working for you, the full 14-day plan goes deeper — same idea, two weeks of it."
-                     : "You're on the full 14-day plan. The 3-day starter keeps just the essentials.")
-                    .font(ffBody(FFType.sm))
-                    .foregroundStyle(theme.color(.muted))
-                    .lineSpacing(2)
-                FFButton(tier == .starter ? "Switch to the full 14-day plan" : "Back to the 3-day starter",
-                         style: .soft, size: .sm,
-                         icon: tier == .starter ? "arrow.up.right" : "arrow.uturn.backward") {
-                    store.fullStretchPlan.toggle()
-                }
-                Text("Switching never erases anything — every stretch you've logged stays.")
-                    .font(ffBody(FFType.xs2))
-                    .foregroundStyle(theme.color(.muted))
-            }
-        }
     }
 
     // MARK: out of window

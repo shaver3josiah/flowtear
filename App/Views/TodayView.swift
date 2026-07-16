@@ -17,7 +17,6 @@ struct TodayView: View {
     private var today: Date { Date() }
     @State private var showThemeEditor = false
     @State private var paneIndex = 0
-    @State private var stickerDrag: CGSize = .zero
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -31,8 +30,9 @@ struct TodayView: View {
                     rotatingPane
                     FertileWindowCard()
                 } else if store.hasAnyLogs {
-                    // She's logging (moods, temps…) but hasn't recorded a period
-                    // yet — say so honestly instead of "nothing logged yet".
+                    // She's logging but no period is confirmed yet — show the
+                    // ring anyway as a best-guess preview that sharpens with data.
+                    previewHero
                     startedState
                     quickLog
                     rotatingPane
@@ -90,32 +90,9 @@ struct TodayView: View {
                     .multilineTextAlignment(.center)
             }
 
-            stickerOverlay
+            RingSticker(radius: 122)
         }
         .padding(.vertical, 2)
-    }
-
-    // Her flower sticker, placeable anywhere around the ring: drag it, it stays.
-    @ViewBuilder private var stickerOverlay: some View {
-        if let id = rewards.activeSticker {
-            let radius: CGFloat = 118
-            StickerView(id: id, size: 32)
-                .offset(x: CGFloat(rewards.stickerX) * radius + stickerDrag.width,
-                        y: CGFloat(rewards.stickerY) * radius + stickerDrag.height)
-                .highPriorityGesture(
-                    DragGesture()
-                        .onChanged { v in stickerDrag = v.translation }
-                        .onEnded { v in
-                            let nx = rewards.stickerX + Double(v.translation.width / radius)
-                            let ny = rewards.stickerY + Double(v.translation.height / radius)
-                            rewards.stickerX = min(max(nx, -1.15), 1.15)
-                            rewards.stickerY = min(max(ny, -1.15), 1.15)
-                            stickerDrag = .zero
-                        }
-                )
-                .accessibilityLabel("Your flower sticker")
-                .accessibilityHint("Drag to place it around the ring")
-        }
     }
 
     // The bottom pane takes turns: the stretch plan, then a peek at Insights,
@@ -212,6 +189,20 @@ struct TodayView: View {
                 store.upsert(log)
             }
         )
+    }
+
+    // A best-guess ring before her first confirmed period: anchored on any
+    // bleeding (or her first log), clearly labeled as an estimate.
+    private var previewHero: some View {
+        ZStack {
+            VStack(spacing: 8) {
+                CycleRing(prediction: store.previewPrediction(), size: 220)
+                Text("A first guess — it sharpens as you log")
+                    .font(ffBody(FFType.xs, weight: .medium))
+                    .foregroundStyle(theme.color(.muted))
+            }
+            RingSticker(radius: 110)
+        }
     }
 
     // Logged something, but no period days yet — predictions are waiting.

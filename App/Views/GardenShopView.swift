@@ -83,8 +83,16 @@ struct StretchTutorialView: View {
 struct PointsPill: View {
     @Environment(Theme.self) private var theme
     @Environment(RewardsStore.self) private var rewards
+    var action: (() -> Void)? = nil
 
     var body: some View {
+        Button { action?() } label: { pill }
+            .buttonStyle(.plain)
+            .disabled(action == nil)
+            .accessibilityHint(action == nil ? "" : "Opens the garden shop")
+    }
+
+    private var pill: some View {
         HStack(spacing: 5) {
             Image(systemName: "sparkle")
                 .font(.system(size: 11, weight: .bold))
@@ -257,14 +265,11 @@ struct GardenShopView: View {
                     if rewards.buyTheme(name) { buyBurst += 1 }
                 }
             }
-            unlockRow(icon: "music.note", swatch: nil, title: "Celebration chime",
-                      owned: rewards.soundUnlocked, price: RewardsStore.soundPrice) {
-                if rewards.buySound() { buyBurst += 1 }
-            }
             unlockRow(icon: "paintpalette.fill", swatch: nil, title: "Custom accent color",
                       owned: rewards.accentUnlocked, price: RewardsStore.accentPrice) {
                 if rewards.buyAccent() { buyBurst += 1 }
             }
+            soundShelf
             unlockRow(icon: "slider.horizontal.3", swatch: nil, title: "Color Studio — recolor nearly everything",
                       owned: rewards.colorStudioUnlocked, price: RewardsStore.colorStudioPrice) {
                 if rewards.buyColorStudio() { buyBurst += 1 }
@@ -272,6 +277,54 @@ struct GardenShopView: View {
             Text("Cherry, Rose and Dark are always free. Unlocked colors live in the pencil settings on Today.")
                 .font(ffBody(FFType.xs2)).foregroundStyle(theme.color(.muted))
         }
+    }
+
+    // Elegant unlockable sounds — they play when a session ends or a log lands.
+    private var soundShelf: some View {
+        VStack(alignment: .leading, spacing: FFSpace.s2) {
+            ForEach(RewardsStore.sounds) { item in
+                soundRow(item)
+            }
+        }
+    }
+
+    private func soundRow(_ item: SoundItem) -> some View {
+        let owned = rewards.soundOwned(item.id)
+        let active = rewards.activeSound == item.id
+        return HStack(spacing: 10) {
+            Image(systemName: active ? "speaker.wave.2.fill" : "music.note")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(theme.color(active ? .primaryStrong : .muted))
+                .frame(width: 20)
+            Text(item.name)
+                .font(ffBody(FFType.sm, weight: .semibold))
+                .foregroundStyle(theme.color(.text))
+            Spacer(minLength: 4)
+            Button {
+                if owned {
+                    rewards.activeSound = active ? nil : item.id
+                    rewards.playCelebrationIfOwned()
+                } else if rewards.buySoundItem(item.id) {
+                    buyBurst += 1
+                }
+            } label: {
+                Group {
+                    if active { Label("On", systemImage: "checkmark") }
+                    else if owned { Text("Use") }
+                    else { Label("\(item.price)", systemImage: "sparkle") }
+                }
+                .font(ffBody(FFType.xs, weight: .bold))
+                .foregroundStyle(active ? .white : theme.color(owned || rewards.canAfford(item.price) ? .deep : .muted))
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(active ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
+            .strokeBorder(theme.color(.line), lineWidth: 1))
+        .accessibilityLabel("\(item.name) sound, \(owned ? (active ? "on" : "owned") : "\(item.price) points")")
     }
 
     private func unlockRow(icon: String?, swatch: Color?, title: String,
@@ -339,10 +392,11 @@ struct StretchRulesView: View {
                     "The first time you ever do a pose with the guided player: +30 bonus (once per pose — there are new ones to discover across the plans).",
                 ])
 
-                rulesCard("Plan multipliers", "arrow.up.circle", [
-                    "Anytime session: everything counts ×1.",
-                    "On the 3-day starter plan: everything counts ×2.",
-                    "On the full 14-day plan: everything counts ×4.",
+                rulesCard("Plan multipliers & lock-ins", "arrow.up.circle", [
+                    "Core trio: any day, no schedule — everything counts ×1.",
+                    "3-day starter: everything counts ×2 — but it's a lock-in.",
+                    "Full 14-day: everything counts ×4 — the biggest lock-in.",
+                    "Lock-in means a missed plan day costs 5 petals. Your lifetime score never drops.",
                     "The multiplier applies to every point you earn that day, bonuses included.",
                 ])
 
@@ -356,7 +410,7 @@ struct StretchRulesView: View {
                     "Your first 100 petals are a welcome gift — enough for the Daisy.",
                     "Ten flowers of rising rarity — Daisy (100) up to the red rose bouquet (7,500). Own one, wear it as a sticker and drag it anywhere around your Today ring.",
                     "Posey herself is the legendary sticker: 10,000.",
-                    "Celebration chime: 1,200 — completions ring out sweetly.",
+                    "Celebration sounds — Petal swoosh 800, Songbird 1,200, Crystal chime 1,600. They ring when a session ends or a log slides home.",
                     "Palettes — Pink, Peony, Soft, Light: 600 each. Cherry, Rose and Dark are always free.",
                     "Custom accent color: 1,500 — tint the whole app any color you like.",
                     "Color Studio: 4,000 — recolor nearly everything, one color at a time.",

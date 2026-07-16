@@ -82,11 +82,15 @@ final class CycleStore {
         return dayComplete
     }
 
-    /// Which stretch plan she's on. Starter (3-day) is the default; switching is
+    /// Which stretch mode she's on ("trio" / "starter" / "full"). Switching is
     /// always manual and NEVER touches logged data — completions are stored per
-    /// calendar date, so both plans read the same history.
-    var fullStretchPlan: Bool = UserDefaults.standard.bool(forKey: "flowtear.stretch.fullplan") {
-        didSet { UserDefaults.standard.set(fullStretchPlan, forKey: "flowtear.stretch.fullplan") }
+    /// calendar date, so every mode reads the same history. Migrates the old
+    /// two-mode boolean.
+    var stretchTierRaw: String = {
+        if let raw = UserDefaults.standard.string(forKey: "flowtear.stretch.tier") { return raw }
+        return UserDefaults.standard.bool(forKey: "flowtear.stretch.fullplan") ? "full" : "starter"
+    }() {
+        didSet { UserDefaults.standard.set(stretchTierRaw, forKey: "flowtear.stretch.tier") }
     }
 
     // MARK: new-insights signal (drives the Insights tab shimmer)
@@ -129,6 +133,21 @@ final class CycleStore {
 
     func prediction(today: Date = Date()) -> CyclePrediction {
         CycleEngine.predict(periodDays: periodDays, today: today, settings: settings, cal: cal)
+    }
+
+    /// A best-guess prediction even before a real period is logged, so the ring
+    /// can always show a preview: anchor on any bleeding day (spotting counts
+    /// here), else on her first log. Real data replaces it as soon as it exists.
+    func previewPrediction(today: Date = Date()) -> CyclePrediction {
+        let real = prediction(today: today)
+        if real.hasHistory { return real }
+        let anyBleed = logs.values
+            .filter { $0.flow != nil }
+            .compactMap { Self.dateFmt.date(from: $0.dateKey) }
+        let anchor = anyBleed.min()
+            ?? logsSnapshot.compactMap { Self.dateFmt.date(from: $0.dateKey) }.min()
+        guard let a = anchor else { return real }
+        return CycleEngine.predict(periodDays: [a], today: today, settings: settings, cal: cal)
     }
 
     // MARK: persistence

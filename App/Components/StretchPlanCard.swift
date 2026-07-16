@@ -10,8 +10,9 @@ struct StretchPlanCard: View {
     var action: () -> Void = {}
 
     private var p: CyclePrediction { store.prediction() }
-    private var tier: StretchTier { store.fullStretchPlan ? .full : .starter }
+    private var tier: StretchTier { StretchTier(rawValue: store.stretchTierRaw) ?? .starter }
     private var session: StretchDay? {
+        if tier == .trio { return StretchPlan.starterDays[0] }
         guard let d = p.daysUntilNextPeriod, d >= 1, d <= tier.totalDays else { return nil }
         return StretchPlan.session(daysUntilPeriod: d, tier: tier)
     }
@@ -44,6 +45,7 @@ struct StretchPlanCard: View {
 
     private var subtitle: String {
         if let s = session {
+            if tier == .trio { return "The core trio · \(s.minutes) min · any day counts" }
             return "Day \(StretchPlan.planDay(s, tier: tier)) of \(tier.totalDays) · \(s.focus) · \(s.minutes) min"
         }
         if p.phase == .menstrual {

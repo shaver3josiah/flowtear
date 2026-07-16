@@ -21,6 +21,13 @@ struct FlowerItem: Identifiable {
     let rarity: String
 }
 
+struct SoundItem: Identifiable {
+    let id: String
+    let name: String
+    let systemID: UInt32
+    let price: Int
+}
+
 @Observable
 final class RewardsStore {
     private(set) var balance = 0
@@ -31,12 +38,16 @@ final class RewardsStore {
     private(set) var accentUnlocked = false
     private(set) var colorStudioUnlocked = false
     private(set) var poseyOwned = false
-    private(set) var soundUnlocked = false
+    private(set) var ownedSounds: Set<String> = []
+    var activeSound: String? { didSet { save() } }
+    private(set) var penalizedDays: Set<String> = []   // lock-in misses already charged
     private(set) var tutorialSeen = false
     var activeSticker: String? { didSet { save() } }  // flower id or "posey"
     /// Where her sticker sits around the Today ring (normalized -1…1 offsets).
     var stickerX: Double = 0.78 { didSet { save() } }
     var stickerY: Double = -0.72 { didSet { save() } }
+    /// Resting angle of the sticker on the Today ring (radians). Persisted.
+    var stickerAngle: Double = -0.9 { didSet { save() } }
 
     private static let key = "flowtear.rewards.v1"
 
@@ -57,6 +68,13 @@ final class RewardsStore {
         FlowerItem(id: "bouquet",   emoji: "🌹", name: "Red rose bouquet", price: 7500, rarity: "Precious"),
     ]
     static let poseyPrice = 10000
+
+    // Elegant little system chimes — each a different mood of "well done".
+    static let sounds: [SoundItem] = [
+        SoundItem(id: "swoosh",   name: "Petal swoosh",  systemID: 1001, price: 800),
+        SoundItem(id: "songbird", name: "Songbird",      systemID: 1016, price: 1200),
+        SoundItem(id: "crystal",  name: "Crystal chime", systemID: 1025, price: 1600),
+    ]
     static let themePrice = 600          // pink, peony, soft, light (cherry/rose/dark are free)
     static let accentPrice = 1500
     static let colorStudioPrice = 4000
@@ -79,10 +97,34 @@ final class RewardsStore {
         earn(Self.starterGift)
     }
 
-    /// The celebration chime, if she owns it. (System chime — asset-free.)
+    /// Her chosen celebration sound, if she owns one. (System sounds — asset-free.)
     func playCelebrationIfOwned() {
-        guard soundUnlocked else { return }
-        AudioServicesPlaySystemSound(SystemSoundID(1025))
+        guard let id = activeSound,
+              let sound = Self.sounds.first(where: { $0.id == id }) else { return }
+        AudioServicesPlaySystemSound(SystemSoundID(sound.systemID))
+    }
+
+    func soundOwned(_ id: String) -> Bool { ownedSounds.contains(id) }
+
+    @discardableResult
+    func buySoundItem(_ id: String) -> Bool {
+        guard let item = Self.sounds.first(where: { $0.id == id }),
+              !ownedSounds.contains(id), canAfford(item.price) else { return false }
+        balance -= item.price
+        ownedSounds.insert(id)
+        activeSound = id
+        AudioServicesPlaySystemSound(SystemSoundID(item.systemID))   // hear it at once
+        save(); return true
+    }
+
+    /// Lock-in: −5 petals for a missed plan day, charged at most once per day.
+    /// Lifetime is untouched — only the spendable balance feels it.
+    @discardableResult
+    func penalizeMissedDay(_ dateKey: String) -> Bool {
+        guard !penalizedDays.contains(dateKey) else { return false }
+        penalizedDays.insert(dateKey)
+        balance = max(0, balance - 5)
+        save(); return true
     }
 
     // MARK: earning
@@ -169,15 +211,6 @@ final class RewardsStore {
     }
 
     @discardableResult
-    func buySound() -> Bool {
-        guard !soundUnlocked, canAfford(Self.soundPrice) else { return false }
-        balance -= Self.soundPrice
-        soundUnlocked = true
-        playCelebrationIfOwned()
-        save(); return true
-    }
-
-    @discardableResult
     func buyColorStudio() -> Bool {
         guard !colorStudioUnlocked, canAfford(Self.colorStudioPrice) else { return false }
         balance -= Self.colorStudioPrice
@@ -194,10 +227,14 @@ final class RewardsStore {
         var ownedThemes: Set<String> = []
         var accentUnlocked = false, colorStudioUnlocked = false, poseyOwned = false
         var activeSticker: String?
-        var soundUnlocked: Bool? = false
+        var soundUnlocked: Bool? = false       // legacy single-chime flag
         var tutorialSeen: Bool? = false
         var stickerX: Double? = 0.78
         var stickerY: Double? = -0.72
+        var ownedSounds: Set<String>? = []
+        var activeSound: String?
+        var penalizedDays: Set<String>? = []
+        var stickerAngle: Double? = -0.9
     }
 
     private func save() {
@@ -205,8 +242,10 @@ final class RewardsStore {
                      ownedFlowers: ownedFlowers, ownedThemes: ownedThemes,
                      accentUnlocked: accentUnlocked, colorStudioUnlocked: colorStudioUnlocked,
                      poseyOwned: poseyOwned, activeSticker: activeSticker,
-                     soundUnlocked: soundUnlocked, tutorialSeen: tutorialSeen,
-                     stickerX: stickerX, stickerY: stickerY)
+                     soundUnlocked: false, tutorialSeen: tutorialSeen,
+                     stickerX: stickerX, stickerY: stickerY,
+                     ownedSounds: ownedSounds, activeSound: activeSound,
+                     penalizedDays: penalizedDays, stickerAngle: stickerAngle)
         guard let data = try? JSONEncoder().encode(b) else { return }
         if let prev = UserDefaults.standard.data(forKey: Self.key) {
             UserDefaults.standard.set(prev, forKey: Self.key + ".backup")
@@ -222,10 +261,18 @@ final class RewardsStore {
                 ownedFlowers = b.ownedFlowers; ownedThemes = b.ownedThemes
                 accentUnlocked = b.accentUnlocked; colorStudioUnlocked = b.colorStudioUnlocked
                 poseyOwned = b.poseyOwned; activeSticker = b.activeSticker
-                soundUnlocked = b.soundUnlocked ?? false
                 tutorialSeen = b.tutorialSeen ?? false
                 stickerX = b.stickerX ?? 0.78
                 stickerY = b.stickerY ?? -0.72
+                ownedSounds = b.ownedSounds ?? []
+                activeSound = b.activeSound
+                penalizedDays = b.penalizedDays ?? []
+                stickerAngle = b.stickerAngle ?? -0.9
+                // Migrate the old single-chime unlock into the crystal chime.
+                if b.soundUnlocked == true && ownedSounds.isEmpty {
+                    ownedSounds.insert("crystal")
+                    if activeSound == nil { activeSound = "crystal" }
+                }
                 return
             }
         }

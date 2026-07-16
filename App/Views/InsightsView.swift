@@ -25,6 +25,11 @@ struct InsightsView: View {
                 } else {
                     emptyCard
                 }
+
+                if store.hasAnyLogs {
+                    reportCard
+                    exportCard
+                }
             }
             .padding(.horizontal, FFSpace.s4)
             .padding(.top, FFSpace.s2)
@@ -44,6 +49,62 @@ struct InsightsView: View {
                 .foregroundStyle(theme.color(.muted))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @State private var csvURL: URL? = nil
+
+    // A pre-written, shareable text report — front and center when something
+    // changed (cycle length shifting, long bleeds, running late).
+    private var reportCard: some View {
+        let flags = CycleReport.flags(store: store)
+        return FFCard(variant: flags.isEmpty ? .plain : .accent) {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                Label(flags.isEmpty ? "Cycle report — all quiet" : "Cycle report — \(flags.count) thing\(flags.count == 1 ? "" : "s") worth noting",
+                      systemImage: flags.isEmpty ? "doc.text" : "exclamationmark.bubble")
+                    .font(ffBody(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                ForEach(flags.prefix(2), id: \.self) { f in
+                    HStack(alignment: .top, spacing: 8) {
+                        Circle().fill(theme.color(.primaryStrong)).frame(width: 5, height: 5).padding(.top, 6)
+                        Text(f).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.text)).lineSpacing(2)
+                    }
+                }
+                ShareLink(item: CycleReport.text(store: store)) {
+                    Label("Share the report", systemImage: "square.and.arrow.up")
+                        .font(ffBody(FFType.sm, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(theme.color(.primaryStrong), in: Capsule())
+                }
+            }
+        }
+    }
+
+    // Every day she's logged, as a spreadsheet (CSV) for her own records.
+    private var exportCard: some View {
+        FFCard {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                Label("Your data, your spreadsheet", systemImage: "tablecells")
+                    .font(ffBody(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                Text("Everything from the calendar — flow, discharge, temps, moods, symptoms, stretches, notes — as a CSV file.")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+                if let url = csvURL {
+                    ShareLink(item: url) {
+                        Label("Share the spreadsheet", systemImage: "square.and.arrow.up")
+                            .font(ffBody(FFType.sm, weight: .bold))
+                            .foregroundStyle(theme.color(.deep))
+                            .padding(.horizontal, 16).padding(.vertical, 9)
+                            .background(theme.color(.surfaceSoft), in: Capsule())
+                    }
+                } else {
+                    FFButton("Prepare the spreadsheet", style: .soft, size: .sm, icon: "tablecells") {
+                        csvURL = CycleReport.csvFile(store: store)
+                    }
+                }
+            }
+        }
     }
 
     private var subtitle: String {

@@ -41,9 +41,18 @@ struct StretchDay: Identifiable {
 // Switching tiers is presentation only: completions are stored per calendar
 // date, so history survives any number of switches, in both directions.
 enum StretchTier: String {
-    case starter, full
-    var totalDays: Int { self == .starter ? 3 : 14 }
-    var label: String { self == .starter ? "3-day starter" : "Full 14-day plan" }
+    case trio, starter, full
+    var totalDays: Int {
+        switch self { case .trio: 0; case .starter: 3; case .full: 14 }
+    }
+    var label: String {
+        switch self { case .trio: "Core trio"; case .starter: "3-day starter"; case .full: "Full 14-day" }
+    }
+    var multiplier: Int {
+        switch self { case .trio: 1; case .starter: 2; case .full: 4 }
+    }
+    /// Lock-in modes charge 5 petals for a missed plan day.
+    var locksIn: Bool { self != .trio }
 }
 
 enum StretchPlan {
