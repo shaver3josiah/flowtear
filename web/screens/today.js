@@ -1,12 +1,26 @@
 // Today — the home screen. Faithful port of App/Views/TodayView.swift:
-// header (bloom + date + theme pencil), the CycleRing hero with drifting petals,
-// the current phase badge (tap → phase sheet), a next-period line, a quick flow
-// log, a rotating teaser pane (stretch → insights → calendar), and the fertile
-// window + basal-temperature card. All state reads/writes go through the store.
+// header (bloom + date + tips + theme pencil), the CycleRing hero with drifting
+// petals and her pluckable ring sticker, the current phase badge (tap → phase
+// sheet), a next-period line, a quick flow log, a rotating teaser pane
+// (stretch → insights → calendar), and the fertile window + basal-temperature
+// card. Before her first confirmed period the ring still shows, as a labelled
+// best guess. All state reads/writes go through the store.
 import { rewards } from "../core/rewards.js";
+import { RingSticker, trackRadius } from "../components/ringSticker.js";
+import { GlitterHint } from "../components/glitterHint.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
+
+// She can switch the drifting petals off in the pencil settings — same key and
+// default-on reading as the theme editor writes (Swift: @AppStorage).
+const PETALS_KEY = "flowtear.petalsOnRing";
+const petalsOnRing = () => localStorage.getItem(PETALS_KEY) !== "false";
+
+// Fraction of the ring covered by the bleed arc (day 1 → period length).
+// TodayView.periodFraction (TodayView.swift:177).
+const periodFraction = (p) =>
+  Math.min(Math.max(p.averagePeriodLength, 0) / Math.max(p.averageCycleLength, 1), 1);
 
 // Native TodayView.nextPeriodLine (TodayView.swift:176) — copy matched exactly.
 function nextPeriodLine(d) {
@@ -38,9 +52,16 @@ export default function TodayScreen({ ctx }) {
     return () => clearInterval(t);
   }, []);
 
+  // The bloom is a double-tap easter egg (Swift: onTapGesture(count: 2)), but it
+  // still answers a keyboard/AT activation — `e.detail === 0` is a click with no
+  // mouse behind it, so the secret survives without stranding the button.
   const header = html`
     <div style=${{ display: "flex", alignItems: "center", gap: 11, marginBottom: 4 }}>
-      <${FlowerMark} size=${38} />
+      <button style=${bareBtn} onDoubleClick=${() => nav.open("about")}
+        onClick=${(e) => { if (e.detail === 0) nav.open("about"); }}
+        aria-label="About Uncorked" title="About Uncorked">
+        <${FlowerMark} size=${38} />
+      </button>
       <div style=${{ display: "flex", flexDirection: "column", gap: 2 }}>
         <span style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>${fmt.greeting(today)}</span>
         <span style=${{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-xl)", color: "var(--deep)" }}>${fmt.longDate(today)}</span>
@@ -53,9 +74,16 @@ export default function TodayScreen({ ctx }) {
         <${Icon} name="flower-2" size=${16} color="var(--primary-strong)" />
         ${rewards.balance}
       </button>
-      <${IconButton} label="Theme settings" variant="soft" onClick=${() => nav.open("theme")}>
-        <${Icon} name="edit-3" size=${18} />
-      </${IconButton}>
+      <${GlitterHint} hintKey="tips">
+        <${IconButton} label="Tips and hidden features" variant="soft" onClick=${() => nav.open("tips")}>
+          <${Icon} name="sparkles" size=${18} />
+        </${IconButton}>
+      </${GlitterHint}>
+      <${GlitterHint} hintKey="themeEditor">
+        <${IconButton} label="Theme settings" variant="soft" onClick=${() => nav.open("theme")}>
+          <${Icon} name="edit-3" size=${18} />
+        </${IconButton}>
+      </${GlitterHint}>
     </div>`;
 
   const sampleBanner = store.sampleActive ? html`
@@ -66,22 +94,41 @@ export default function TodayScreen({ ctx }) {
       </div>
     </${Card}>` : null;
 
+  // The sticker shares the ring's box so its orbit center IS the ring's center,
+  // and it rides the drawn track's exact radius — concentric, never offset.
+  const ring = (pred, size, onOpen) => {
+    const dial = html`<${CycleRing}
+      cycleDay=${Math.min(Math.max(pred.cycleDay || 1, 1), pred.averageCycleLength)}
+      cycleLength=${pred.averageCycleLength}
+      periodLength=${pred.averagePeriodLength}
+      size=${size} />`;
+    return html`
+      <div style=${{ position: "relative", width: size, height: size }}>
+        ${onOpen
+          ? html`<button style=${bareBtn} onClick=${onOpen} aria-label="Explore this phase">${dial}</button>`
+          : dial}
+        <${RingSticker} radius=${trackRadius(size)} periodFraction=${periodFraction(pred)} />
+      </div>`;
+  };
+
   const hero = html`
     <div style=${{ position: "relative", padding: "2px 0" }}>
-      <${PetalRain} count=${10} />
+      ${petalsOnRing() && html`<${PetalRain} count=${10} />`}
       <div style=${{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-        <button style=${bareBtn} onClick=${openPhase} aria-label="Explore this phase">
-          <${CycleRing}
-            cycleDay=${Math.min(Math.max(p.cycleDay || 1, 1), p.averageCycleLength)}
-            cycleLength=${p.averageCycleLength}
-            periodLength=${p.averagePeriodLength}
-            size=${244} />
-        </button>
+        ${ring(p, 244, openPhase)}
         <button style=${bareBtn} onClick=${openPhase} aria-label=${`${fmt.phaseLabel(p.phase)} phase — open details`}>
           <${PhaseBadge} phase=${p.phase} />
         </button>
         <div style=${{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--muted)", textAlign: "center" }}>${nextPeriodLine(p.daysUntilNextPeriod)}</div>
       </div>
+    </div>`;
+
+  // A best-guess ring before her first confirmed period: anchored on any bleeding
+  // (or her first log), clearly labelled as an estimate (TodayView.previewHero).
+  const previewHero = () => html`
+    <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      ${ring(store.previewPrediction(today), 220, null)}
+      <span style=${{ fontSize: "var(--text-xs)", fontWeight: 500, color: "var(--muted)" }}>A first guess — it sharpens as you log</span>
     </div>`;
 
   const quickLog = html`
@@ -151,7 +198,7 @@ export default function TodayScreen({ ctx }) {
       ${p.hasHistory
         ? html`${hero}${quickLog}${rotatingPane}<${FertileWindow} ctx=${ctx} p=${p} />`
         : store.hasAnyLogs
-          ? html`${startedState}${quickLog}${rotatingPane}`
+          ? html`${previewHero()}${startedState}${quickLog}${rotatingPane}`
           : emptyState}
     </div>`;
 }

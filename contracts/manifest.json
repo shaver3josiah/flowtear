@@ -32,25 +32,21 @@
     { "id": "stretch-coach", "since": "1.0.0", "ios": "App/Views/StretchCoachView.swift", "web": "web/screens/stretch.js" },
     { "id": "stretch-session", "since": "1.0.0", "ios": "App/Views/StretchSessionView.swift", "web": "web/screens/stretchSession.js" },
     { "id": "garden-shop", "since": "1.0.0", "ios": "App/Views/GardenShopView.swift", "web": "web/screens/garden.js" },
-    { "id": "reminders", "since": "1.1.0", "ios": "App/Core/Reminders.swift", "web": null },
-    { "id": "cycle-report-csv", "since": "1.1.0", "ios": "App/Core/CycleReport.swift", "web": null },
-    { "id": "tips-sheet", "since": "1.1.0", "ios": "App/Components/TipsSheet.swift", "web": null },
-    { "id": "ring-sticker", "since": "1.1.0", "ios": "App/Components/RingSticker.swift", "web": null },
-    { "id": "about", "since": "1.1.0", "ios": "App/Views/AboutView.swift", "web": null },
-    { "id": "faceid-lock", "since": "1.1.0", "ios": "App/FlowtearApp.swift", "web": null }
+    { "id": "reminders", "since": "1.1.0", "ios": "App/Core/Reminders.swift", "web": "web/core/reminders.js" },
+    { "id": "cycle-report-csv", "since": "1.1.0", "ios": "App/Core/CycleReport.swift", "web": "web/core/report.js" },
+    { "id": "tips-sheet", "since": "1.1.0", "ios": "App/Components/TipsSheet.swift", "web": "web/screens/tips.js" },
+    { "id": "ring-sticker", "since": "1.1.0", "ios": "App/Components/RingSticker.swift", "web": "web/components/ringSticker.js" },
+    { "id": "about", "since": "1.1.0", "ios": "App/Views/AboutView.swift", "web": "web/screens/about.js" },
+    { "id": "app-lock", "since": "1.1.0", "ios": "App/Components/AppLock.swift", "web": "web/core/appLock.js" }
   ],
-  "knownGaps": {
-    "note": "As of contracts v1.1.0 the WEB/Android build is deliberately behind iOS. The web app was ported at v1.0.0 (main@0e95081); iOS has since landed ~2,200 lines across 5 commits. `npm run check:parity` reports web as an outdated version until these are ported and web/core/version.js is bumped to 1.1.0.",
-    "stillInSync": [
-      "App/Core/CycleEngine.swift — unchanged; web/core/engine.js still reproduces every golden vector",
-      "App/Core/CycleModels.swift — unchanged; the logged-data models still match",
-      "App/Design/Theme.swift — unchanged; tokens still match contracts/tokens.json"
-    ],
-    "webBehindOn": [
-      "RewardsStore.swift (+141 lines) — petals economy changed; web/core/rewards.js is at the v1.0.0 shape",
-      "StretchLibrary.swift (+15) — plan/move data changed; web/core/stretchLibrary.js is behind",
-      "CycleStore.swift (+27) — new state added; web/core/store.js is behind",
-      "New iOS-only features with no web counterpart: reminders, cycle-report-csv, tips-sheet, ring-sticker, about, faceid-lock (see features[] with web: null)"
+  "platformDivergences": {
+    "note": "Both platforms are at contracts v1.1.0 — no version drift. These are deliberate, permanent differences where the platforms genuinely differ; they are NOT drift and do not need porting.",
+    "items": [
+      "app-lock: iOS says 'Face ID', Android says 'biometrics' (fingerprint / face unlock / screen lock) via @aparajita/capacitor-biometric-auth. Same key (flowtear.appLock), same behaviour.",
+      "reminders: iOS uses UNUserNotificationCenter, Android uses @capacitor/local-notifications. Same keys, same copy, same schedule. Capacitor needs numeric notification ids (1001/1002) where Swift uses strings.",
+      "cycle-report-csv: identical CSV bytes. iOS shares via ShareLink; Android writes to the app cache (@capacitor/filesystem) and opens the system share sheet (@capacitor/share). A plain browser falls back to a Blob download.",
+      "theme presets: tokens.css ships cherry/rose/peony/soft. Swift additionally has pink/light/dark; those need [data-theme] blocks in tokens.css before the web sheet can offer them.",
+      "motion: several SwiftUI flourishes (Posey's animations, SparkleBurst) render as calmer static/CSS equivalents on web."
     ]
   },
   "howToStaySynced": [

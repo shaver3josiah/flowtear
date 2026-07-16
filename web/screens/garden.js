@@ -1,10 +1,13 @@
 // The garden shop — a port of App/Views/GardenShopView.swift. Spend petal points
-// on flower stickers (ten of rising rarity), Posey herself, palettes, the
-// celebration chime, a custom accent, and the Color Studio. Owned flowers can be
-// worn as the Today-tab sticker. All economy + persistence lives in the shared
-// rewards singleton (web/core/rewards.js); this screen just reads and drives it.
+// on flower stickers (ten of rising rarity), Posey herself, palettes, celebration
+// sounds, a custom accent, and the Color Studio. Owned flowers can be worn as the
+// Today-tab sticker. All economy + persistence lives in the shared rewards
+// singleton (web/core/rewards.js); this screen just reads and drives it.
+//
+// Nothing here spends a petal without one confirm step, and a tap she can't
+// afford opens the "not yet" splash instead of doing nothing.
 
-import { rewards, FLOWERS, PRICES, PAID_THEMES } from "../core/rewards.js";
+import { rewards, FLOWERS, SOUNDS, PRICES, PAID_THEMES } from "../core/rewards.js";
 
 const { useState, useEffect } = window.React;
 
@@ -32,10 +35,18 @@ export default function GardenScreen({ ctx }) {
 
   const [burst, setBurst] = useState(0);          // bumps a petal-rain celebration
   const [showShare, setShowShare] = useState(false);
+  const [pendingBuy, setPendingBuy] = useState(null);   // { name, price, buy }
 
   const celebrate = () => {
     setBurst((n) => n + 1);
     r.playCelebrationIfOwned();
+  };
+
+  // Affordable → one confirm step; short on petals → the splash. Mis-taps never
+  // spend anything. `back: "garden"` brings her home from the splash.
+  const confirmOrGap = (name, price, buy) => {
+    if (r.canAfford(price)) setPendingBuy({ name, price, buy });
+    else nav.open("needPetals", { name, price, back: "garden" });
   };
 
   // ---- a procedural inline bloom, so the ten flowers read as distinct without
@@ -73,16 +84,15 @@ export default function GardenScreen({ ctx }) {
   </div>`;
 
   // A small pill button used across the shop for buy / wear / owned states.
-  const pill = (label, { onClick, tone = "soft", disabled = false, icon } = {}) => {
+  const pill = (label, { onClick, tone = "soft", icon } = {}) => {
     const bg = tone === "strong" ? "var(--primary-strong)" : "var(--surface-soft)";
     const fg = tone === "strong" ? "var(--surface)"
       : tone === "muted" ? "var(--muted)"
       : tone === "primary" ? "var(--primary-strong)" : "var(--deep)";
-    return html`<button onClick=${onClick} disabled=${disabled} aria-disabled=${disabled}
+    return html`<button onClick=${onClick}
       style=${{
         display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999,
-        border: "none", background: bg, color: fg, fontWeight: 700, fontSize: 12,
-        cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1,
+        border: "none", background: bg, color: fg, fontWeight: 700, fontSize: 12, cursor: "pointer",
       }}>
       ${icon && html`<${Icon} name=${icon} size=${12} color=${fg} />`}${label}
     </button>`;
@@ -95,12 +105,12 @@ export default function GardenScreen({ ctx }) {
     const affordable = r.canAfford(f.price);
     const onClick = () => {
       if (owned) { r.equip(f.id); return; }
-      if (r.buyFlower(f.id)) celebrate();
+      confirmOrGap(`the ${f.name}`, f.price, () => { if (r.buyFlower(f.id)) celebrate(); });
     };
     let action;
     if (equipped) action = pill("Worn", { onClick, tone: "strong", icon: "check" });
     else if (owned) action = pill("Tap to wear", { onClick, tone: "primary" });
-    else action = pill(String(f.price), { onClick, tone: affordable ? "soft" : "muted", disabled: !affordable, icon: "sparkles" });
+    else action = pill(String(f.price), { onClick, tone: affordable ? "soft" : "muted", icon: "sparkles" });
 
     return html`<div key=${f.id} style=${{
       display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center",
@@ -114,7 +124,7 @@ export default function GardenScreen({ ctx }) {
     </div>`;
   };
 
-  // ---- unlock row (palettes / chime / accent / color studio) ----
+  // ---- unlock row (palettes / accent / color studio) ----
   const unlockRow = (key, { swatch, icon, title, owned, price, buy }) => html`<div key=${key} style=${{
     display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
     background: "var(--surface)", borderRadius: 16, border: "1px solid var(--line)",
@@ -126,16 +136,59 @@ export default function GardenScreen({ ctx }) {
     ${owned
       ? html`<span style=${{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 700, fontSize: 12, color: "var(--good)" }}>
           <${Icon} name="check" size=${13} color="var(--good)" />Owned</span>`
-      : pill(String(price), { onClick: () => { if (buy()) celebrate(); }, tone: r.canAfford(price) ? "soft" : "muted", disabled: !r.canAfford(price), icon: "sparkles" })}
+      : pill(String(price), { onClick: buy, tone: r.canAfford(price) ? "soft" : "muted", icon: "sparkles" })}
   </div>`;
+
+  // ---- sound row: elegant unlockable chimes, played when a session ends or a
+  // log lands. (The native shelf plays iOS system sounds; the web synthesizes a
+  // matching tone per sound — see rewards.js.)
+  const soundRow = (s) => {
+    const owned = r.soundOwned(s.id);
+    const active = r.activeSound === s.id;
+    const onClick = () => {
+      if (owned) { r.useSound(s.id); return; }
+      confirmOrGap(`the ${s.name} sound`, s.price, () => { if (r.buySoundItem(s.id)) setBurst((n) => n + 1); });
+    };
+    return html`<div key=${s.id} style=${{
+      display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+      background: "var(--surface)", borderRadius: 16, border: "1px solid var(--line)",
+    }}>
+      <span style=${{ flex: "0 0 auto", width: 20, display: "inline-flex", justifyContent: "center" }}>
+        <${Icon} name="bell" size=${16} color=${active ? "var(--primary-strong)" : "var(--muted)"} /></span>
+      <span style=${{ flex: 1, fontWeight: 600, color: "var(--deep)", fontSize: 14 }}>${s.name}</span>
+      ${active ? pill("On", { onClick, tone: "strong", icon: "check" })
+        : owned ? pill("Use", { onClick, tone: "primary" })
+        : pill(String(s.price), { onClick, tone: r.canAfford(s.price) ? "soft" : "muted", icon: "sparkles" })}
+    </div>`;
+  };
 
   // ---- Posey card ----
   const poseyOwned = r.poseyOwned;
   const poseyEquipped = r.activeSticker === "posey";
   const poseyAction = () => {
     if (poseyOwned) { r.equip("posey"); return; }
-    if (r.buyPosey()) celebrate();
+    confirmOrGap("Posey herself", PRICES.posey, () => { if (r.buyPosey()) setBurst((n) => n + 1); });
   };
+
+  // ---- one confirm step before petals leave her balance ----
+  const confirmDialog = () => html`<div onClick=${() => setPendingBuy(null)} style=${{
+    position: "fixed", inset: 0, background: "var(--surface-soft)", zIndex: 60,
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+  }}>
+    <div role="dialog" aria-modal="true" onClick=${(e) => e.stopPropagation()} style=${{
+      width: "100%", maxWidth: 320, background: "var(--surface)", borderRadius: "var(--radius)",
+      border: "1px solid var(--line)", padding: 20, textAlign: "center",
+    }}>
+      <div style=${{ fontSize: 18, fontWeight: 700, color: "var(--deep)" }}>Bring home ${pendingBuy.name}?</div>
+      <div style=${{ fontSize: 13, color: "var(--muted)", margin: "8px 0 16px" }}>
+        That leaves ${Math.max(r.balance - pendingBuy.price, 0)} of your ${r.balance} petals.</div>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <${Button} variant="primary" block=${true} iconLeft=${html`<${Icon} name="sparkles" size=${16} />`}
+          onClick=${() => { const b = pendingBuy; setPendingBuy(null); b.buy(); }}>Buy for ${pendingBuy.price} petals<//>
+        <${Button} variant="ghost" size="sm" block=${true} onClick=${() => setPendingBuy(null)}>Cancel<//>
+      </div>
+    </div>
+  </div>`;
 
   // ---- share card (lightweight, screenshot-friendly overlay) ----
   const daysStretched = store.logsSnapshot.filter((l) => l.stretchDone === true).length;
@@ -204,7 +257,7 @@ export default function GardenScreen({ ctx }) {
         </div>
         ${poseyEquipped ? pill("Worn", { onClick: poseyAction, tone: "strong", icon: "check" })
           : poseyOwned ? pill("Wear", { onClick: poseyAction, tone: "primary" })
-          : pill(String(PRICES.posey), { onClick: poseyAction, tone: r.canAfford(PRICES.posey) ? "soft" : "muted", disabled: !r.canAfford(PRICES.posey), icon: "sparkles" })}
+          : pill(String(PRICES.posey), { onClick: poseyAction, tone: r.canAfford(PRICES.posey) ? "soft" : "muted", icon: "sparkles" })}
       </div>
     <//>
 
@@ -214,16 +267,29 @@ export default function GardenScreen({ ctx }) {
       ${PAID_THEMES.map((name) => unlockRow(name, {
         swatch: THEME_SWATCH[name] || "var(--primary)",
         title: `${themeLabel(name)} palette`,
-        owned: r.themeOwned(name), price: PRICES.theme, buy: () => r.buyTheme(name),
+        owned: r.themeOwned(name), price: PRICES.theme,
+        buy: () => confirmOrGap(`the ${themeLabel(name)} palette`, PRICES.theme,
+          () => { if (r.buyTheme(name)) setBurst((n) => n + 1); }),
       }))}
-      ${unlockRow("sound", { icon: "bell", title: "Celebration chime", owned: r.soundUnlocked, price: PRICES.sound, buy: () => r.buySound() })}
-      ${unlockRow("accent", { icon: "sparkles", title: "Custom accent color", owned: r.accentUnlocked, price: PRICES.accent, buy: () => r.buyAccent() })}
-      ${unlockRow("studio", { icon: "settings", title: "Color Studio — recolor nearly everything", owned: r.colorStudioUnlocked, price: PRICES.colorStudio, buy: () => r.buyColorStudio() })}
+      ${unlockRow("accent", {
+        icon: "sparkles", title: "Custom accent color",
+        owned: r.accentUnlocked, price: PRICES.accent,
+        buy: () => confirmOrGap("the custom accent color", PRICES.accent,
+          () => { if (r.buyAccent()) setBurst((n) => n + 1); }),
+      })}
+      ${SOUNDS.map(soundRow)}
+      ${unlockRow("studio", {
+        icon: "settings", title: "Color Studio — recolor nearly everything",
+        owned: r.colorStudioUnlocked, price: PRICES.colorStudio,
+        buy: () => confirmOrGap("the Color Studio", PRICES.colorStudio,
+          () => { if (r.buyColorStudio()) setBurst((n) => n + 1); }),
+      })}
       <p style=${{ fontSize: 11, color: "var(--muted)", margin: 0 }}>Cherry, Rose and Dark are always free. Unlocked colors live in the pencil settings on Today.</p>
     </div>
 
     <${Button} variant="soft" block=${true} iconLeft=${html`<${Icon} name="gift" size=${16} />`} onClick=${() => setShowShare(true)}>Share your garden<//>
 
+    ${pendingBuy && confirmDialog()}
     ${showShare && shareCard()}
   </div>`;
 }

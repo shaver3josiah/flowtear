@@ -90,6 +90,20 @@ h1, h2, h3 { font-family: var(--font-display, var(--font-body)); margin: 0; }
 @keyframes scrim-in { from { opacity: 0; } }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: .6; } }
 
+/* Privacy gate — opaque, above everything, and it blocks every tap behind it. */
+.lock-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg, #FDF2F7);
+}
+
 .screen-error { padding: 40px 20px; color: var(--muted, #b7889b); }
 .screen-error pre { white-space: pre-wrap; font-size: 12px; opacity: .7; }
 

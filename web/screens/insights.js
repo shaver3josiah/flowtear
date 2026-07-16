@@ -1,18 +1,23 @@
 // Insights — full-parity port of App/Views/InsightsView.swift: a StatTile summary
 // grid, IntensityBar breakdown charts (rhythm + symptom frequency), the sample
-// banner, and the empty state, all in warm second person. Adds the two web-only
-// charts the brief asks for — flow breakdown and a lightweight inline-SVG basal
-// temperature curve. Everything derives from the shared store; the only local
-// effect marks insights seen on mount (mirrors Swift .onAppear).
+// banner, the empty state, and the shareable cycle report + CSV export, all in
+// warm second person. Adds the two web-only charts the brief asks for — flow
+// breakdown and a lightweight inline-SVG basal temperature curve. Everything
+// derives from the shared store; the only local effect marks insights seen on
+// mount (mirrors Swift .onAppear).
 import { periodStarts } from "../core/engine.js";
 import { FLOW } from "../core/models.js";
+import { flags as reportFlags, text as reportText, csv as reportCsv, CSV_FILENAME } from "../core/report.js";
+import { shareText, shareFile } from "../core/share.js";
 
 const React = window.React;
-const { useEffect } = React;
+const { useState, useEffect } = React;
 
 export default function InsightsScreen({ ctx }) {
   const { store, html, ui, Icon, fmt, today } = ctx;
   const { Card, StatTile, IntensityBar, Button } = ui;
+  const [shareNote, setShareNote] = useState(null); // fallback confirmations, no toast plumbing
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => { store.markInsightsSeen(); }, []); // ponytail: mount-once, matches Swift .onAppear
 
@@ -117,6 +122,59 @@ export default function InsightsScreen({ ctx }) {
   // ---- basal temperature (inline SVG biphasic curve, shown in °F) ----
   const tempCard = temperatureCard(store, html, ui, fmt, cardTitle);
 
+  // ---- cycle report — pre-written text to hand to a partner or clinician ----
+  const flags = reportFlags(store, today);
+  const shareReport = async () => {
+    // Native share sheet inside the APK; Web Share / clipboard in a browser.
+    setShareNote(await shareText({ title: "My cycle report", text: reportText(store, today) }));
+  };
+  const reportCard = html`
+    <${Card} variant=${flags.length ? "accent" : "plain"}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+          <${Icon} name=${flags.length ? "bell" : "check"} size=${16} color="var(--deep)" />
+          <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>
+            ${flags.length
+              ? `Cycle report — ${flags.length} thing${flags.length === 1 ? "" : "s"} worth noting`
+              : "Cycle report — all quiet"}
+          </div>
+        </div>
+        ${flags.slice(0, 2).map((f) => html`
+          <div key=${f} style=${{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <span style=${{ width: 5, height: 5, marginTop: 7, borderRadius: "50%",
+              background: "var(--primary-strong)", flex: "0 0 auto" }} />
+            <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: 1.5 }}>${f}</div>
+          </div>`)}
+        <${Button} variant="primary" size="sm" onClick=${shareReport}>Share the report</${Button}>
+        ${shareNote && html`<div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>${shareNote}</div>`}
+      </div>
+    </${Card}>`;
+
+  // ---- every logged day, as a spreadsheet ----
+  const saveCsv = async () => {
+    setSaved(await shareFile({
+      filename: CSV_FILENAME, data: reportCsv(store),
+      mimeType: "text/csv", dialogTitle: "Your cycle data",
+    }));
+  };
+  const exportCard = html`
+    <${Card}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+          <${Icon} name="calendar" size=${16} color="var(--deep)" />
+          <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>Your data, your spreadsheet</div>
+        </div>
+        <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+          Everything from the calendar — flow, discharge, temps, moods, symptoms, stretches, notes — as a CSV file.
+        </div>
+        <${Button} variant="soft" size="sm" onClick=${saveCsv}>Share the spreadsheet</${Button}>
+        ${saved && html`
+          <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+            ${saved === "shared" ? `Shared as ${CSV_FILENAME}.` : `Saved to your downloads as ${CSV_FILENAME}.`}
+          </div>`}
+      </div>
+    </${Card}>`;
+
   return html`
     <div style=${{ display: "flex", flexDirection: "column", gap: "var(--gap-section)" }}>
       ${header}
@@ -124,6 +182,7 @@ export default function InsightsScreen({ ctx }) {
       ${p.hasHistory
         ? html`${summaryGrid}${rhythmCard}${symptomsCard}${flowCard}${tempCard}`
         : emptyCard(html, ui, Icon)}
+      ${store.hasAnyLogs ? html`${reportCard}${exportCard}` : null}
     </div>`;
 }
 

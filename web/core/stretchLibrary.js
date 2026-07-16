@@ -21,18 +21,24 @@ function day(daysBeforePeriod, focus, minutes, moves) {
 }
 
 // ---- tiers -----------------------------------------------------------------
-// Two tiers of the same evidence base. Starter (default) is a 3-day plan on the
-// three days before the period; full is the complete 14-day routine. Switching is
-// presentation only — completions are stored per calendar date, so history survives.
+// Three modes of the same evidence base. Trio is the no-schedule anytime session
+// (no lock-in, no pressure); starter (the default) is a 3-day plan on the three
+// days before the period; full is the complete 14-day routine. Switching modes is
+// presentation only — completions are stored per calendar date, so history
+// survives any number of switches, in both directions.
 export const TOTAL_DAYS = 14;
 
+// multiplier = points multiplier for the mode; locksIn modes charge 5 petals for
+// a missed plan day (StretchTier in StretchLibrary.swift).
 export const TIERS = {
-  starter: { key: "starter", totalDays: 3, label: "3-day starter" },
-  full: { key: "full", totalDays: 14, label: "Full 14-day plan" },
+  trio: { key: "trio", totalDays: 0, label: "Core trio", multiplier: 1, locksIn: false },
+  starter: { key: "starter", totalDays: 3, label: "3-day starter", multiplier: 2, locksIn: true },
+  full: { key: "full", totalDays: 14, label: "Full 14-day", multiplier: 4, locksIn: true },
 };
 
-// Map the store's boolean (fullStretchPlan) to a tier object.
-export const tierFor = (fullPlan) => (fullPlan ? TIERS.full : TIERS.starter);
+// The store's `stretchTier` raw string -> a tier object. Unknown values fall back
+// to starter, mirroring `StretchTier(rawValue:) ?? .starter`.
+export const tierFor = (raw) => TIERS[raw] ?? TIERS.starter;
 
 // ---- reusable cues (mirror the private StretchMove constants in Swift) -------
 const breathing = move("Diaphragmatic breathing", "5–6 slow breaths",
@@ -123,7 +129,9 @@ export const fullDays = [
 ];
 
 // ---- lookups ---------------------------------------------------------------
-export function daysFor(tier) { return tier.totalDays === TIERS.starter.totalDays ? starterDays : fullDays; }
+// Mirrors Swift's `StretchPlan.days(for:)`: only starter swaps the list (trio has
+// no schedule of its own, so it never asks).
+export function daysFor(tier) { return tier.key === "starter" ? starterDays : fullDays; }
 
 // The session for a given days-until-period on a tier, or null if outside the window.
 export function session(daysUntilPeriod, tier) {
@@ -133,8 +141,17 @@ export function session(daysUntilPeriod, tier) {
 // 1-based "Day N of the plan" for a session within a tier.
 export function planDay(d, tier) { return tier.totalDays + 1 - d.daysBeforePeriod; }
 
-// Off-schedule fallback so checking off stretches is always available.
+// Off-schedule fallback so checking off stretches is always available — and the
+// whole of the trio mode.
 export const anytimeSession = starterDays[0];
+
+// Best day's pose points on a mode: 15·m + 5·(m−1) + 10 = 20m + 5, times the
+// multiplier (StretchCoachView.maxDailyPoints). Drives the mode chooser previews.
+export function maxDailyPoints(tier) {
+  const sessions = tier.key === "trio" ? [anytimeSession] : daysFor(tier);
+  const m = sessions.reduce((n, d) => Math.max(n, d.moves.length), 0);
+  return (20 * m + 5) * tier.multiplier;
+}
 
 // ---- copy blocks (verbatim from Swift) -------------------------------------
 export const summary =
@@ -248,6 +265,15 @@ if (typeof process !== "undefined" && process.argv && String(process.argv[1]).en
   assert(session(3, TIERS.starter)?.focus === "The core trio", "session(3, starter)");
   assert(session(14, TIERS.full)?.focus === "Foundations & breath", "session(14, full)");
   assert(session(9, TIERS.starter) === null, "starter has no day 9");
+  assert(TIERS.trio.multiplier === 1 && TIERS.starter.multiplier === 2 && TIERS.full.multiplier === 4, "tier multipliers");
+  assert(!TIERS.trio.locksIn && TIERS.starter.locksIn && TIERS.full.locksIn, "only scheduled tiers lock in");
+  assert(tierFor("trio") === TIERS.trio && tierFor("full") === TIERS.full, "tierFor maps raw values");
+  assert(tierFor(null) === TIERS.starter && tierFor("nonsense") === TIERS.starter, "tierFor falls back to starter");
+  assert(daysFor(TIERS.starter) === starterDays && daysFor(TIERS.trio) === fullDays, "daysFor mirrors Swift days(for:)");
+  assert(anytimeSession === starterDays[0], "the trio IS the anytime session");
+  assert(maxDailyPoints(TIERS.trio) === 85, "trio previews 85/day");
+  assert(maxDailyPoints(TIERS.starter) === 170, "starter previews 170/day");
+  assert(maxDailyPoints(TIERS.full) === 500, "full previews 500/day");
   assert(poseKind("Cat-Cow") === "allFours" && poseKind("Supported Fish") === "fish", "poseKind mapping");
   assert(starterDays[0].moves[0].id === "Cat-Cow45–60s flowing", "move id = name+hold");
   console.log("stretchLibrary self-check OK");

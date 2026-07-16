@@ -11,11 +11,14 @@ import { buildSampleLogs } from "./sampleData.js";
 const K = {
   state: "flowtear.state.v1",
   backup: "flowtear.state.v1.backup",
-  fullPlan: "flowtear.stretch.fullplan",
+  tier: "flowtear.stretch.tier",
+  fullPlan: "flowtear.stretch.fullplan", // legacy boolean — migrated into `tier`
   lastEdit: "flowtear.lastEdit",
   insightsSeen: "flowtear.insightsSeen",
   seeded: "flowtear.sample.seeded",
 };
+
+export const STRETCH_TIERS = ["trio", "starter", "full"];
 
 export class CycleStore {
   constructor() {
@@ -88,8 +91,20 @@ export class CycleStore {
     return dayComplete;
   }
 
-  get fullStretchPlan() { return readBool(K.fullPlan); }
-  set fullStretchPlan(v) { localStorage.setItem(K.fullPlan, JSON.stringify(!!v)); this._notify(); }
+  // Which stretch mode she's on ("trio" / "starter" / "full"). Switching is always
+  // manual and NEVER touches logged data — completions are stored per calendar
+  // date, so every mode reads the same history. Migrates the old two-mode boolean
+  // (CycleStore.swift:85).
+  get stretchTier() {
+    const raw = localStorage.getItem(K.tier);
+    if (raw && STRETCH_TIERS.includes(raw)) return raw;
+    return readBool(K.fullPlan) ? "full" : "starter";
+  }
+  set stretchTier(v) {
+    if (!STRETCH_TIERS.includes(v)) return;
+    localStorage.setItem(K.tier, v);
+    this._notify();
+  }
 
   updateSettings(patch) { this.settings = { ...this.settings, ...patch }; this._save(); this._notify(); }
 
@@ -111,6 +126,23 @@ export class CycleStore {
 
   prediction(today = new Date()) {
     return predict(this.periodDays, today, this.settings);
+  }
+
+  // A best-guess prediction even before a real period is logged, so the ring can
+  // always show a preview: anchor on any bleeding day (spotting counts HERE, unlike
+  // periodDays), else on her first log. Real data replaces it as soon as it exists.
+  // (CycleStore.swift:138)
+  previewPrediction(today = new Date()) {
+    const real = this.prediction(today);
+    if (real.hasHistory) return real;
+    const anyBleed = this.logsSnapshot
+      .filter((l) => l.flow != null)
+      .map((l) => dateFromKey(l.dateKey));
+    const all = this.logsSnapshot.map((l) => dateFromKey(l.dateKey));
+    const pool = anyBleed.length ? anyBleed : all;
+    if (!pool.length) return real;
+    const anchor = new Date(Math.min(...pool.map((d) => d.getTime())));
+    return predict([anchor], today, this.settings);
   }
 
   // ---- persistence ----

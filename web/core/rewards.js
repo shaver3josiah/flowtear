@@ -11,25 +11,38 @@
 //   every pose in the day done  +10
 //   first-ever guided pose      +30 (once per pose)
 //   multiplier: Anytime x1 · 3-day starter x2 · full 14-day x4
+//   flower lands on the period arc  +5 (once per calendar day)
+//
+// LOCK-INS: a missed plan day costs 5 petals, charged once per day. Lifetime is
+// never touched. Days missed while her plan is paused are excused, not billed.
 
 const K = {
   state: "flowtear.rewards.v1",
   backup: "flowtear.rewards.v1.backup",
 };
 
-// Ten flowers of rising rarity. `emoji` is carried for parity with the Swift
-// catalog; the web shop draws its own inline blooms (see garden.js).
+// Ten flowers of rising rarity. Hand-drawn (never emoji — the DS forbids them in
+// product UI); the web shop draws its own inline blooms, see garden.js.
 export const FLOWERS = [
-  { id: "daisy",     emoji: "🌼", name: "Daisy",     price: 100,  rarity: "Common" },
-  { id: "tulip",     emoji: "🌷", name: "Tulip",     price: 250,  rarity: "Common" },
-  { id: "blossom",   emoji: "🌸", name: "Blossom",   price: 500,  rarity: "Sweet" },
-  { id: "camellia",  emoji: "💮", name: "Camellia",  price: 800,  rarity: "Sweet" },
-  { id: "rosette",   emoji: "🏵️", name: "Rosette",   price: 1200, rarity: "Lovely" },
-  { id: "rose",      emoji: "🌹", name: "Rose",      price: 1800, rarity: "Lovely" },
-  { id: "hibiscus",  emoji: "🌺", name: "Hibiscus",  price: 2600, rarity: "Rare" },
-  { id: "sunflower", emoji: "🌻", name: "Sunflower", price: 3600, rarity: "Rare" },
-  { id: "lotus",     emoji: "🪷", name: "Lotus",     price: 5000, rarity: "Precious" },
-  { id: "bouquet",   emoji: "🌹", name: "Red rose bouquet", price: 7500, rarity: "Precious" },
+  { id: "daisy",     name: "Daisy",     price: 100,  rarity: "Common" },
+  { id: "tulip",     name: "Tulip",     price: 250,  rarity: "Common" },
+  { id: "blossom",   name: "Blossom",   price: 500,  rarity: "Sweet" },
+  { id: "camellia",  name: "Camellia",  price: 800,  rarity: "Sweet" },
+  { id: "rosette",   name: "Rosette",   price: 1200, rarity: "Lovely" },
+  { id: "rose",      name: "Rose",      price: 1800, rarity: "Lovely" },
+  { id: "hibiscus",  name: "Hibiscus",  price: 2600, rarity: "Rare" },
+  { id: "sunflower", name: "Sunflower", price: 3600, rarity: "Rare" },
+  { id: "lotus",     name: "Lotus",     price: 5000, rarity: "Precious" },
+  { id: "bouquet",   name: "Red rose bouquet", price: 7500, rarity: "Precious" },
+];
+
+// Elegant little chimes — each a different mood of "well done". `systemID` is the
+// iOS AudioServices sound the native app plays; the web has no such shelf, so
+// `freq` is the WebAudio stand-in that keeps the three audibly distinct.
+export const SOUNDS = [
+  { id: "swoosh",   name: "Petal swoosh",  systemID: 1001, price: 800,  freq: 660 },
+  { id: "songbird", name: "Songbird",      systemID: 1016, price: 1200, freq: 1046 },
+  { id: "crystal",  name: "Crystal chime", systemID: 1025, price: 1600, freq: 880 },
 ];
 
 export const PRICES = {
@@ -37,7 +50,7 @@ export const PRICES = {
   theme: 600,          // pink, peony, soft, light (cherry/rose/dark are free)
   accent: 1500,
   colorStudio: 4000,
-  sound: 1200,
+  sound: 1200,         // legacy single-chime price; per-sound prices live in SOUNDS
   starterGift: 100,    // exactly a Daisy — her first unlock
 };
 
@@ -55,11 +68,18 @@ export class RewardsStore {
     this.accentUnlocked = false;
     this.colorStudioUnlocked = false;
     this.poseyOwned = false;
-    this.soundUnlocked = false;
+    this.ownedSounds = new Set();
+    this.activeSound = null;
+    this.penalizedDays = new Set();   // lock-in misses already charged
+    this.periodLandDays = new Set();  // ring-landing bonuses already paid
     this.tutorialSeen = false;
     this.activeSticker = null;        // flower id or "posey"
-    this.stickerX = 0.78;             // normalized offsets around the Today ring
+    // Where her plucked sticker rests near the Today ring (offsets from the ring
+    // center in units of the ring's track radius, so ~-1.4…1.4).
+    this.stickerX = 0.78;
     this.stickerY = -0.72;
+    this.stickerAngle = -0.9;         // resting angle on the ring (radians)
+    this.stickerMode = "ring";        // "ring" (riding it) or "free" (plucked off)
     this._subs = new Set();
     this._load();
   }
@@ -71,13 +91,7 @@ export class RewardsStore {
   // ---- catalog ----
   get catalog() { return FLOWERS; }
   flower(id) { return FLOWERS.find((f) => f.id === id) || null; }
-
-  // The emoji for the sticker she has equipped (Posey shows as her bloom).
-  get activeStickerEmoji() {
-    if (!this.activeSticker) return null;
-    if (this.activeSticker === "posey") return "🌸";
-    return this.flower(this.activeSticker)?.emoji ?? null;
-  }
+  sound(id) { return SOUNDS.find((s) => s.id === id) || null; }
 
   // First open of the Stretch tab: mark the tutorial seen and gift exactly
   // enough petals for the Daisy, once ever.
@@ -87,18 +101,25 @@ export class RewardsStore {
     this._earn(PRICES.starterGift);
   }
 
-  // The celebration chime, if she owns it. WebAudio stands in for the iOS system
-  // sound; audio is a nicety, so a failure here never breaks a purchase.
+  // Her chosen celebration sound, if she owns one.
   playCelebrationIfOwned() {
-    if (!this.soundUnlocked) return;
+    const s = this.activeSound ? this.sound(this.activeSound) : null;
+    if (s) this._play(s);
+  }
+
+  soundOwned(id) { return this.ownedSounds.has(id); }
+
+  // WebAudio stands in for the iOS system sounds; audio is a nicety, so a
+  // failure here never breaks a purchase.
+  _play(s) {
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const Ctx = typeof window === "undefined" ? null : (window.AudioContext || window.webkitAudioContext);
       if (!Ctx) return;
       const ac = new Ctx();
       const o = ac.createOscillator();
       const g = ac.createGain();
       o.type = "sine";
-      o.frequency.value = 880;
+      o.frequency.value = s.freq;
       g.gain.setValueAtTime(0.0001, ac.currentTime);
       g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.34);
@@ -137,6 +158,35 @@ export class RewardsStore {
     const amount = 30 * multiplier;
     this._earn(amount);
     return amount;
+  }
+
+  // Easter egg: her flower settled on the period arc of the ring — +5, at most
+  // once per calendar day.
+  awardPeriodLanding(dateKey) {
+    if (this.periodLandDays.has(dateKey)) return false;
+    this.periodLandDays.add(dateKey);
+    this._earn(5);
+    return true;
+  }
+
+  // Lock-in: −5 petals for a missed plan day, charged at most once per day.
+  // Lifetime is untouched — only the spendable balance feels it.
+  penalizeMissedDay(dateKey) {
+    if (this.penalizedDays.has(dateKey)) return false;
+    this.penalizedDays.add(dateKey);
+    this.balance = Math.max(0, this.balance - 5);
+    this._save();
+    this._notify();
+    return true;
+  }
+
+  // Pause amnesty: mark a missed day handled WITHOUT charging it, so days
+  // skipped while her plan is paused can never be billed later.
+  excuseMissedDay(dateKey) {
+    if (this.penalizedDays.has(dateKey)) return;
+    this.penalizedDays.add(dateKey);
+    this._save();
+    this._notify();
   }
 
   _earn(amount) {
@@ -197,14 +247,25 @@ export class RewardsStore {
     return true;
   }
 
-  buySound() {
-    if (this.soundUnlocked || !this.canAfford(PRICES.sound)) return false;
-    this.balance -= PRICES.sound;
-    this.soundUnlocked = true;
-    this.playCelebrationIfOwned();
+  buySoundItem(id) {
+    const s = this.sound(id);
+    if (!s || this.ownedSounds.has(id) || !this.canAfford(s.price)) return false;
+    this.balance -= s.price;
+    this.ownedSounds.add(id);
+    this.activeSound = id;
+    this._play(s);              // hear it at once
     this._save();
     this._notify();
     return true;
+  }
+
+  // Wear / take off a sound she owns; re-tapping the active one silences it.
+  useSound(id) {
+    if (!this.ownedSounds.has(id)) return;
+    this.activeSound = this.activeSound === id ? null : id;
+    this._save();
+    this._notify();
+    this.playCelebrationIfOwned();
   }
 
   buyColorStudio() {
@@ -231,9 +292,23 @@ export class RewardsStore {
     this._notify();
   }
 
+  setStickerAngle(a) {
+    this.stickerAngle = a;
+    this._save();
+    this._notify();
+  }
+
+  setStickerMode(mode) {
+    this.stickerMode = mode;
+    this._save();
+    this._notify();
+  }
+
   // ---- persistence (own blob + backup — never touches cycle data) ----
   // Sets serialize as arrays, matching Swift's JSONEncoder(Set) output so the
-  // saved blob is byte-shape-compatible across platforms.
+  // saved blob is byte-shape-compatible across platforms. `soundUnlocked` is
+  // written as false forever: it is the legacy single-chime flag, kept in the
+  // blob only so an older iOS build can still decode it.
   _save() {
     if (typeof localStorage === "undefined") return; // Node import / SSR: in-memory only
     const blob = {
@@ -246,10 +321,16 @@ export class RewardsStore {
       colorStudioUnlocked: this.colorStudioUnlocked,
       poseyOwned: this.poseyOwned,
       activeSticker: this.activeSticker,
-      soundUnlocked: this.soundUnlocked,
+      soundUnlocked: false,
       tutorialSeen: this.tutorialSeen,
       stickerX: this.stickerX,
       stickerY: this.stickerY,
+      ownedSounds: [...this.ownedSounds],
+      activeSound: this.activeSound,
+      penalizedDays: [...this.penalizedDays],
+      stickerAngle: this.stickerAngle,
+      periodLandDays: [...this.periodLandDays],
+      stickerMode: this.stickerMode,
     };
     const prev = localStorage.getItem(K.state);
     if (prev != null) localStorage.setItem(K.backup, prev);
@@ -262,22 +343,37 @@ export class RewardsStore {
       const data = localStorage.getItem(key);
       if (!data) continue;
       try {
-        const b = JSON.parse(data);
-        this.balance = b.balance ?? 0;
-        this.lifetime = b.lifetime ?? 0;
-        this.guidedSeen = new Set(b.guidedSeen ?? []);
-        this.ownedFlowers = new Set(b.ownedFlowers ?? []);
-        this.ownedThemes = new Set(b.ownedThemes ?? []);
-        this.accentUnlocked = !!b.accentUnlocked;
-        this.colorStudioUnlocked = !!b.colorStudioUnlocked;
-        this.poseyOwned = !!b.poseyOwned;
-        this.activeSticker = b.activeSticker ?? null;
-        this.soundUnlocked = !!b.soundUnlocked;
-        this.tutorialSeen = !!b.tutorialSeen;
-        this.stickerX = b.stickerX ?? 0.78;
-        this.stickerY = b.stickerY ?? -0.72;
+        this._hydrate(JSON.parse(data));
         return;
       } catch { /* corrupt blob — try the backup next */ }
+    }
+  }
+
+  // Split out so the round-trip self-check can exercise decoding + migration
+  // without a localStorage.
+  _hydrate(b) {
+    this.balance = b.balance ?? 0;
+    this.lifetime = b.lifetime ?? 0;
+    this.guidedSeen = new Set(b.guidedSeen ?? []);
+    this.ownedFlowers = new Set(b.ownedFlowers ?? []);
+    this.ownedThemes = new Set(b.ownedThemes ?? []);
+    this.accentUnlocked = !!b.accentUnlocked;
+    this.colorStudioUnlocked = !!b.colorStudioUnlocked;
+    this.poseyOwned = !!b.poseyOwned;
+    this.activeSticker = b.activeSticker ?? null;
+    this.tutorialSeen = !!b.tutorialSeen;
+    this.stickerX = b.stickerX ?? 0.78;
+    this.stickerY = b.stickerY ?? -0.72;
+    this.ownedSounds = new Set(b.ownedSounds ?? []);
+    this.activeSound = b.activeSound ?? null;
+    this.penalizedDays = new Set(b.penalizedDays ?? []);
+    this.stickerAngle = b.stickerAngle ?? -0.9;
+    this.periodLandDays = new Set(b.periodLandDays ?? []);
+    this.stickerMode = b.stickerMode ?? "ring";
+    // Migrate the old single-chime unlock into the crystal chime.
+    if (b.soundUnlocked === true && this.ownedSounds.size === 0) {
+      this.ownedSounds.add("crystal");
+      if (this.activeSound == null) this.activeSound = "crystal";
     }
   }
 }
@@ -287,3 +383,53 @@ export class RewardsStore {
 // window/localStorage (safe under `node --check` and a bare Node import).
 export const rewards = new RewardsStore();
 export default rewards;
+
+// ---- self-check: `node web/core/rewards.js` (silent in the browser) ----
+if (import.meta.main) {
+  const assert = (await import("node:assert")).default;
+  const r = new RewardsStore();
+  r.awardPose(0, 4, 2);                       // 15 × 2
+  r.awardPose(1, 4, 2);                       // (15+5) × 2
+  assert.equal(r.balance, 70, "earning");
+  assert.equal(r.lifetime, 70, "lifetime");
+
+  assert.equal(r.buySoundItem("crystal"), false, "cannot afford the crystal chime");
+  r._earn(1600 - r.balance);
+  assert.equal(r.buySoundItem("crystal"), true, "buys the crystal chime");
+  assert.equal(r.activeSound, "crystal", "new sound becomes active");
+  assert.equal(r.balance, 0, "price left the balance");
+  assert.equal(r.lifetime, 1600, "spending never touches lifetime");
+  assert.equal(r.buySoundItem("crystal"), false, "never bought twice");
+
+  r._earn(10);
+  assert.equal(r.penalizeMissedDay("2026-07-15"), true, "lock-in charges once");
+  assert.equal(r.penalizeMissedDay("2026-07-15"), false, "and only once");
+  assert.equal(r.balance, 5, "−5 petals");
+  assert.equal(r.lifetime, 1610, "penalty never touches lifetime");
+  r.excuseMissedDay("2026-07-14");
+  assert.equal(r.penalizeMissedDay("2026-07-14"), false, "an excused day can't be billed later");
+  assert.equal(r.balance, 5, "amnesty costs nothing");
+
+  assert.equal(r.awardPeriodLanding("2026-07-16"), true, "ring landing pays");
+  assert.equal(r.awardPeriodLanding("2026-07-16"), false, "once per day");
+  assert.equal(r.balance, 10, "+5 petals");
+
+  // Legacy blob → the crystal chime, and a full round-trip of the new fields.
+  const legacy = new RewardsStore();
+  legacy._hydrate({ balance: 40, soundUnlocked: true, ownedFlowers: ["daisy"] });
+  assert.deepEqual([...legacy.ownedSounds], ["crystal"], "legacy chime migrates");
+  assert.equal(legacy.activeSound, "crystal", "and plays");
+  assert.equal(legacy.stickerMode, "ring", "sticker defaults");
+  assert.equal(legacy.stickerAngle, -0.9, "sticker angle default");
+
+  const back = new RewardsStore();
+  back._hydrate(JSON.parse(JSON.stringify({
+    ...r, guidedSeen: [...r.guidedSeen], ownedFlowers: [...r.ownedFlowers],
+    ownedThemes: [...r.ownedThemes], ownedSounds: [...r.ownedSounds],
+    penalizedDays: [...r.penalizedDays], periodLandDays: [...r.periodLandDays],
+  })));
+  assert.equal(back.balance, r.balance, "round-trip balance");
+  assert.deepEqual([...back.penalizedDays].sort(), ["2026-07-14", "2026-07-15"], "round-trip lock-in days");
+  assert.deepEqual([...back.ownedSounds], ["crystal"], "round-trip sounds");
+  console.log("rewards.js self-check ok");
+}

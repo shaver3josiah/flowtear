@@ -4,7 +4,10 @@
 // celebration. Pause, skip, or step back anytime. Each move it finishes is checked
 // off through store.toggleStretchMove (never unchecked), so the coach's checklist and
 // window progress stay in sync; the last move sets stretchDone. Close ends the session.
+// Each move pays its pose points at her plan's multiplier, plus +30 the first time
+// she's ever guided through that pose.
 import * as lib from "../core/stretchLibrary.js";
+import { rewards } from "../core/rewards.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
@@ -33,6 +36,7 @@ export default function StretchSession({ ctx }) {
 
   const day = screenProps && screenProps.day ? screenProps.day : lib.anytimeSession;
   const finishTitle = (screenProps && screenProps.finishTitle) || "Session done";
+  const multiplier = (screenProps && screenProps.multiplier) || 1;
   const moves = day.moves;
 
   const [index, setIndex] = useState(0);
@@ -43,16 +47,22 @@ export default function StretchSession({ ctx }) {
   const move = moves[Math.min(index, moves.length - 1)];
   const progress = move && move.seconds > 0 ? 1 - remaining / move.seconds : 1;
 
-  // Check off the current move (if new), then advance or finish the day.
+  // The move she just finished counts — check it off (never uncheck), award its
+  // points, and pay the first-ever-guided bonus for this pose. Then advance or
+  // finish the day.
   const advance = () => {
-    if (!store.stretchMovesDone(today).includes(index)) {
+    const doneBefore = store.stretchMovesDone(today);
+    if (!doneBefore.includes(index)) {
       store.toggleStretchMove(index, today, moves.length);
+      rewards.awardPose(doneBefore.length, moves.length, multiplier);
     }
+    rewards.awardGuidedFirstTime(move.name, multiplier);
     if (index + 1 < moves.length) {
       setIndex(index + 1);
       setRemaining(moves[index + 1].seconds);
     } else {
       store.setStretchDone(true, today);
+      rewards.playCelebrationIfOwned();
       setFinished(true);
     }
   };

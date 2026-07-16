@@ -27,6 +27,10 @@ import Garden from "./screens/garden.js";
 import StretchSession from "./screens/stretchSession.js";
 import ThemeEditor from "./screens/themeEditor.js";
 import PhaseDetail from "./screens/phaseDetail.js";
+import NeedMorePetals from "./screens/needMorePetals.js";
+import Tips from "./screens/tips.js";
+import About from "./screens/about.js";
+import * as appLock from "./core/appLock.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
@@ -50,9 +54,13 @@ const OVERLAYS = {
   theme: ThemeEditor,
   phase: PhaseDetail,
   log: Log,
+  needPetals: NeedMorePetals,
+  tips: Tips,
+  about: About,
 };
 
-const THEME_KEY = "flowtear.theme";
+// Matches Swift's Theme.presetKey so both builds read the same saved preset.
+const THEME_KEY = "flowtear.theme.preset";
 function applyTheme(name) {
   document.documentElement.setAttribute("data-theme", name || "cherry");
 }
@@ -64,8 +72,65 @@ function useStore() {
   return store;
 }
 
+// The privacy gate — the shell half of core/appLock.js (which owns the state and
+// the biometric prompt). Mirrors AppLockGate's scenePhase logic: lock when the
+// app leaves the foreground, prompt when it comes back and on cold launch. If she
+// cancels we PARK on an Unlock button rather than re-prompting in a loop — the
+// system prompt itself flips visibility, so looping would trap her.
+function useAppLock() {
+  const [, force] = useState(0);
+  const parked = React.useRef(false);
+  const rerender = () => force((n) => n + 1);
+
+  useEffect(() => {
+    const attempt = () => {
+      if (!appLock.isLocked() || parked.current) return;
+      appLock.unlock().then((ok) => { parked.current = !ok; rerender(); });
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (appLock.isEnabled()) appLock.lock();
+        parked.current = false;   // coming back should prompt again
+      } else {
+        attempt();
+      }
+    };
+    const off = appLock.subscribe(rerender);
+    document.addEventListener("visibilitychange", onVisibility);
+    attempt();                     // cold launch starts locked when she enabled it
+    return () => { off(); document.removeEventListener("visibilitychange", onVisibility); };
+  }, []);
+
+  return {
+    locked: appLock.isLocked(),
+    parked: parked.current,
+    retry: () => {
+      parked.current = false;
+      rerender();
+      appLock.unlock().then((ok) => { parked.current = !ok; rerender(); });
+    },
+  };
+}
+
+// Shown over everything while locked. Says nothing about her cycle.
+function LockCurtain({ parked, retry }) {
+  const { Button, FlowerMark } = UI;
+  return html`
+    <div class="lock-curtain" role="dialog" aria-modal="true" aria-label="Uncorked is locked">
+      <${FlowerMark} size=${86} breathe=${!parked} />
+      <div style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--deep)" }}>
+        Uncorked is locked
+      </div>
+      <div style=${{ fontSize: 14, color: "var(--muted)", textAlign: "center", maxWidth: 260 }}>
+        ${parked ? "Unlock when you're ready — your day is waiting." : "Just checking it's you."}
+      </div>
+      ${parked && html`<${Button} variant="primary" onClick=${retry}>Unlock</${Button}>`}
+    </div>`;
+}
+
 function App() {
   useStore();
+  const lock = useAppLock();
   const [tab, setTab] = useState("today");
   const [overlay, setOverlay] = useState(null); // { name, props } | null
   const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "cherry");
@@ -87,13 +152,15 @@ function App() {
 
   const OverlayComp = overlay ? OVERLAYS[overlay.name] : null;
 
+  // The curtain sits OUTSIDE the aria-hidden content (or it would hide itself).
   return html`
     <div class="app">
-      <main class="screen" key=${tab}>
+      ${lock.locked && html`<${LockCurtain} parked=${lock.parked} retry=${lock.retry} />`}
+      <main class="screen" key=${tab} aria-hidden=${lock.locked ? "true" : undefined}>
         <${Screen} Comp=${Current} ctx=${{ ...ctx, screenProps: {} }} />
       </main>
 
-      <nav class="tabbar" role="tablist">
+      <nav class="tabbar" role="tablist" aria-hidden=${lock.locked ? "true" : undefined}>
         ${TABS.map((t) => html`
           <button
             key=${t.id}
@@ -108,7 +175,7 @@ function App() {
         `)}
       </nav>
 
-      ${OverlayComp && html`
+      ${!lock.locked && OverlayComp && html`
         <div class="overlay-scrim" onClick=${nav.close}>
           <div class="overlay-sheet" onClick=${(e) => e.stopPropagation()}>
             <${Screen} Comp=${OverlayComp} ctx=${{ ...ctx, screenProps: overlay.props }} />

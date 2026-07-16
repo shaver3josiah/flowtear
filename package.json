@@ -5,6 +5,7 @@
   "description": "Uncorked (Flowtear) — web app wrapped by Capacitor for Android. Shares the /contracts source-of-truth with the native SwiftUI iOS app.",
   "type": "module",
   "scripts": {
+    "test": "node web/core/engine.test.mjs && node web/core/store.test.mjs && node web/core/report.test.mjs && node web/core/rewards.js && node web/core/stretchLibrary.js",
     "gen:vectors": "node scripts/gen-vectors.mjs",
     "check:parity": "node scripts/check-parity.mjs",
     "assets": "node scripts/generate-assets.js && npx capacitor-assets generate --android",
@@ -12,9 +13,13 @@
     "apk": "npm run sync && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
-    "@capacitor/android": "^6.2.1",
-    "@capacitor/cli": "^6.2.1",
-    "@capacitor/core": "^6.2.1"
+    "@aparajita/capacitor-biometric-auth": "^10.0.0",
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/share": "^8.0.1"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
