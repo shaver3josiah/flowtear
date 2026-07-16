@@ -538,6 +538,33 @@ struct StretchCoachView: View {
         }
     }
 
+    // The day's own checkbox — tappable for today and past plan days; future
+    // days wait their turn. Completing rings her chime and bursts.
+    private func dayCheckbox(planDay: Int) -> some View {
+        let done = isDone(planDay: planDay)
+        let dayDate = date(forPlanDay: planDay)
+        let tappable = dayDate.map { $0 <= today } ?? false
+        return Button {
+            guard let d = dayDate else { return }
+            let finishing = !store.stretchDone(on: d)
+            store.setStretchDone(finishing, on: d)
+            if finishing {
+                dayBurstToken += 1
+                rewards.playCelebrationIfOwned()
+            }
+        } label: {
+            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 20))
+                .foregroundStyle(theme.color(done ? .good : (tappable ? .muted : .line)))
+                .frame(width: FFSpace.tapMin - 14, height: FFSpace.tapMin - 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!tappable)
+        .accessibilityLabel(done ? "Day \(planDay) done" : "Mark day \(planDay) done")
+        .accessibilityAddTraits(done ? .isSelected : [])
+    }
+
     // MARK: evidence + safety
 
     private var evidenceCard: some View {
