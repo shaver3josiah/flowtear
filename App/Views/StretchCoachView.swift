@@ -114,6 +114,11 @@ struct StretchCoachView: View {
             if wasPaused && !isPaused { excusePauseWindow() }
             applyLockInPenalties()
         }
+        // Re-run the accounting on a tier switch so the penalty note never
+        // shows a stale count from the previous plan.
+        .onChange(of: store.stretchTierRaw) { _, _ in
+            applyLockInPenalties()
+        }
     }
 
     /// Amnesty at unpause: every past, un-done plan day is excused for good —
@@ -136,6 +141,13 @@ struct StretchCoachView: View {
     private func applyLockInPenalties() {
         guard tier.locksIn, tier.totalDays > 0 else { return }
         let startOfToday = Calendar.current.startOfDay(for: today)
+        // While there's no prediction the window is unknown (it slides with
+        // today and can never charge) — keep sliding the anchor too, so when
+        // the FIRST prediction lands and pins the window into real dates, it
+        // can only reach back to the last day the window was still unknown.
+        if daysUntil == nil {
+            planActivatedAt = startOfToday.timeIntervalSinceReferenceDate
+        }
         let activation = Date(timeIntervalSinceReferenceDate: planActivatedAt)
         var charged = 0
         for d in 1...tier.totalDays {
@@ -151,7 +163,7 @@ struct StretchCoachView: View {
     }
 
     private var penaltyNote: some View {
-        Text("\(penaltyCharged * 5) petals drifted off for missed days — today's a fresh bloom.")
+        Text("\(penaltyCharged * 5) petals drifted off for \(penaltyCharged == 1 ? "a missed day" : "missed days") — today's a fresh bloom.")
             .font(ffBody(FFType.xs))
             .foregroundStyle(theme.color(.muted))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -252,7 +264,7 @@ struct StretchCoachView: View {
         case .starter: "the 3 days before your period, 5 petals lost per missed day"
         case .full:    "the full two weeks before your period, 5 petals lost per missed day"
         }
-        return "\(t.label), \(how), up to \(maxDailyPoints(t)) points a day"
+        return "\(t.label), \(how), up to \(maxDailyPoints(t)) petals a day"
     }
 
     // Her plan, her terms: pausing excuses missed days instead of charging them.
@@ -608,7 +620,7 @@ struct StretchCoachView: View {
                         playingDay = day
                     }
                 }
-                .padding(.leading, 34)
+                .padding(.leading, FFSpace.tapMin + 10)
                 .padding(.bottom, FFSpace.s3)
                 .transition(.opacity)
             } else if expanded {
@@ -632,7 +644,7 @@ struct StretchCoachView: View {
                         playingDay = day
                     }
                 }
-                .padding(.leading, 34)
+                .padding(.leading, FFSpace.tapMin + 10)
                 .padding(.bottom, FFSpace.s3)
                 .transition(.opacity)
             }
