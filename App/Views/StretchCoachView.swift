@@ -139,7 +139,9 @@ struct StretchCoachView: View {
     /// plan is PAUSED those days are excused for good instead of charged; days
     /// before the plan was activated are never chargeable at all.
     private func applyLockInPenalties() {
-        guard tier.locksIn, tier.totalDays > 0 else { return }
+        // Trio never penalizes — and must also clear any note left over from a
+        // lock-in tier, or the "petals drifted off" line goes stale on switch.
+        guard tier.locksIn, tier.totalDays > 0 else { penaltyCharged = 0; return }
         let startOfToday = Calendar.current.startOfDay(for: today)
         // While there's no prediction the window is unknown (it slides with
         // today and can never charge) — keep sliding the anchor too, so when

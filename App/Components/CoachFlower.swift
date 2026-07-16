@@ -117,6 +117,10 @@ struct CoachFlower: View {
         // check-off must never let the FIRST award's hide truncate the second.
         awardHideTask?.cancel()
         guard !reduceMotion else {
+            // If a full-motion celebration was just cancelled (Reduce Motion
+            // flipped mid-sequence), clear its theatrics so nothing strands.
+            watering = false
+            balloon = false
             showAward = true
             awardHideTask = Task {
                 try? await Task.sleep(for: .seconds(1.4))

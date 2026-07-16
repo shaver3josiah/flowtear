@@ -65,7 +65,13 @@ final class RewardsStoreTests: XCTestCase {
         _ = r.awardPose(dateKey: "2026-07-16", alreadyDone: 1, total: 3, multiplier: 2)
         guard let data = r.backupData() else { return XCTFail("no backup data") }
 
+        // Clear the defaults again so `fresh` truly starts empty — otherwise it
+        // hydrates r's saved state in init and the test would pass even if
+        // restore(from:) were a no-op.
+        UserDefaults.standard.removeObject(forKey: "flowtear.rewards.v1")
+        UserDefaults.standard.removeObject(forKey: "flowtear.rewards.v1.backup")
         let fresh = RewardsStore()
+        XCTAssertEqual(fresh.balance, 0)   // proves the restore below does the work
         XCTAssertTrue(fresh.restore(from: data))
         XCTAssertEqual(fresh.balance, 70)
         // The restored ledger refunds the recorded amounts, newest first.
