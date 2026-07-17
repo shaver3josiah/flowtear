@@ -243,15 +243,24 @@ struct CoachFlower: View {
         let chain = Array(rewards.ringChain.prefix(7))   // a crown, not a hedge
         return ZStack {
             ForEach(Array(chain.enumerated()), id: \.offset) { i, id in
-                let t = chain.count == 1 ? 0.5 : Double(i) / Double(chain.count - 1)
-                let deg = -142 + 104 * t                 // fan across the top arc
-                let rad = deg * .pi / 180
+                let spot = Self.crownSpot(index: i, count: chain.count)
                 StickerView(id: id, size: 11)
-                    .rotationEffect(.degrees((deg + 90) * 0.5))
-                    .offset(x: 24 * CGFloat(cos(rad)), y: 24 * CGFloat(sin(rad)))
+                    .rotationEffect(.degrees(spot.tilt))
+                    .offset(x: spot.x, y: spot.y)
             }
         }
         .allowsHitTesting(false)
+    }
+
+    /// Crown geometry, hoisted out of the ViewBuilder so the release build's
+    /// type-checker never chokes on inline CGFloat/Double trig.
+    static func crownSpot(index: Int, count: Int, radius: CGFloat = 24) -> (x: CGFloat, y: CGFloat, tilt: Double) {
+        let t: Double = count <= 1 ? 0.5 : Double(index) / Double(count - 1)
+        let deg: Double = -142 + 104 * t                 // fan across the top arc
+        let rad: Double = deg * .pi / 180
+        return (x: radius * CGFloat(cos(rad)),
+                y: radius * CGFloat(sin(rad)),
+                tilt: (deg + 90) * 0.5)
     }
 }
 

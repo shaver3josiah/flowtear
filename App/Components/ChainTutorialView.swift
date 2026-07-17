@@ -92,19 +92,18 @@ struct ChainTutorialView: View {
         }
     }
 
-    // Practice Posey: the bloom with the demo chain fanned over her petals.
+    // Practice Posey: the bloom with the demo chain fanned over her petals,
+    // using the exact same crown geometry the real Posey wears.
     private var demoPosey: some View {
         FlowerMark(size: 46)
             .overlay {
                 ZStack {
                     let chain = Array(demoChain.prefix(7))
                     ForEach(Array(chain.enumerated()), id: \.offset) { i, id in
-                        let t = chain.count == 1 ? 0.5 : Double(i) / Double(chain.count - 1)
-                        let deg = -142 + 104 * t
-                        let rad = deg * .pi / 180
+                        let spot = CoachFlower.crownSpot(index: i, count: chain.count)
                         StickerView(id: id, size: 11)
-                            .rotationEffect(.degrees((deg + 90) * 0.5))
-                            .offset(x: 24 * CGFloat(cos(rad)), y: 24 * CGFloat(sin(rad)))
+                            .rotationEffect(.degrees(spot.tilt))
+                            .offset(x: spot.x, y: spot.y)
                     }
                 }
             }

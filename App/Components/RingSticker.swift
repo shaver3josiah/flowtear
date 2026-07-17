@@ -280,12 +280,20 @@ struct RingChainView: View {
     var body: some View {
         ZStack {
             ForEach(Array(chain.enumerated()), id: \.offset) { i, id in
-                let a = Double(i) / Double(max(chain.count, 1)) * 2 * .pi - .pi / 2
+                let p = position(for: i)
                 StickerView(id: id, size: 19)
-                    .offset(x: radius * CGFloat(cos(a)), y: radius * CGFloat(sin(a)))
+                    .offset(x: p.x, y: p.y)
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    // Hoisted out of the ViewBuilder: the inline CGFloat/Double trig mix made
+    // the release build's type-checker time out (simulator builds squeaked by).
+    private func position(for index: Int) -> CGPoint {
+        let angle: Double = Double(index) / Double(max(chain.count, 1)) * 2 * .pi - .pi / 2
+        return CGPoint(x: radius * CGFloat(cos(angle)),
+                       y: radius * CGFloat(sin(angle)))
     }
 }
