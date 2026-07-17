@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Garden Editor · clickable prototype</title>
+<style>
+  :root{
+    --bg:#FDF2F7; --surface:#FFFFFF; --soft:#FBE4EE; --line:#F2CEDF;
+    --text:#421527; --muted:#885B6D; --deep:#B01B58; --strong:#D23070;
+    --good:#17703B; --gold:#FFC966;
+    --serif:'Playfair Display',Georgia,serif; --sans:'Quicksand','Segoe UI',system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#171118; --surface:#221925; --soft:#302433; --line:#3F3140;
+           --text:#F8EDF3; --muted:#C7A9B8; --deep:#F8CCDF; --strong:#F26AA2; --good:#55C389; }
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;padding:22px 16px 60px}
+  .page{max-width:960px;margin:0 auto}
+  .crumbs{display:flex;gap:8px;align-items:center;font-size:.82rem;color:var(--muted);margin-bottom:14px;flex-wrap:wrap}
+  .crumbs a{color:var(--strong);text-decoration:none;font-weight:700;cursor:pointer}
+  h1{font-family:var(--serif);color:var(--deep);font-size:1.7rem;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:.88rem;margin-bottom:18px;max-width:64ch}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;
+        cursor:pointer;transition:transform .15s ease-out}
+  .tile:hover{transform:translateY(-2px)}
+  .tile h3{font-family:var(--serif);color:var(--deep);margin:8px 0 3px}
+  .tile p{font-size:.8rem;color:var(--muted)}
+  .badge{display:inline-block;background:var(--soft);color:var(--deep);border-radius:999px;
+         padding:2px 10px;font-size:.7rem;font-weight:700}
+  button{font:700 .85rem var(--sans);color:var(--deep);background:var(--soft);border:none;
+         border-radius:999px;padding:9px 18px;cursor:pointer}
+  button.primary{background:var(--strong);color:#fff}
+  button:disabled{opacity:.4;cursor:default}
+  .frame{display:none}
+  .frame.on{display:block}
+  .editor{display:grid;grid-template-columns:200px 1fr 240px;gap:14px}
+  @media (max-width:820px){.editor{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .panel h4{font-family:var(--serif);color:var(--deep);font-size:.95rem;margin-bottom:8px}
+  .layer{padding:7px 10px;border-radius:9px;font-size:.8rem;cursor:pointer;font-weight:600}
+  .layer.sel{background:var(--soft);color:var(--deep)}
+  .preview{display:grid;place-items:center;padding:20px;min-height:340px}
+  .swatches{display:flex;gap:8px;justify-content:center;margin-top:10px}
+  .swatches button{width:26px;height:26px;padding:0;border-radius:50%;border:1px solid var(--line)}
+  label{display:block;font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;
+        letter-spacing:.04em;margin:10px 0 3px}
+  input[type=range]{width:100%;accent-color:var(--strong)}
+  input[type=color]{width:100%;height:30px;border:1px solid var(--line);border-radius:8px;background:none;padding:1px}
+  .val{font-size:.78rem;color:var(--deep);font-weight:700;float:right}
+  .rowlist{display:grid;gap:8px}
+  .secrow{display:flex;align-items:center;gap:10px;background:var(--soft);border-radius:11px;padding:10px 12px;font-size:.85rem;font-weight:600}
+  .secrow .mv{margin-left:auto;display:flex;gap:6px}
+  .secrow button{padding:3px 10px;font-size:.8rem}
+  .secrow.hidden-sec{opacity:.45}
+  pre{background:var(--soft);border-radius:10px;padding:12px;font-size:.74rem;overflow-x:auto;white-space:pre-wrap}
+  .gate{display:flex;gap:8px;align-items:center;font-size:.85rem;margin:5px 0}
+  .ok{color:var(--good);font-weight:700}
+  .beforeafter{display:flex;gap:18px;align-items:center;justify-content:center;margin:14px 0}
+  .beforeafter .cell{text-align:center;font-size:.72rem;color:var(--muted)}
+  .note{background:var(--soft);border-radius:12px;padding:12px 14px;font-size:.8rem;color:var(--muted);margin-top:16px;max-width:64ch}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="crumbs" id="crumbs"></div>
+
+  <!-- F2: editor home -->
+  <section class="frame" id="home">
+    <h1>Garden Editor</h1>
+    <p class="sub">Every petal, ring and layout box in Uncorked, editable as data. Changes save as plain JSON in git; shipping runs the same gates as always. Prototype: the Daisy editor below is fully live.</p>
+    <div class="grid">
+      <div class="tile" onclick="go('blooms')"><span class="badge">10 blooms</span><h3>Blooms</h3><p>Petal recipes for the whole shop shelf.</p></div>
+      <div class="tile" onclick="go('posey')"><span class="badge">brand mark</span><h3>Posey</h3><p>Her rings, face and crown proportions.</p></div>
+      <div class="tile" onclick="go('ring')"><span class="badge">geometry</span><h3>Cycle ring</h3><p>Track radius, thickness, sheen.</p></div>
+      <div class="tile" onclick="go('layout')"><span class="badge">3 screens</span><h3>Layout</h3><p>Which cards, in what order.</p></div>
+    </div>
+  </section>
+
+  <!-- F4: bloom editor (LIVE) -->
+  <section class="frame" id="blooms">
+    <h1>Daisy</h1>
+    <p class="sub">A real recipe editor: the JSON below is the actual data format, and the flower redraws as you slide.</p>
+    <div class="editor">
+      <div class="panel"><h4>Layers</h4><div id="layers"></div></div>
+      <div class="panel">
+        <div class="preview"><svg id="bloom" viewBox="0 0 100 100" width="260" height="260"></svg></div>
+        <div class="swatches">
+          <button style="background:#FDF2F7" onclick="setBgSwatch('#FDF2F7')" aria-label="light background"></button>
+          <button style="background:#FFFFFF" onclick="setBgSwatch('#FFFFFF')" aria-label="white background"></button>
+          <button style="background:#171118" onclick="setBgSwatch('#171118')" aria-label="dark background"></button>
+        </div>
+      </div>
+      <div class="panel"><h4>Inspector</h4><div id="inspector"></div>
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="resetRecipe()">Reset</button>
+          <button class="primary" onclick="go('ship')">Review &amp; ship</button>
+        </div>
+      </div>
+    </div>
+    <pre id="recipeJson" style="margin-top:14px"></pre>
+  </section>
+
+  <!-- F5/F6: static mock frames -->
+  <section class="frame" id="posey">
+    <h1>Posey</h1>
+    <p class="sub">Mock frame: her three petal rings as editable rows, plus one proportions sheet for the face, stem and crown offsets that live as literals today.</p>
+    <div class="panel" style="max-width:520px">
+      <h4>Petal rings</h4>
+      <div class="rowlist">
+        <div class="secrow">Outer · 8 petals · primary <span class="mv"><button>edit</button></span></div>
+        <div class="secrow">Middle · 8 petals · primaryStrong <span class="mv"><button>edit</button></span></div>
+        <div class="secrow">Heart · gold center r=11 <span class="mv"><button>edit</button></span></div>
+        <div class="secrow">Proportions · eyes, smile, stem, crown arc <span class="mv"><button>edit</button></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="frame" id="ring">
+    <h1>Cycle ring</h1>
+    <p class="sub">Mock frame: the shared constants blob (track radius 84/200, stroke 15, snap band 26) as sliders, previewed across all eight palettes at once.</p>
+    <div class="panel" style="max-width:520px">
+      <label>Track radius <span class="val">84 / 200</span></label><input type="range" min="60" max="95" value="84">
+      <label>Stroke width <span class="val">15</span></label><input type="range" min="8" max="24" value="15">
+      <label>Sheen strength <span class="val">0.6</span></label><input type="range" min="0" max="100" value="60">
+    </div>
+  </section>
+
+  <!-- F7: layout editor (interactive) -->
+  <section class="frame" id="layout">
+    <h1>Layout · Today</h1>
+    <p class="sub">The screen as an ordered list of native sections. Reorder or hide; the app renders whatever this list says.</p>
+    <div class="panel" style="max-width:520px"><div class="rowlist" id="secList"></div></div>
+    <div style="margin-top:12px"><button class="primary" onclick="go('ship')">Review &amp; ship</button></div>
+  </section>
+
+  <!-- F8: review & ship -->
+  <section class="frame" id="ship">
+    <h1>Review &amp; ship</h1>
+    <p class="sub">Eyes first, gates second, tag third. The ship button stays off until the before/after has been seen.</p>
+    <div class="panel">
+      <h4>Before / after</h4>
+      <div class="beforeafter">
+        <div class="cell"><svg id="beforeSvg" viewBox="0 0 100 100" width="120" height="120"></svg><div>shipped today</div></div>
+        <div style="font-size:1.4rem;color:var(--muted)">→</div>
+        <div class="cell"><svg id="afterSvg" viewBox="0 0 100 100" width="120" height="120"></svg><div>your edit</div></div>
+      </div>
+      <h4>Gates</h4>
+      <div class="gate"><span class="ok">✓</span> web tests (engine · store · report)</div>
+      <div class="gate"><span class="ok">✓</span> cross-platform parity</div>
+      <div class="gate"><span class="ok">✓</span> recipe schema validation</div>
+      <h4 style="margin-top:12px">Diff</h4>
+      <pre id="diffPre"></pre>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+        <input id="shipVer" placeholder="v0.3.0" style="font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);width:110px">
+        <button class="primary" onclick="go('done')">Ship this look</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- F9: shipped -->
+  <section class="frame" id="done">
+    <h1>Shipped 🌸</h1>
+    <p class="sub">The tag is pushed; the macOS runner is building; TestFlight processing follows. Same pipeline, new petals.</p>
+    <div class="panel" style="max-width:460px">
+      <div class="gate"><span class="ok">✓</span> committed &amp; tagged</div>
+      <div class="gate"><span class="ok">✓</span> pushed to GitHub</div>
+      <div class="gate"><span style="color:var(--strong);font-weight:700">●</span> testflight workflow running…</div>
+    </div>
+    <div class="note">Prototype note: in the real editor this screen polls <code>gh run list</code> exactly like the cockpit's health card.</div>
+    <div style="margin-top:14px"><button onclick="go('home')">Back to the garden</button></div>
+  </section>
+</div>
+
+<script>
+// ---- the real thing: a recipe-driven daisy, matching FlowerArt's primitives ----
+const DEFAULT = {
+  schemaVersion: 1, id: "daisy",
+  steps: [
+    { kind:"petalRing", label:"Back petals",  count:9, offset:30, len:40, width:20, start:20, color:"#F3DFA8" },
+    { kind:"petalRing", label:"Front petals", count:9, offset:29, len:36, width:16, start:20, color:"#FFFFFF" },
+    { kind:"dot",       label:"Heart",        r:12.5, color:"#FFC24E" },
+    { kind:"seedRing",  label:"Seeds",        count:6, offset:6.5, r:1.6, color:"#E8992B" },
+  ],
+};
+let recipe = structuredClone(DEFAULT);
+let shipped = structuredClone(DEFAULT);
+let sel = 0, bgSwatch = getComputedStyle(document.documentElement).getPropertyValue('--surface');
+
+function petal(cx, cy, len, width, deg, color) {
+  return `<ellipse cx="0" cy="${-len/4}" rx="${width/2}" ry="${len/2}" fill="${color}"
+    transform="translate(${cx} ${cy}) rotate(${deg})"/>`;
+}
+function renderRecipe(r) {
+  let out = "";
+  for (const s of r.steps) {
+    if (s.kind === "petalRing") {
+      for (let i = 0; i < s.count; i++) {
+        const deg = s.start + i * 360 / s.count, a = (deg - 90) * Math.PI / 180;
+        out += petal(50 + s.offset * 0.55 * Math.cos(a), 50 + s.offset * 0.55 * Math.sin(a), s.len, s.width, deg, s.color);
+      }
+    } else if (s.kind === "dot") {
+      out += `<circle cx="50" cy="50" r="${s.r}" fill="${s.color}"/>`;
+    } else if (s.kind === "seedRing") {
+      for (let i = 0; i < s.count; i++) {
+        const a = i * 2 * Math.PI / s.count;
+        out += `<circle cx="${50 + s.offset * Math.cos(a)}" cy="${50 + s.offset * Math.sin(a)}" r="${s.r}" fill="${s.color}"/>`;
+      }
+      out += `<circle cx="50" cy="50" r="2" fill="${s.color}"/>`;
+    }
+  }
+  return out;
+}
+function draw() {
+  const svg = document.getElementById('bloom');
+  svg.innerHTML = `<rect x="0" y="0" width="100" height="100" rx="14" fill="${bgSwatch}"/>` + renderRecipe(recipe);
+  document.getElementById('recipeJson').textContent = JSON.stringify(recipe, null, 1);
+  drawLayers(); drawInspector();
+}
+function drawLayers() {
+  document.getElementById('layers').innerHTML = recipe.steps.map((s, i) =>
+    `<div class="layer ${i === sel ? 'sel' : ''}" onclick="sel=${i};draw()">${s.label}</div>`).join('');
+}
+const FIELDS = {
+  petalRing: [["count",3,16,1],["offset",10,45,1],["len",10,55,1],["width",4,40,1],["start",0,90,1]],
+  dot: [["r",2,30,0.5]], seedRing: [["count",3,12,1],["offset",2,20,0.5],["r",0.5,4,0.1]],
+};
+function drawInspector() {
+  const s = recipe.steps[sel];
+  let html = "";
+  for (const [k, min, max, step] of FIELDS[s.kind]) {
+    html += `<label>${k} <span class="val">${s[k]}</span></label>
+      <input type="range" min="${min}" max="${max}" step="${step}" value="${s[k]}"
+        oninput="recipe.steps[${sel}].${k}=Number(this.value);draw()">`;
+  }
+  html += `<label>color</label><input type="color" value="${s.color}"
+      oninput="recipe.steps[${sel}].color=this.value;draw()">`;
+  document.getElementById('inspector').innerHTML = html;
+}
+function setBgSwatch(c) { bgSwatch = c; draw(); }
+function resetRecipe() { recipe = structuredClone(DEFAULT); sel = 0; draw(); }
+
+// ---- layout frame ----
+let sections = [
+  { id:"hero", name:"Cycle ring hero", on:true }, { id:"quickLog", name:"Quick flow log", on:true },
+  { id:"rotating", name:"Rotating insight pane", on:true }, { id:"fertile", name:"Fertile window card", on:true },
+];
+function drawSections() {
+  document.getElementById('secList').innerHTML = sections.map((s, i) =>
+    `<div class="secrow ${s.on ? '' : 'hidden-sec'}">${s.name}
+      <span class="mv">
+        <button onclick="mv(${i},-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button onclick="mv(${i},1)" ${i === sections.length - 1 ? 'disabled' : ''}>↓</button>
+        <button onclick="sections[${i}].on=!sections[${i}].on;drawSections()">${s.on ? 'hide' : 'show'}</button>
+      </span></div>`).join('');
+}
+function mv(i, d) { const [s] = sections.splice(i, 1); sections.splice(i + d, 0, s); drawSections(); }
+
+// ---- router + ship frame ----
+const TITLES = { home:"Editor", blooms:"Blooms · Daisy", posey:"Posey", ring:"Cycle ring", layout:"Layout", ship:"Review & ship", done:"Shipped" };
+function go(id) {
+  document.querySelectorAll('.frame').forEach(f => f.classList.toggle('on', f.id === id));
+  document.getElementById('crumbs').innerHTML =
+    `<a onclick="go('home')">Garden Editor</a>` + (id === 'home' ? '' : ` · <span>${TITLES[id]}</span>`);
+  if (id === 'ship') {
+    document.getElementById('beforeSvg').innerHTML = renderRecipe(shipped);
+    document.getElementById('afterSvg').innerHTML = renderRecipe(recipe);
+    const changed = JSON.stringify(recipe) !== JSON.stringify(shipped);
+    document.getElementById('diffPre').textContent = changed
+      ? 'contracts/art-recipes.json\n- (shipped daisy recipe)\n+ (your edited recipe — see JSON on the bloom page)'
+      : 'No changes yet. Go bend some petals first.';
+  }
+  window.scrollTo(0, 0);
+}
+go('home'); draw(); drawSections();
+</script>
+</body>
+</html>
