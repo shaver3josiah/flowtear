@@ -118,7 +118,8 @@ struct GardenShopView: View {
     @State private var pendingBuy: PendingBuy?
     @State private var showChainTutorial = false
 
-    private let columns = [GridItem(.adaptive(minimum: 104), spacing: FFSpace.s3)]
+    // Wide enough for the doubled blooms: two lush columns on any phone.
+    private let columns = [GridItem(.adaptive(minimum: 150), spacing: FFSpace.s3)]
 
     var body: some View {
         ScrollView {
@@ -196,8 +197,8 @@ struct GardenShopView: View {
             }
         } label: {
             VStack(spacing: 6) {
-                StickerView(id: f.id, size: 52)
-                    .frame(height: 72)   // rarity scaling without jagged grid rows
+                StickerView(id: f.id, size: 104)
+                    .frame(height: 140)   // rarity scaling without jagged grid rows
                     .saturation(owned || affordable ? 1 : 0.35)
                 Text(f.name)
                     .font(ffBody(FFType.sm, weight: .semibold))

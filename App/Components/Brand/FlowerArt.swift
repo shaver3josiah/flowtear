@@ -2,7 +2,8 @@ import SwiftUI
 
 // FlowerArt — the shop's ten blooms, drawn by hand the same way FlowerMark is:
 // flat Canvas fills in a 100×100 design space, cute and cartoonish, never
-// photoreal. Each flower has its own geometry and palette, and the shelf reads
+// photoreal. Every bloom is seen from directly above (plan view), so the
+// shelf reads as one garden. Each flower has its own geometry and palette, and the shelf reads
 // as a crescendo: rarer blooms are visibly lusher AND render a touch larger
 // (see `FlowerItem.artScale`). Rare/Precious blooms carry little gold sparkles.
 //
@@ -137,20 +138,19 @@ struct FlowerArt: View {
         dot(&ctx, 50, 50, 2, c("#E8992B"))
     }
 
-    // Tulip — the only side-view bloom: a rosy cup on a green stem.
+    // Tulip — seen from above like the rest of the garden: three rosy outer
+    // petals, three lighter inner ones, leaf tips peeking between.
     private static func tulip(_ ctx: inout GraphicsContext) {
-        var stem = Path()
-        stem.move(to: CGPoint(x: 50, y: 58))
-        stem.addLine(to: CGPoint(x: 50, y: 90))
-        ctx.stroke(stem, with: .color(c("#5FA968")), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-        let leaf = petalPath(.pointed, l: 26, w: 11)
-        ctx.fill(place(leaf, rot: -38, x: 40, y: 77), with: .color(c("#4E9B5C")))
-        ctx.fill(place(leaf, rot: 38, x: 60, y: 79), with: .color(c("#5FA968")))
-        let side = petalPath(.round, l: 36, w: 22)
-        ctx.fill(place(side, rot: -14, x: 40, y: 39), with: .color(c("#F25D8E")))
-        ctx.fill(place(side, rot: 14, x: 60, y: 39), with: .color(c("#F25D8E")))
-        ctx.fill(place(petalPath(.round, l: 38, w: 26), rot: 0, x: 50, y: 44), with: .color(c("#FF8FB3")))
-        dot(&ctx, 50, 54, 13.5, c("#FF8FB3"))
+        petalRing(&ctx, count: 3, offset: 33, l: 26, w: 13, color: c("#4E9B5C"),
+                  style: .pointed, startAngle: 60)
+        petalRing(&ctx, count: 3, offset: 25, l: 44, w: 32, color: c("#F25D8E"), style: .pointed)
+        petalRing(&ctx, count: 3, offset: 15, l: 32, w: 24, color: c("#FF8FB3"),
+                  style: .pointed, startAngle: 60)
+        dot(&ctx, 50, 50, 6.5, c("#FFC9DA"))
+        for i in 0..<6 {
+            let a = Double(i) * 60 * .pi / 180
+            dot(&ctx, 50 + 3.6 * CGFloat(cos(a)), 50 + 3.6 * CGFloat(sin(a)), 1.4, c("#FFCB5C"))
+        }
     }
 
     // Cherry blossom — five notched pink petals, gold stamens.
@@ -241,32 +241,20 @@ struct FlowerArt: View {
         sparkle(&ctx, 78, 78, 4, opacity: 0.75)
     }
 
-    // Bouquet — three little roses over greenery in a wrapped paper cone.
+    // Bouquet — from above now: greenery radiating past a scalloped paper
+    // wrap, three little roses clustered on top.
     private static func bouquet(_ ctx: inout GraphicsContext) {
-        let leaf = petalPath(.pointed, l: 24, w: 12)
-        ctx.fill(place(leaf, rot: -50, x: 28, y: 44), with: .color(c("#5FA968")))
-        ctx.fill(place(leaf, rot: 50, x: 72, y: 44), with: .color(c("#5FA968")))
-        ctx.fill(place(leaf, rot: -22, x: 38, y: 33), with: .color(c("#4E9B5C")))
-        ctx.fill(place(leaf, rot: 22, x: 62, y: 33), with: .color(c("#4E9B5C")))
-        ctx.fill(place(leaf, rot: 0, x: 50, y: 28), with: .color(c("#5FA968")))
-        miniRose(&ctx, x: 34, y: 47, r: 8)
-        miniRose(&ctx, x: 66, y: 47, r: 8)
-        miniRose(&ctx, x: 50, y: 37, r: 10)
-        var cone = Path()
-        cone.move(to: CGPoint(x: 31, y: 56))
-        cone.addLine(to: CGPoint(x: 69, y: 56))
-        cone.addLine(to: CGPoint(x: 50, y: 92))
-        cone.closeSubpath()
-        ctx.fill(cone, with: .color(c("#F4C9DE")))
-        var fold = Path()
-        fold.move(to: CGPoint(x: 60, y: 57))
-        fold.addLine(to: CGPoint(x: 50, y: 89))
-        ctx.stroke(fold, with: .color(c("#E3A8C4")), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-        ctx.fill(Path(roundedRect: CGRect(x: 37, y: 63, width: 26, height: 6), cornerRadius: 3),
-                 with: .color(c("#E2417F")))
+        petalRing(&ctx, count: 3, offset: 36, l: 26, w: 13, color: c("#4E9B5C"), style: .pointed)
+        petalRing(&ctx, count: 3, offset: 36, l: 26, w: 13, color: c("#5FA968"),
+                  style: .pointed, startAngle: 60)
+        petalRing(&ctx, count: 9, offset: 30, l: 16, w: 14, color: c("#F4C9DE"))
+        dot(&ctx, 50, 50, 31, c("#F4C9DE"))
+        miniRose(&ctx, x: 50, y: 39, r: 9)
+        miniRose(&ctx, x: 40, y: 57, r: 9)
+        miniRose(&ctx, x: 60, y: 57, r: 9)
         sparkle(&ctx, 16, 24, 6)
         sparkle(&ctx, 86, 36, 5, opacity: 0.9)
-        sparkle(&ctx, 22, 72, 4, opacity: 0.75)
+        sparkle(&ctx, 22, 76, 4, opacity: 0.75)
     }
 
     private static func miniRose(_ ctx: inout GraphicsContext, x: CGFloat, y: CGFloat, r: CGFloat) {

@@ -87,20 +87,21 @@ struct LogView: View {
                                     .foregroundStyle(theme.color(.muted))
                                 FlowLayout(spacing: FFSpace.inline) {
                                     ForEach(group.1) { symptom in
-                                        SymptomChip(symptom, selected: draft.symptoms.contains(symptom)) {
-                                            let turningOn = !draft.symptoms.contains(symptom)
-                                            draft.symptoms.formSymmetricDifference([symptom])
-                                            // Selecting a symptom she's felt before opens
-                                            // its little history: when, that whole day,
-                                            // and where in her cycle she was.
-                                            if turningOn, let last = store.lastFelt(symptom, before: date) {
-                                                symptomEcho = SymptomEcho(symptom: symptom,
-                                                                          lastDate: last,
-                                                                          loggingDate: date)
+                                        let selected = draft.symptoms.contains(symptom)
+                                        HStack(spacing: 6) {
+                                            SymptomChip(symptom, selected: selected) {
+                                                draft.symptoms.formSymmetricDifference([symptom])
+                                            }
+                                            // A quiet clock pops up beside a picked symptom
+                                            // she's felt before. Nothing opens on its own;
+                                            // the history tour waits for this tap.
+                                            if selected, let last = store.lastFelt(symptom, before: date) {
+                                                historyButton(symptom, last: last)
                                             }
                                         }
                                     }
                                 }
+                                .animation(reduceMotion ? nil : FFMotion.spring, value: draft.symptoms)
                             }
                         }
                     }
@@ -312,6 +313,25 @@ struct LogView: View {
                 }
             }
         }
+    }
+
+    /// The little clock beside a selected symptom. Same 40pt height as the
+    /// chips so the row stays level; opens the symptom's history tour.
+    private func historyButton(_ symptom: Symptom, last: Date) -> some View {
+        Button {
+            symptomEcho = SymptomEcho(symptom: symptom, lastDate: last, loggingDate: date)
+        } label: {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(theme.color(.primaryStrong))
+                .frame(width: 40, height: 40)
+                .background(theme.color(.surfaceSoft), in: Circle())
+                .overlay(Circle().strokeBorder(theme.color(.line), lineWidth: 1))
+        }
+        .buttonStyle(FFPressButtonStyle(scale: 0.9))
+        .transition(.scale.combined(with: .opacity))
+        .accessibilityLabel("\(symptom.label) history")
+        .accessibilityHint("Shows the last time you felt this")
     }
 
     private func checkboxRow(checked: Bool, label: String, action: @escaping () -> Void) -> some View {
