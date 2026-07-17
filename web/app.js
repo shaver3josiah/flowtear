@@ -40,6 +40,9 @@ const UI = window.FlowtierDesignSystem_6b3d0d || {};
 const store = new CycleStore();
 store.seedSampleIfFirstLaunch();
 
+// (Uncaught errors surface via the inline reporter in index.html — registered
+// before any module loads, so even a module-graph failure shows on screen.)
+
 const TABS = [
   { id: "today", label: "Today", icon: "flower-2", screen: Today },
   { id: "calendar", label: "Calendar", icon: "calendar", screen: Calendar },
@@ -88,6 +91,9 @@ function useAppLock() {
       appLock.unlock().then((ok) => { parked.current = !ok; rerender(); });
     };
     const onVisibility = () => {
+      // The biometric prompt itself backgrounds the app — ignore that flip, or
+      // a cancelled prompt re-arms and re-fires in a loop she can't escape.
+      if (appLock.isPrompting()) return;
       if (document.hidden) {
         if (appLock.isEnabled()) appLock.lock();
         parked.current = false;   // coming back should prompt again

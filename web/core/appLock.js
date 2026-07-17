@@ -112,6 +112,11 @@ export function isLocked() {
   return locked;
 }
 
+/// True while the OS prompt is up. The prompt itself backgrounds the app, so
+/// the shell must NOT treat that visibility flip as "she left — re-lock", or
+/// a cancelled prompt re-arms and re-fires forever.
+export function isPrompting() { return authInFlight; }
+
 export function lock() {
   if (!isEnabled()) return;
   locked = true;

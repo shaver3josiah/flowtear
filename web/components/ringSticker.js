@@ -54,6 +54,30 @@ function Bloom({ id, size }) {
   </svg>`;
 }
 
+// RingChainView (RingSticker.swift) — her daisy chain: every bloom she's
+// chained in the shop rides the ring together, evenly spaced from 12 o'clock.
+// Purely decorative (the one ACTIVE sticker stays the draggable bead); no
+// touches stolen from the scrub. Subscribes to rewards itself so chaining in
+// the garden shop shows up the moment she's back on Today.
+export function RingChain({ radius }) {
+  const [, force] = useState(0);
+  useEffect(() => rewards.subscribe(() => force((n) => n + 1)), []);
+  const chain = rewards.ringChain ?? [];
+  if (!chain.length) return null;
+  return html`
+    <div aria-hidden="true" style=${{
+      position: "absolute", left: "50%", top: "50%", width: 0, height: 0, pointerEvents: "none",
+    }}>
+      ${chain.map((id, i) => {
+        const a = (i / Math.max(chain.length, 1)) * 2 * Math.PI - Math.PI / 2;
+        return html`<div key=${i} style=${{
+          position: "absolute",
+          transform: `translate(-50%, -50%) translate(${radius * Math.cos(a)}px, ${radius * Math.sin(a)}px)`,
+        }}><${Bloom} id=${id} size=${19} /></div>`;
+      })}
+    </div>`;
+}
+
 export function RingSticker({ radius, periodFraction = 0 }) {
   const [, force] = useState(0);
   useEffect(() => rewards.subscribe(() => force((n) => n + 1)), []);

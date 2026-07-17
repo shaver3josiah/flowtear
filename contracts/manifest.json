@@ -1,6 +1,6 @@
 {
   "product": "Uncorked (Flowtear)",
-  "contractsVersion": "1.2.0",
+  "contractsVersion": "1.3.0",
   "updated": "2026-07-16",
   "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
   "platforms": {
@@ -144,6 +144,18 @@
       "since": "1.2.0",
       "ios": "App/Design/Theme.swift",
       "web": "web/styles/tokens.css"
+    },
+    {
+      "id": "flower-chain",
+      "since": "1.3.0",
+      "ios": "App/Core/RewardsStore.swift (ringChain)",
+      "web": "web/core/rewards.js"
+    },
+    {
+      "id": "posey-crown",
+      "since": "1.3.0",
+      "ios": "App/Components/CoachFlower.swift",
+      "web": "web/screens/stretch.js"
     }
   ],
   "platformDivergences": {

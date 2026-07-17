@@ -30,7 +30,7 @@ const themeLabel = (n) => n[0].toUpperCase() + n.slice(1);
 
 export default function GardenScreen({ ctx }) {
   const { html, ui, Icon, nav, store } = ctx;
-  const { Card, IconButton, Button, FlowerMark, PetalRain } = ui;
+  const { Card, IconButton, Button, Switch, FlowerMark, PetalRain } = ui;
   const r = useRewards();
 
   const [burst, setBurst] = useState(0);          // bumps a petal-rain celebration
@@ -164,6 +164,57 @@ export default function GardenScreen({ ctx }) {
     </div>`;
   };
 
+  // ---- the daisy chain: owned blooms she taps into a chain that circles her
+  // Today ring together. Three or more and Posey can wear it as a crown.
+  // (Chaining is free — no petals move, so no confirm step.)
+  const chainChip = (f) => {
+    const chained = r.inChain(f.id);
+    return html`<button key=${f.id} onClick=${() => r.toggleChain(f.id)}
+      aria-label=${`${f.name}${chained ? ", in your chain" : ", not in your chain"}`}
+      title=${chained ? "Removes it from the chain" : "Adds it to the chain"}
+      style=${{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 3, minHeight: 52, padding: "6px 4px", cursor: "pointer",
+        background: chained ? "var(--surface-soft)" : "var(--surface)", borderRadius: 12,
+        border: `${chained ? 1.5 : 1}px solid ${chained ? "var(--primary-strong)" : "var(--line)"}`,
+      }}>
+      <${Bloom} id=${f.id} size=${24} />
+      <${Icon} name=${chained ? "check" : "plus"} size=${12}
+        color=${chained ? "var(--good)" : "var(--muted)"} />
+    </button>`;
+  };
+
+  const chainCard = () => {
+    const ownedList = FLOWERS.filter((f) => r.ownedFlowers.has(f.id));
+    const n = r.ringChain.length;
+    return html`<${Card}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "var(--deep)", fontSize: 15 }}>
+          <${Icon} name="flower-2" size=${16} color="var(--primary-strong)" />Your flower chain
+        </div>
+        <div style=${{ fontSize: 12, color: "var(--muted)" }}>
+          Tap owned blooms into a chain — they circle your Today ring together. Three or more make a crown Posey can wear.
+        </div>
+        ${ownedList.length === 0
+          ? html`<div style=${{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>Flowers you own will appear here, ready to chain.</div>`
+          : html`<div style=${{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))" }}>
+              ${ownedList.map(chainChip)}
+            </div>`}
+        <div style=${{ display: "flex", alignItems: "center", gap: 10, marginTop: 2 }}>
+          <div style=${{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style=${{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Posey wears the crown</div>
+            <div style=${{ fontSize: 12, color: "var(--muted)" }}>${n >= 3
+              ? "Your chain, resting on her petals"
+              : `Chain ${3 - n} more bloom${n === 2 ? "" : "s"} to crown her`}</div>
+          </div>
+          <${Switch} checked=${r.poseyCrowned} disabled=${n < 3}
+            label="Posey wears the flower crown"
+            onChange=${(on) => r.setPoseyCrowned(on)} />
+        </div>
+      </div>
+    <//>`;
+  };
+
   // ---- Posey card ----
   const poseyOwned = r.poseyOwned;
   const poseyEquipped = r.activeSticker === "posey";
@@ -246,6 +297,9 @@ export default function GardenScreen({ ctx }) {
         ${FLOWERS.map(flowerCell)}
       </div>
     </div>
+
+    <!-- flower chain -->
+    ${chainCard()}
 
     <!-- posey -->
     <${Card} variant="accent">

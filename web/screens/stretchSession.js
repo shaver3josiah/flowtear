@@ -5,7 +5,8 @@
 // off through store.toggleStretchMove (never unchecked), so the coach's checklist and
 // window progress stay in sync; the last move sets stretchDone. Close ends the session.
 // Each move pays its pose points at her plan's multiplier, plus +30 the first time
-// she's ever guided through that pose.
+// she's ever guided through that pose. Everything logs to `logDate` — today, unless
+// the session was launched from a plan day's schedule row (then it's that day).
 import * as lib from "../core/stretchLibrary.js";
 import { rewards } from "../core/rewards.js";
 
@@ -41,6 +42,10 @@ export default function StretchSession({ ctx }) {
   const day = screenProps && screenProps.day ? screenProps.day : lib.anytimeSession;
   const finishTitle = (screenProps && screenProps.finishTitle) || "Session done";
   const multiplier = (screenProps && screenProps.multiplier) || 1;
+  // The calendar date completions and awards land on. Defaults to today; a
+  // session run from a plan day's schedule row passes THAT day, so the row's
+  // checkboxes light up and nothing can be earned twice.
+  const logDate = (screenProps && screenProps.logDate) || today;
   const moves = day.moves;
 
   const [index, setIndex] = useState(0);
@@ -55,17 +60,17 @@ export default function StretchSession({ ctx }) {
   // points, and pay the first-ever-guided bonus for this pose. Then advance or
   // finish the day.
   const advance = () => {
-    const doneBefore = store.stretchMovesDone(today);
+    const doneBefore = store.stretchMovesDone(logDate);
     if (!doneBefore.includes(index)) {
-      store.toggleStretchMove(index, today, moves.length);
-      awardPose(store.key(today), doneBefore.length, moves.length, multiplier);
+      store.toggleStretchMove(index, logDate, moves.length);
+      awardPose(store.key(logDate), doneBefore.length, moves.length, multiplier);
     }
     rewards.awardGuidedFirstTime(move.name, multiplier);
     if (index + 1 < moves.length) {
       setIndex(index + 1);
       setRemaining(moves[index + 1].seconds);
     } else {
-      store.setStretchDone(true, today);
+      store.setStretchDone(true, logDate);
       rewards.playCelebrationIfOwned();
       setFinished(true);
     }

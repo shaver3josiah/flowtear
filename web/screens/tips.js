@@ -5,7 +5,8 @@
 // sheet.
 //
 // Icons: the closest names in the offline Lucide set (web/vendor/icon.js) to
-// Swift's SF Symbols — the set has no hand.draw / bag / wand equivalents.
+// Swift's SF Symbols — the set has no hand.draw / bag / wand / link
+// equivalents ("circle" stands in for link: the blooms circle the ring).
 
 const TIPS = [
   {
@@ -34,9 +35,9 @@ const TIPS = [
     text: "In Stretch, open any day of your plan to see its moves, check them off, or run that day's guided session on the spot — even off-schedule.",
   },
   {
-    icon: "clock",
-    title: "Pause your plan",
-    text: "Inside the plan picker there's a pause switch — missed days cost nothing while life happens.",
+    icon: "circle",
+    title: "Chain your blooms",
+    text: "In the garden shop, chain the flowers you own and they circle your Today ring together. Three or more, and Posey can wear them as a crown.",
   },
   {
     icon: "gift",

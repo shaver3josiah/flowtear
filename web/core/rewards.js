@@ -14,7 +14,7 @@
 //   flower lands on the period arc  +5 (once per calendar day)
 //
 // LOCK-INS: a missed plan day costs 5 petals, charged once per day. Lifetime is
-// never touched. Days missed while her plan is paused are excused, not billed.
+// never touched. Days before the plan was activated are excused, never billed.
 
 const K = {
   state: "flowtear.rewards.v1",
@@ -85,6 +85,8 @@ export class RewardsStore {
     this.stickerY = -0.72;
     this.stickerAngle = -0.9;         // resting angle on the ring (radians)
     this.stickerMode = "ring";        // "ring" (riding it) or "free" (plucked off)
+    this.ringChain = [];              // owned blooms chained around the Today ring, in add order
+    this.poseyCrowned = false;        // Posey wears the chain as a crown (needs 3+ chained)
     this._subs = new Set();
     this._load();
   }
@@ -214,8 +216,8 @@ export class RewardsStore {
     return true;
   }
 
-  // Pause amnesty: mark a missed day handled WITHOUT charging it, so days
-  // skipped while her plan is paused can never be billed later.
+  // Amnesty: mark a missed day handled WITHOUT charging it — used for days
+  // before the plan was activated, which are never billable.
   excuseMissedDay(dateKey) {
     if (this.penalizedDays.has(dateKey)) return;
     this.penalizedDays.add(dateKey);
@@ -338,6 +340,29 @@ export class RewardsStore {
     this._notify();
   }
 
+  // ---- the flower chain (daisy-chained blooms around the Today ring) ----
+  // Mirrors Swift's inChain/toggleChain: only OWNED blooms may join, order is
+  // the order she added them (= ring order), re-tapping removes.
+
+  inChain(id) { return this.ringChain.includes(id); }
+
+  toggleChain(id) {
+    const i = this.ringChain.indexOf(id);
+    if (i >= 0) this.ringChain.splice(i, 1);
+    else if (this.ownedFlowers.has(id)) this.ringChain.push(id);
+    this._save();
+    this._notify();
+  }
+
+  // Posey wears the chain as a flower crown. The shop gates the toggle at 3+
+  // chained blooms (Swift disables the switch); the store itself never
+  // un-crowns her when the chain later shrinks — exactly like Swift.
+  setPoseyCrowned(on) {
+    this.poseyCrowned = on;
+    this._save();
+    this._notify();
+  }
+
   // ---- persistence (own blob + backup — never touches cycle data) ----
   // Sets serialize as arrays, matching Swift's JSONEncoder(Set) output so the
   // saved blob is byte-shape-compatible across platforms. `soundUnlocked` is
@@ -366,6 +391,8 @@ export class RewardsStore {
       periodLandDays: [...this.periodLandDays],
       stickerMode: this.stickerMode,
       poseAwardLog: this.poseAwardLog,
+      ringChain: [...this.ringChain],
+      poseyCrowned: this.poseyCrowned,
     };
   }
 
@@ -410,6 +437,8 @@ export class RewardsStore {
     this.periodLandDays = new Set(b.periodLandDays ?? []);
     this.stickerMode = b.stickerMode ?? "ring";
     this.poseAwardLog = b.poseAwardLog ?? {};
+    this.ringChain = [...(b.ringChain ?? [])];
+    this.poseyCrowned = !!b.poseyCrowned;
     // Migrate the old single-chime unlock into the crystal chime.
     if (b.soundUnlocked === true && this.ownedSounds.size === 0) {
       this.ownedSounds.add("crystal");
@@ -524,6 +553,36 @@ if (import.meta.main) {
     assert.equal(fresh.balance, 70, "restored balance");
     fresh.revokePose("2026-07-16", 1, 3, false, 1);
     assert.equal(fresh.balance, 30, "restored ledger refunds the recorded 40, newest first");
+  }
+
+  // FLOWER CHAIN + CROWN: only owned blooms chain, the order is her add order,
+  // re-tapping removes, and both the chain and the crown survive a round trip.
+  // Old blobs (no ringChain/poseyCrowned) hydrate to the empty defaults.
+  {
+    const c = new RewardsStore();
+    c._earn(350);
+    c.buyFlower("daisy");
+    c.buyFlower("tulip");
+    c.toggleChain("rose");                     // not owned — refused
+    assert.deepEqual(c.ringChain, [], "unowned blooms never chain");
+    c.toggleChain("tulip");
+    c.toggleChain("daisy");
+    assert.deepEqual(c.ringChain, ["tulip", "daisy"], "chain keeps add order");
+    assert.equal(c.inChain("tulip"), true, "inChain sees members");
+    assert.equal(c.inChain("rose"), false, "and only members");
+    c.toggleChain("tulip");
+    assert.deepEqual(c.ringChain, ["daisy"], "re-tap removes from the chain");
+    c.setPoseyCrowned(true);
+
+    const round = new RewardsStore();
+    round._hydrate(JSON.parse(c.backupData()));
+    assert.deepEqual(round.ringChain, ["daisy"], "chain survives the round trip");
+    assert.equal(round.poseyCrowned, true, "crown survives the round trip");
+
+    const old = new RewardsStore();
+    old._hydrate({ balance: 5 });              // a pre-chain blob
+    assert.deepEqual(old.ringChain, [], "old blobs default to no chain");
+    assert.equal(old.poseyCrowned, false, "and no crown");
   }
 
   assert.equal(r.buySoundItem("crystal"), false, "cannot afford the crystal chime");

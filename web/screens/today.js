@@ -6,12 +6,12 @@
 // back), a rotating teaser pane (stretch → insights → calendar), and the
 // fertile window + basal-temperature card. Before her first confirmed period
 // the ring still shows, as a labelled best guess. The vendored DS CycleRing
-// can't be edited, so the Swift ring's jewelry pass (metal sheen, lapping
-// glint, today glimmer) is an overlay sharing the ring's box — same pattern as
-// RingSticker. All state reads/writes go through the store.
+// can't be edited, so the Swift ring's jewelry pass (metal sheen, 7s phase
+// shimmer, solid today bead + glimmer) is an overlay sharing the ring's box —
+// same pattern as RingSticker. All state reads/writes go through the store.
 import { rewards } from "../core/rewards.js";
 import { emptyLog } from "../core/models.js";
-import { RingSticker, trackRadius } from "../components/ringSticker.js";
+import { RingSticker, RingChain, trackRadius } from "../components/ringSticker.js";
 import { GlitterHint } from "../components/glitterHint.js";
 
 const React = window.React;
@@ -29,8 +29,6 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
   const el = document.createElement("style");
   el.id = STYLE_ID;
   el.textContent = [
-    // RingGlint: one narrow highlight lapping the band every 9s (CycleRing.swift).
-    "@keyframes ft-ring-glint { to { transform: rotate(360deg); } }",
     // TodayGlimmer: the gold halo breathes, the two twinkles alternate.
     "@keyframes ft-halo-breathe { from { transform: scale(.98); opacity: .95; } to { transform: scale(1.12); opacity: .55; } }",
     "@keyframes ft-twinkle-hi { from { opacity: .15; } to { opacity: 1; } }",
@@ -73,12 +71,74 @@ const bareBtn = { background: "none", border: "none", padding: 0, margin: 0, cur
 //   • metal sheen — the "single lamp" top-left wash masked to the band, so
 //     track and arcs read as one polished piece (Swift strokes the same wash
 //     over the track and each arc; one band-masked wash approximates that);
-//   • RingGlint — a narrow white highlight lapping the band every ~9s,
-//     mounted only when motion is allowed (Swift: if !reduceMotion);
+//   • ArcShimmer — one gleam every 7 seconds, taking turns around the phases
+//     (bleed, fertile, ovulation), mounted only when motion is allowed
+//     (Swift: if !reduceMotion — the rest state is the band at rest);
 //   • TodayGlimmer — a breathing gold halo + two alternating four-point
-//     twinkles on the today marker, plus the gold→phase gradient center dot.
-//     Reduce Motion keeps the halo and one lit twinkle, static.
+//     twinkles on the today marker, plus the SOLID gold→phase bead that
+//     covers the vendored knob's old bullseye. Reduce Motion keeps the halo
+//     and one lit twinkle, static.
 // ---------------------------------------------------------------------------
+
+// ArcShimmer (CycleRing.swift) — one gleam every 7 seconds, taking turns
+// around the phases: a narrow soft highlight sweeps ONE phase arc from start
+// to end (~1.1s), then the band rests until the next phase's turn.
+// Deterministic cadence, one shimmer at a time; the caller mounts it only
+// when motion is allowed.
+function ArcShimmer({ size, cycleLength, periodLength }) {
+  const r = trackRadius(size);
+  const w = (15 * size) / 200;
+  // Same phase-arc math as the vendored DS ring (computeCycle).
+  const cl = cycleLength;
+  const ovDay = Math.min(Math.max(cl - 14, periodLength + 1), cl - 1);
+  const fertileStart = Math.max(ovDay - 5, periodLength + 1);
+  const segs = [
+    { from: 0, to: periodLength / cl },
+    { from: (fertileStart - 1) / cl, to: (ovDay + 1) / cl },
+    { from: (ovDay - 0.6) / cl, to: (ovDay + 0.6) / cl },
+  ];
+
+  const [sweep, setSweep] = useState(null); // { seg, head } while a gleam travels
+  useEffect(() => {
+    let t;
+    let seg = 0;
+    const steps = 36;
+    const run = (i) => {
+      const s = segs[seg % segs.length];
+      setSweep({ seg: seg % segs.length, head: s.from + (s.to - s.from + 0.05) * (i / steps) });
+      if (i < steps) t = setTimeout(() => run(i + 1), 30);
+      else { setSweep(null); seg += 1; rest(); }
+    };
+    const rest = () => { t = setTimeout(() => run(0), 5900); }; // + ~1.1s sweep = 7s cadence
+    rest();
+    return () => clearTimeout(t);
+  }, [size, cycleLength, periodLength]);
+
+  if (!sweep) return null;
+  const s = segs[sweep.seg];
+  const from = Math.max(sweep.head - 0.05, s.from);
+  const to = Math.min(sweep.head, s.to);
+  if (to - from < 0.0005) return null;
+  const c = size / 2;
+  const pt = (f) => {
+    const a = ((f * 360 - 90) * Math.PI) / 180;
+    return `${c + r * Math.cos(a)} ${c + r * Math.sin(a)}`;
+  };
+  const grad = `ft-shimmer-${size}`;
+  return mhtml`
+    <svg width=${size} height=${size} viewBox=${`0 0 ${size} ${size}`} aria-hidden="true"
+      style=${{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      <defs>
+        <linearGradient id=${grad}>
+          <stop offset="0" stop-color="#fff" stop-opacity="0" />
+          <stop offset="0.5" stop-color="#fff" stop-opacity="0.55" />
+          <stop offset="1" stop-color="#fff" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <path d=${`M ${pt(from)} A ${r} ${r} 0 0 1 ${pt(to)}`}
+        fill="none" stroke=${`url(#${grad})`} stroke-width=${w} stroke-linecap="round" />
+    </svg>`;
+}
 
 // FFTwinkle (CycleRing.swift) — the same concave four-point star GlitterHint uses.
 const Twinkle = ({ size, style }) => mhtml`
@@ -88,7 +148,7 @@ const Twinkle = ({ size, style }) => mhtml`
       fill="var(--flower-center)" />
   </svg>`;
 
-function RingPolish({ size, day, cycleLength, phase }) {
+function RingPolish({ size, day, cycleLength, periodLength, phase }) {
   const k = size / 200;
   const r = trackRadius(size);
   const w = 15 * k; // the DS ring's stroke width
@@ -108,7 +168,11 @@ function RingPolish({ size, day, cycleLength, phase }) {
 
   const d = w + 22 * k; // glimmer halo diameter (Swift: stroke + 22k)
   const haloBand = `radial-gradient(circle, transparent ${d / 2 - 3}px, #000 ${d / 2 - 2.5}px, #000 ${d / 2}px, transparent ${d / 2 + 0.5}px)`;
-  const dot = 7 * k;    // marker center dot (Swift: 7k, gold→phase gradient on today)
+  // The solid focus bead (Swift: stroke + 8k, gold→phase gradient on today,
+  // hairline surface rim, specular top-left kiss). The vendored knob beneath
+  // still draws the old bullseye and its outer edge sits at 13.5 units in the
+  // 200 viewBox, so the bead is sized to cover it completely.
+  const bead = 27 * k;
 
   // ponytail: web theme presets have no dark mode, so the sheen's shadow end
   // is the Swift light value (.16); revisit if a dark preset lands.
@@ -117,10 +181,7 @@ function RingPolish({ size, day, cycleLength, phase }) {
       <div style=${banded({
         background: "linear-gradient(135deg, rgba(255,255,255,.38) 0%, rgba(255,255,255,.08) 35%, transparent 55%, rgba(0,0,0,.16) 100%)",
       })} />
-      ${!still && mhtml`<div style=${banded({
-        background: "conic-gradient(from 0deg, transparent 0% 42%, rgba(255,255,255,.22) 48%, rgba(255,255,255,.5) 50%, rgba(255,255,255,.22) 52%, transparent 58% 100%)",
-        animation: "ft-ring-glint 9s linear infinite",
-      })} />`}
+      ${!still && mhtml`<${ArcShimmer} size=${size} cycleLength=${cycleLength} periodLength=${periodLength} />`}
 
       <div style=${{ position: "absolute", left: mx, top: my, width: 0, height: 0 }}>
         <div style=${{
@@ -142,9 +203,11 @@ function RingPolish({ size, day, cycleLength, phase }) {
           animation: still ? "none" : "ft-twinkle-lo 1.4s ease-in-out infinite alternate",
         }} />
         <div style=${{
-          position: "absolute", left: -dot / 2, top: -dot / 2, width: dot, height: dot,
-          borderRadius: "50%",
+          position: "absolute", left: -bead / 2, top: -bead / 2, width: bead, height: bead,
+          borderRadius: "50%", boxSizing: "border-box",
           background: `linear-gradient(135deg, var(--flower-center), var(--phase-${phase || "menstrual"}))`,
+          border: "2px solid var(--surface)",
+          boxShadow: `0 1px 2px var(--shadow), inset ${1.5 * k}px ${1.5 * k}px ${2 * k}px rgba(255,255,255,.55)`,
         }} />
       </div>
     </div>`;
@@ -253,7 +316,8 @@ export default function TodayScreen({ ctx }) {
 
   // The sticker shares the ring's box so its orbit center IS the ring's center,
   // and it rides the drawn track's exact radius — concentric, never offset.
-  // RingPolish shares the same box for the Swift ring's sheen/glint/glimmer.
+  // RingPolish shares the same box for the Swift ring's sheen/shimmer/glimmer;
+  // her daisy chain rides the ring beneath the draggable bead (TodayView.swift).
   const ring = (pred, size, onOpen) => {
     const cl = pred.averageCycleLength;
     const day = Math.min(Math.max(pred.cycleDay || 1, 1), cl);
@@ -266,18 +330,31 @@ export default function TodayScreen({ ctx }) {
       <span style=${{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: size * 0.26,
         lineHeight: 1, color: "var(--deep)", margin: "2px 0" }}>${day}</span>
       <span style=${{ fontFamily: "var(--font-body)", fontSize: "var(--text-sm)", color: "var(--muted)" }}>tap for today's insight</span>` : null;
+    // spinnable: the DS ring's built-in fidget spin (drag + inertial decay) —
+    // pure fun, reduced-motion aware inside the vendored component. The wrapping
+    // button suppresses its click when the pointer actually dragged, so spinning
+    // never accidentally opens the phase sheet; a clean tap still does.
     const dial = html`<${CycleRing}
       cycleDay=${day}
       cycleLength=${cl}
       periodLength=${pred.averagePeriodLength}
+      spinnable=${true}
       size=${size}>${readout}</${CycleRing}>`;
+    const down = { x: 0, y: 0 };
+    const onDown = (e) => { down.x = e.clientX; down.y = e.clientY; };
+    const onClick = (e) => {
+      if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return; // was a spin
+      onOpen();
+    };
     return html`
       <div style=${{ position: "relative", width: size, height: size }}>
         ${onOpen
-          ? html`<button style=${bareBtn} onClick=${onOpen}
+          ? html`<button style=${bareBtn} onPointerDown=${onDown} onClick=${onClick}
               aria-label=${`Cycle ring — day ${day} of ${cl}, ${fmt.phaseLabel(pred.phase)} phase, today. Opens today's insight`}>${dial}</button>`
           : dial}
-        <${RingPolish} size=${size} day=${day} cycleLength=${cl} phase=${pred.phase} />
+        <${RingPolish} size=${size} day=${day} cycleLength=${cl}
+          periodLength=${pred.averagePeriodLength} phase=${pred.phase} />
+        <${RingChain} radius=${trackRadius(size)} />
         <${RingSticker} radius=${trackRadius(size)} periodFraction=${periodFraction(pred)} />
       </div>`;
   };

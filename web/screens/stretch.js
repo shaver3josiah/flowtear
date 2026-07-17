@@ -3,18 +3,16 @@
 // checkbox; the whole day can be checked too. Three modes (core trio / 3-day starter
 // default / full 14-day) switch from the plan bar at the top and never touch logged
 // history — completions live on dates, in the shared store. The two scheduled modes
-// lock in: a missed plan day costs 5 petals, unless her plan is paused.
+// lock in: a missed plan day costs 5 petals (never before the plan was activated).
 // The garden header (points pill, shop, share, rules, tutorial sheets) is the garden
 // feature and lives on its own screen — see web/screens/garden.js.
 import * as lib from "../core/stretchLibrary.js";
 import { addDays, startOfDay, isSameDay } from "../core/dates.js";
-import { rewards } from "../core/rewards.js";
+import { rewards, FLOWERS } from "../core/rewards.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
 
-// Mirrors @AppStorage("flowtear.planPaused") in StretchCoachView.
-const PAUSE_KEY = "flowtear.planPaused";
 // Mirrors @AppStorage("flowtear.planActivatedAt"): the dateKey of the day the
 // current lock-in plan was (re)chosen. Penalties never reach behind this line —
 // so switching tiers, or the first prediction remapping the window into the
@@ -46,12 +44,77 @@ function PoseFigure({ ctx, move, size = 24, color = "var(--phase-luteal)" }) {
   </svg>`;
 }
 
+// A procedural inline bloom — the same catalog-indexed petals the garden shop
+// draws, so a flower reads the same everywhere. ponytail: third copy of the
+// shop's Bloom (garden.js, ringSticker.js keep theirs private); sharing needs a
+// module outside this task's files.
+function Bloom({ ctx, id, size }) {
+  const { html, ui } = ctx;
+  if (id === "posey" && ui.FlowerMark) return html`<${ui.FlowerMark} size=${size} />`;
+  const idx = Math.max(FLOWERS.findIndex((f) => f.id === id), 0);
+  const petals = 5 + (idx % 6);
+  const fills = ["var(--primary)", "var(--primary-strong)", "var(--flower-center)", "var(--good)"];
+  const fill = fills[idx % fills.length];
+  const c = size / 2;
+  const ring = size * 0.26;
+  const nodes = [];
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * Math.PI * 2;
+    const px = c + Math.cos(a) * ring;
+    const py = c + Math.sin(a) * ring;
+    nodes.push(html`<ellipse key=${i} cx=${px} cy=${py} rx=${size * 0.15} ry=${size * 0.26}
+      transform=${`rotate(${(a * 180) / Math.PI + 90} ${px} ${py})`} fill=${fill} />`);
+  }
+  return html`<svg width=${size} height=${size} viewBox=${`0 0 ${size} ${size}`} aria-hidden="true"
+      style=${{ display: "block" }}>
+    ${nodes}
+    <circle cx=${c} cy=${c} r=${size * 0.17} fill="var(--flower-center)" />
+  </svg>`;
+}
+
+// A quiet garden wash behind the Stretch screen: the plan's own lavender
+// breathing down from the top, and two faint blooms resting in the corners like
+// pressed flowers. Purely decorative and fully static — no motion, nothing to
+// gate — and whisper-faint so every card stays legible. Port of Swift's
+// StretchGardenBackdrop; its hand-drawn FlowerArt has no web port, so the
+// shop's procedural blooms stand in.
+function GardenBackdrop({ ctx }) {
+  const { html } = ctx;
+  return html`<div aria-hidden="true" style=${{
+    position: "fixed", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)",
+    width: "100%", maxWidth: "var(--screen-max, 440px)", overflow: "hidden",
+    pointerEvents: "none", zIndex: 0,
+  }}>
+    <div style=${{ position: "absolute", inset: 0,
+      background: "linear-gradient(to bottom, color-mix(in srgb, var(--phase-luteal-soft) 55%, transparent), transparent 50%)" }} />
+    <div style=${{ position: "absolute", top: -24, right: -60, opacity: 0.06, transform: "rotate(-14deg)" }}>
+      <${Bloom} ctx=${ctx} id="camellia" size=${210} /></div>
+    <div style=${{ position: "absolute", bottom: -36, left: -46, opacity: 0.05, transform: "rotate(18deg)" }}>
+      <${Bloom} ctx=${ctx} id="daisy" size=${170} /></div>
+  </div>`;
+}
+
 // Posey — a simplified storybook coach flower (bloom + face + leaf arms) with a
 // named speech bubble. ponytail: the SwiftUI CoachFlower animates (sway/wave/blink/
 // watering); here she's a calm static bloom — same warmth, no animation loop.
 function CoachFlower({ ctx, message }) {
   const { html, ui } = ctx;
   const { FlowerMark } = ui;
+  // The crown she chained on her ring, resting on Posey's petals — same blooms,
+  // same order, as the ring. Defensive reads: the rewards fields land in a
+  // parallel change. (CoachFlower.crown in Swift: fanned across the top arc.)
+  const chain = (rewards.ringChain ?? []).slice(0, 7);   // a crown, not a hedge
+  const crowned = (rewards.poseyCrowned ?? false) && chain.length >= 3;
+  const crown = crowned && html`<div aria-hidden="true" style=${{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+    ${chain.map((id, i) => {
+      const t = chain.length === 1 ? 0.5 : i / (chain.length - 1);
+      const deg = -142 + 104 * t;                        // fan across the top arc
+      const rad = (deg * Math.PI) / 180;
+      return html`<span key=${i} style=${{ position: "absolute", left: "50%", top: "50%",
+        transform: `translate(-50%, -50%) translate(${24 * Math.cos(rad)}px, ${24 * Math.sin(rad)}px) rotate(${(deg + 90) * 0.5}deg)` }}>
+        <${Bloom} ctx=${ctx} id=${id} size=${11} /></span>`;
+    })}
+  </div>`;
   return html`<div style=${{ display: "flex", alignItems: "flex-start", gap: 12 }}>
     <div style=${{ position: "relative", width: 60, flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style=${{ position: "relative", lineHeight: 0 }}>
@@ -63,6 +126,7 @@ function CoachFlower({ ctx, message }) {
           </div>
           <div style=${{ width: 6, height: 3, borderBottom: "1.1px solid var(--bloom-ink, var(--deep))", borderRadius: "0 0 6px 6px", opacity: 0.75 }} />
         </div>
+        ${crown}
       </div>
       <div style=${{ width: 3, height: 20, background: "var(--good)", borderRadius: 3 }} />
     </div>
@@ -94,28 +158,14 @@ function MoveRow({ ctx, move, checked, onToggle }) {
     style=${{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "6px 0", cursor: "pointer", minHeight: "var(--tap-min)" }}>${inner}</button>`;
 }
 
-// A read-only move (schedule days that aren't today).
-function MoveDetail({ ctx, move }) {
-  const { html } = ctx;
-  return html`<div style=${{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-    <${PoseFigure} ctx=${ctx} move=${move} size=${24} />
-    <div style=${{ flex: 1, minWidth: 0 }}>
-      <div style=${{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-        <span style=${{ fontSize: "var(--text-base)", fontWeight: 600, color: "var(--text)" }}>${move.name}</span>
-        <span style=${{ fontSize: "var(--text-xs)", fontWeight: 500, color: "var(--muted)", flex: "0 0 auto" }}>${move.hold}</span>
-      </div>
-      <div style=${{ fontSize: "var(--text-sm)", color: "var(--muted)", lineHeight: 1.5, marginTop: 2 }}>${move.cue}</div>
-    </div>
-  </div>`;
-}
-
 export default function StretchScreen({ ctx }) {
   const { store, nav, html, ui, Icon, today } = ctx;
-  const { Card, Button, Switch } = ui;
+  const { Card, Button } = ui;
   const [expandedDay, setExpandedDay] = useState(null);
   const [showEvidence, setShowEvidence] = useState(false);
   const [showSafety, setShowSafety] = useState(false);
-  const [planPaused, setPlanPaused] = useState(() => localStorage.getItem(PAUSE_KEY) === "true");
+  // The no-schedule card rests folded.
+  const [anytimeExpanded, setAnytimeExpanded] = useState(false);
   const [penaltyCharged, setPenaltyCharged] = useState(0);
 
   const p = store.prediction(today);
@@ -141,18 +191,6 @@ export default function StretchScreen({ ctx }) {
   const dateForPlanDay = (pd) => lib.dateForPlanDay(pd, tier, p.nextPeriodStart, today);
   const isDone = (pd) => store.stretchDone(dateForPlanDay(pd));
 
-  // Past plan days in this window she didn't stretch — the lock-in's billable set.
-  const missedKeys = () => {
-    if (!tier.locksIn || tier.totalDays === 0) return [];
-    const start = startOfDay(today);
-    const keys = [];
-    for (let pd = 1; pd <= tier.totalDays; pd++) {
-      const d = dateForPlanDay(pd);
-      if (d < start && !store.stretchDone(d)) keys.push(store.key(d));
-    }
-    return keys;
-  };
-
   // Re-anchor the accounting to a given day: nothing before it is ever
   // chargeable. The rewards side owns the penalty ledger; tell it too if it
   // grows an anchor API (that change lands in parallel).
@@ -161,12 +199,10 @@ export default function StretchScreen({ ctx }) {
   };
 
   // Lock-in accounting: a missed past plan day costs 5 petals, charged once ever
-  // per day. Trio never penalizes; while the plan is PAUSED those days are
-  // excused for good instead of charged; days before the plan was activated are
-  // never chargeable at all. Runs on open, whenever the pause flips, and on a
-  // tier switch so the penalty note never shows a stale count from the previous
-  // plan (StretchCoachView: onAppear / onChange(of: planPaused) /
-  // onChange(of: stretchTierRaw)).
+  // per day. Trio never penalizes; days before the plan was activated are never
+  // chargeable at all. Runs on open and on a tier switch so the penalty note
+  // never shows a stale count from the previous plan (StretchCoachView:
+  // onAppear / onChange(of: stretchTierRaw)).
   useEffect(() => {
     // Trio never penalizes — and must also clear any note left over from a
     // lock-in tier, or the "petals drifted off" line goes stale on switch.
@@ -187,20 +223,11 @@ export default function StretchScreen({ ctx }) {
       const d = dateForPlanDay(pd);
       if (d >= start || store.stretchDone(d)) continue;
       const k = store.key(d);
-      if (planPaused || k < activation) rewards.excuseMissedDay(k);
+      if (k < activation) rewards.excuseMissedDay(k);
       else if (rewards.penalizeMissedDay(k)) charged += 1;
     }
     setPenaltyCharged(charged);
-  }, [planPaused, tier.key]);
-
-  // Pausing grants amnesty immediately; UNpausing forgives everything missed up to
-  // that moment first (days that elapsed while paused must never be billed), then
-  // the effect above resumes normal accounting.
-  const togglePause = (next) => {
-    localStorage.setItem(PAUSE_KEY, String(next));
-    if (!next) for (const k of missedKeys()) rewards.excuseMissedDay(k);
-    setPlanPaused(next);
-  };
+  }, [tier.key]);
 
   // Streak: consecutive days done, ending today (or yesterday if today's not done yet).
   const streak = (() => {
@@ -214,17 +241,22 @@ export default function StretchScreen({ ctx }) {
 
   const sessionFinishTitle = (!isTrio && todaySession)
     ? `Day ${lib.planDay(todaySession, tier)} done` : "Session done";
-  const play = (day, finishTitle) => nav.open("session", { day, finishTitle, multiplier });
+  // A session run from a plan day's schedule row passes THAT day as logDate, so
+  // completions and petals land on that date — matching the row's own checkboxes
+  // (no lost completions, no double-earning). Omitted, it defaults to today.
+  const play = (day, finishTitle, logDate) => nav.open("session", { day, finishTitle, multiplier, logDate });
 
-  // Checking a pose ON pays; UNchecking takes the same points back, so toggling
-  // can't farm petals. Finishing the set rings her chime.
-  const toggleMove = (i, s) => {
-    const before = store.stretchMovesDone(today);
+  // One pose, one checkmark. `d` defaults to today; schedule rows pass their own
+  // day so every plan day's poses check off (and pay) on that date. Checking a
+  // pose ON pays; UNchecking takes the same points back, so toggling can't farm
+  // petals. Finishing the set rings her chime.
+  const toggleMove = (i, s, d = today) => {
+    const before = store.stretchMovesDone(d);
     const checked = before.includes(i);
     const wasFullDay = before.length === s.moves.length;
-    const completedDay = store.toggleStretchMove(i, today, s.moves.length);
-    if (!checked) awardPose(store.key(today), before.length, s.moves.length, multiplier);
-    else revokePose(store.key(today), Math.max(before.length - 1, 0), s.moves.length, wasFullDay, multiplier);
+    const completedDay = store.toggleStretchMove(i, d, s.moves.length);
+    if (!checked) awardPose(store.key(d), before.length, s.moves.length, multiplier);
+    else revokePose(store.key(d), Math.max(before.length - 1, 0), s.moves.length, wasFullDay, multiplier);
     if (completedDay) rewards.playCelebrationIfOwned();
   };
 
@@ -232,12 +264,6 @@ export default function StretchScreen({ ctx }) {
   // the time, one tap to switch (no hidden menus to discover). The segments
   // carry the name and points multiplier; the line beneath explains the one
   // she's on.
-  const rowShell = () => ({
-    display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-    background: "var(--surface)", border: "1px solid var(--line)",
-    borderRadius: "var(--radius-md)", padding: "10px 14px", minHeight: "var(--tap-min)",
-  });
-
   const planNote = (t) =>
     t.key === "trio" ? "Any day, no schedule, no pressure"
     : t.key === "starter" ? "The 3 days before your period · −5 a missed day"
@@ -274,22 +300,8 @@ export default function StretchScreen({ ctx }) {
     </button>`;
   };
 
-  // Her plan, her terms: pausing excuses missed days instead of charging them.
-  const pauseRow = () => html`<div style=${rowShell()}>
-    <span style=${{ color: planPaused ? "var(--primary-strong)" : "var(--muted)", flex: "0 0 auto", display: "inline-flex" }}>
-      <${Icon} name="clock" size=${17} /></span>
-    <div style=${{ flex: 1, minWidth: 0 }}>
-      <div style=${{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--deep)" }}>Pause my plan</div>
-      <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", marginTop: 1 }}>Life happens — missed days cost nothing while paused</div>
-    </div>
-    <${Switch} checked=${planPaused} onChange=${togglePause} label="Pause my plan" />
-  </div>`;
-
   const planBar = () => html`<div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-    <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-      <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>YOUR PLAN</span>
-      ${planPaused && tier.locksIn && html`<span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--deep)", background: "var(--surface-soft)", borderRadius: 999, padding: "2px 8px" }}>paused</span>`}
-    </div>
+    <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>YOUR PLAN</span>
     <div role="group" aria-label="Plan choices"
       style=${{ display: "flex", gap: 4, padding: 4, background: "var(--surface-soft)", borderRadius: "var(--radius-md)" }}>
       ${planSegment(lib.TIERS.trio, "Anytime")}
@@ -300,22 +312,32 @@ export default function StretchScreen({ ctx }) {
       <span style=${{ flex: 1, fontSize: "var(--text-xs)", color: "var(--muted)" }}>${planNote(tier)}</span>
       <span style=${{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--deep)", flex: "0 0 auto" }}>up to ${lib.maxDailyPoints(tier)}/day</span>
     </div>
-    ${tier.locksIn && pauseRow()}
     <div style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>Switching keeps every point and completion.</div>
   </div>`;
 
   // ---- today's session card ----
-  const todayCard = (s, heading) => html`<${Card}>
+  // Collapsible cards fold to just the header — one tap opens (Swift's
+  // anytimeExpanded: the no-schedule card rests folded so the schedule leads).
+  const todayCard = (s, heading, collapsible = false) => {
+    const open = !collapsible || anytimeExpanded;
+    return html`<${Card}>
     <div style=${{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+      <button onClick=${() => collapsible && setAnytimeExpanded(!anytimeExpanded)}
+        disabled=${!collapsible} aria-expanded=${collapsible ? open : undefined}
+        style=${{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8,
+          width: "100%", textAlign: "left", background: "none", border: "none", padding: 0,
+          cursor: collapsible ? "pointer" : "default", color: "inherit" }}>
         <div>
           <div style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)" }}>${heading}</div>
           <div style=${{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", fontWeight: 600, color: "var(--deep)", marginTop: 2 }}>${s.focus}</div>
         </div>
-        <div style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--phase-luteal)", flex: "0 0 auto" }}>${s.minutes} min</div>
-      </div>
+        <div style=${{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+          <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--phase-luteal)" }}>${s.minutes} min</span>
+          ${collapsible && html`<span style=${{ color: "var(--muted)", display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast)" }}><${Icon} name="chevron-down" size=${16} /></span>`}
+        </div>
+      </button>
 
-      ${s.moves.map((m, i) => html`<${MoveRow} key=${m.id} ctx=${ctx} move=${m}
+      ${open && html`${s.moves.map((m, i) => html`<${MoveRow} key=${m.id} ctx=${ctx} move=${m}
         checked=${movesDone.includes(i)} onToggle=${() => toggleMove(i, s)} />`)}
 
       ${!dayDone && html`<${Button} variant="primary" block=${true}
@@ -330,9 +352,10 @@ export default function StretchScreen({ ctx }) {
         style=${{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", minHeight: "var(--tap-min)" }}>
         <span style=${{ color: dayDone ? "var(--good)" : "var(--muted)" }}><${Icon} name=${dayDone ? "check" : "circle"} size=${19} /></span>
         <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)" }}>${dayDone ? "Today's stretching — done" : "Mark the whole day done"}</span>
-      </button>
+      </button>`}
     </div>
   </${Card}>`;
+  };
 
   // ---- window progress strip ----
   const progressStrip = () => {
@@ -437,12 +460,13 @@ export default function StretchScreen({ ctx }) {
           ? html`${d.moves.map((m, i) => html`<${MoveRow} key=${m.id} ctx=${ctx} move=${m}
               checked=${movesDone.includes(i)} onToggle=${() => toggleMove(i, d)} />`)}
             <${Button} variant="soft" size="sm" iconLeft=${html`<${Icon} name="activity" size=${16} />`}
-              onClick=${() => play(d, sessionFinishTitle)}>Start guided session</${Button}>`
-          // Off-schedule days still open the guided player — the whole system is
-          // hers to explore; completions log to today.
-          : html`${d.moves.map((m) => html`<${MoveDetail} key=${m.id} ctx=${ctx} move=${m} />`)}
+              onClick=${() => play(d, sessionFinishTitle, rowDate)}>Start guided session</${Button}>`
+          // Every plan day's poses get their own checkmarks, checked off (and
+          // paid) on THAT day's date — back-fill or work ahead.
+          : html`${d.moves.map((m, i) => html`<${MoveRow} key=${m.id} ctx=${ctx} move=${m}
+              checked=${store.stretchMovesDone(rowDate).includes(i)} onToggle=${() => toggleMove(i, d, rowDate)} />`)}
             <${Button} variant="soft" size="sm" iconLeft=${html`<${Icon} name="activity" size=${16} />`}
-              onClick=${() => play(d, "Session done")}>Do this session now</${Button}>`}
+              onClick=${() => play(d, "Session done", rowDate)}>Do this session now</${Button}>`}
       </div>`}
     </div>`;
   };
@@ -484,7 +508,9 @@ export default function StretchScreen({ ctx }) {
     </div>`)}
   </div>`;
 
-  return html`<div class="pad" style=${{ display: "flex", flexDirection: "column", gap: "var(--gap-card)" }}>
+  return html`<div>
+    <${GardenBackdrop} ctx=${ctx} />
+    <div class="pad" style=${{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: "var(--gap-card)" }}>
     ${planBar()}
     <${CoachFlower} ctx=${ctx} message=${coachLine} />
 
@@ -499,11 +525,15 @@ export default function StretchScreen({ ctx }) {
       ? html`${todayCard(todaySession, isTrio ? "TODAY · THE CORE TRIO" : `TODAY · DAY ${lib.planDay(todaySession, tier)} OF ${tier.totalDays}`)}
           ${!isTrio && progressStrip()}
           ${penaltyCharged > 0 && penaltyNote()}`
-      : html`${outOfWindow()}${todayCard(lib.anytimeSession, "ANYTIME SESSION · NO SCHEDULE NEEDED")}`}
+      // Stretching is never locked: any day, she can run and check off a
+      // session — it logs to today like any other. Folded by default so the
+      // schedule below leads; one tap opens it.
+      : html`${outOfWindow()}${todayCard(lib.anytimeSession, "ANYTIME SESSION · NO SCHEDULE NEEDED", true)}`}
 
     ${!isTrio && scheduleCard()}
     ${disclosure(showEvidence, setShowEvidence, "Why this may help", evidenceBody)}
     ${disclosure(showSafety, setShowSafety, "Before you start", safetyBody)}
+    </div>
   </div>`;
 }
 
