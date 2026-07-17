@@ -165,7 +165,7 @@ struct GardenShopView: View {
     }
 
     private var stickerNote: some View {
-        Text("Flowers you own become stickers. Tap one to wear it on your Today tab.")
+        Text("Tap flowers you own to wear them on your Today ring. Wear as many as you like; they chain together.")
             .font(ffBody(FFType.xs))
             .foregroundStyle(theme.color(.muted))
     }
@@ -180,11 +180,11 @@ struct GardenShopView: View {
 
     private func flowerCell(_ f: FlowerItem) -> some View {
         let owned = rewards.ownedFlowers.contains(f.id)
-        let equipped = rewards.activeSticker == f.id
+        let worn = rewards.inChain(f.id)
         let affordable = rewards.canAfford(f.price)
         return Button {
             if owned {
-                rewards.activeSticker = equipped ? nil : f.id
+                withAnimation(FFMotion.fast) { rewards.toggleChain(f.id) }
             } else if !affordable {
                 petalGap = PetalGap(name: "the \(f.name)", price: f.price)
             } else {
@@ -207,8 +207,8 @@ struct GardenShopView: View {
                     .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.6)
                     .foregroundStyle(theme.color(.phaseLuteal))
                 Group {
-                    if equipped {
-                        Label("Worn", systemImage: "checkmark")
+                    if worn {
+                        Label("On your ring", systemImage: "checkmark")
                     } else if owned {
                         Text("Tap to wear")
                     } else {
@@ -216,22 +216,23 @@ struct GardenShopView: View {
                     }
                 }
                 .font(ffBody(FFType.xs, weight: .bold))
-                .foregroundStyle(equipped ? theme.color(.onPrimary) : theme.color(owned ? .primaryStrong : (affordable ? .deep : .muted)))
+                .foregroundStyle(worn ? theme.color(.onPrimary) : theme.color(owned ? .primaryStrong : (affordable ? .deep : .muted)))
                 .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(equipped ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
+                .background(worn ? theme.color(.primaryStrong) : theme.color(.surfaceSoft), in: Capsule())
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, FFSpace.s3)
             .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
-                    .strokeBorder(equipped ? theme.color(.primaryStrong) : theme.color(.line),
-                                  lineWidth: equipped ? 1.5 : 1)
+                    .strokeBorder(worn ? theme.color(.primaryStrong) : theme.color(.line),
+                                  lineWidth: worn ? 1.5 : 1)
             )
         }
         .buttonStyle(FFPressButtonStyle(scale: 0.96))
         .sensoryFeedback(.success, trigger: rewards.ownedFlowers.contains(f.id))
-        .accessibilityLabel("\(f.name), \(f.rarity), \(owned ? (equipped ? "worn" : "owned") : "\(f.price) points")")
+        .accessibilityLabel("\(f.name), \(f.rarity), \(owned ? (worn ? "on your ring" : "owned") : "\(f.price) points")")
+        .accessibilityHint(owned ? (worn ? "Takes it off your ring" : "Wears it on your ring") : "")
     }
 
     // The daisy chain: owned blooms she taps into a chain that circles her
@@ -335,7 +336,9 @@ struct GardenShopView: View {
                 }
                 Spacer(minLength: 4)
                 Button {
-                    if owned { rewards.activeSticker = equipped ? nil : "posey" }
+                    // Taking Posey off hands the bead back to the newest
+                    // chained bloom, so the ring never loses its draggable bead.
+                    if owned { rewards.activeSticker = equipped ? rewards.ringChain.last : "posey" }
                     else if !rewards.canAfford(RewardsStore.poseyPrice) {
                         petalGap = PetalGap(name: "Posey herself", price: RewardsStore.poseyPrice)
                     } else {
@@ -533,7 +536,7 @@ struct StretchRulesView: View {
 
                 rulesCard("Spending", "bag", [
                     "Your first 100 petals are a welcome gift, enough for the Daisy.",
-                    "Ten flowers of rising rarity: Daisy (100) up to the red rose bouquet (7,500). Own one, wear it on your Today ring. Spin it around the ring, or pluck it off and rest it anywhere you like.",
+                    "Ten flowers of rising rarity: Daisy (100) up to the red rose bouquet (7,500). Wear as many as you own; they chain around your Today ring. The newest rides as a bead you can spin, or pluck off and rest anywhere you like.",
                     "Posey herself is the legendary sticker: 10,000.",
                     "Celebration sounds: Petal swoosh 800, Songbird 1,200, Crystal chime 1,600. They ring when a session ends or a log slides home.",
                     "Palettes (Pink, Peony, Soft, Light): 600 each. Cherry, Rose and Dark are always free.",

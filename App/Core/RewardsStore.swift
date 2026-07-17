@@ -163,11 +163,17 @@ final class RewardsStore {
     func inChain(_ id: String) -> Bool { ringChain.contains(id) }
 
     /// Add or remove an owned bloom from the chain (order = ring order).
+    /// Wearing is additive: the chain IS what she wears, as many blooms as she
+    /// likes. The newest-added bloom rides as the draggable bead (unless Posey
+    /// holds it); removing the bead's bloom hands the bead to the last bloom
+    /// still chained.
     func toggleChain(_ id: String) {
         if let i = ringChain.firstIndex(of: id) {
             ringChain.remove(at: i)
+            if activeSticker == id { activeSticker = ringChain.last }
         } else if ownedFlowers.contains(id) {
             ringChain.append(id)
+            if activeSticker != "posey" { activeSticker = id }
         }
         save()
     }
@@ -238,7 +244,7 @@ final class RewardsStore {
               !ownedFlowers.contains(id), canAfford(f.price) else { return false }
         balance -= f.price
         ownedFlowers.insert(id)
-        if activeSticker == nil { activeSticker = id }
+        toggleChain(id)   // a new bloom goes straight onto her ring
         save(); return true
     }
 
@@ -332,6 +338,9 @@ final class RewardsStore {
         stickerMode = b.stickerMode ?? "ring"
         poseAwardLog = b.poseAwardLog ?? [:]
         ringChain = b.ringChain ?? []
+        // Migrate: a single worn sticker from before additive wearing joins the
+        // chain, so the shop shows it as "on your ring" like everything else.
+        if ringChain.isEmpty, let s = activeSticker, s != "posey" { ringChain = [s] }
         poseyCrowned = b.poseyCrowned ?? false
         // Migrate the old single-chime unlock into the crystal chime.
         if b.soundUnlocked == true && ownedSounds.isEmpty {

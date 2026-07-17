@@ -15,10 +15,16 @@ struct TodayView: View {
     var onOpenCalendar: () -> Void = {}
 
     private var p: CyclePrediction { store.prediction() }
+    /// Chained blooms minus the one riding as the draggable bead, so a worn
+    /// bloom never renders twice on the ring.
+    private var chainMinusBead: [String] {
+        rewards.ringChain.filter { $0 != rewards.activeSticker }
+    }
     private var today: Date { Date() }
     @State private var showThemeEditor = false
     @State private var showAbout = false
     @State private var showTips = false
+    @State private var showShop = false
     @State private var paneIndex = 0
     @State private var undoToast: UndoAction? = nil
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
@@ -59,6 +65,12 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showAbout) { AboutView() }
         .sheet(isPresented: $showTips) { TipsSheet() }
+        .sheet(isPresented: $showShop) {
+            GardenShopView(onGoEarn: {
+                showShop = false
+                onOpenStretch()
+            })
+        }
         .overlay(alignment: .top) { undoToastView }
     }
 
@@ -125,6 +137,9 @@ struct TodayView: View {
             FFIconButton("pencil") { showThemeEditor = true }
                 .glitterHint("themeEditor")
                 .accessibilityLabel("Theme settings")
+            FFIconButton("bag") { showShop = true }
+                .glitterHint("todayShop")
+                .accessibilityLabel("Garden shop")
         }
         .padding(.top, 2)
     }
@@ -148,8 +163,8 @@ struct TodayView: View {
                 ZStack {
                     CycleRing(prediction: p, size: 244)
                     // Her daisy chain rides the ring beneath the draggable bead.
-                    if !rewards.ringChain.isEmpty {
-                        RingChainView(chain: rewards.ringChain,
+                    if !chainMinusBead.isEmpty {
+                        RingChainView(chain: chainMinusBead,
                                       radius: CycleRing.trackRadius(for: 244))
                     }
                     RingSticker(radius: CycleRing.trackRadius(for: 244),
@@ -294,8 +309,8 @@ struct TodayView: View {
         VStack(spacing: 8) {
             ZStack {
                 CycleRing(prediction: store.previewPrediction(), size: 220)
-                if !rewards.ringChain.isEmpty {
-                    RingChainView(chain: rewards.ringChain,
+                if !chainMinusBead.isEmpty {
+                    RingChainView(chain: chainMinusBead,
                                   radius: CycleRing.trackRadius(for: 220))
                 }
                 RingSticker(radius: CycleRing.trackRadius(for: 220),
