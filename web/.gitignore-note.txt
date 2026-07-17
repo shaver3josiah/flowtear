@@ -1,0 +1,49 @@
+Vendored assets — provenance & how to reproduce
+================================================
+
+Everything under web/vendor/ is checked in (NOT gitignored) so the Capacitor
+Android APK builds and runs fully offline — no CDN, no network at runtime.
+
+Reproduce from a clean checkout:
+
+  npm install --no-save \
+    react@18 react-dom@18 htm lucide lucide-static \
+    @fontsource/quicksand @fontsource/playfair-display @fontsource/great-vibes
+
+Then copy (see the vendor step / scripts):
+
+  node_modules/react/umd/react.production.min.js          -> web/vendor/react.production.min.js
+  node_modules/react-dom/umd/react-dom.production.min.js  -> web/vendor/react-dom.production.min.js
+  node_modules/htm/dist/htm.js                            -> web/vendor/htm.js
+  design-system/_ds_bundle.js                             -> web/vendor/ds-bundle.js   (copied unchanged)
+
+Fonts (renamed):
+  @fontsource/quicksand/files/quicksand-latin-400-normal.woff2               -> web/vendor/fonts/quicksand-400.woff2
+  @fontsource/quicksand/files/quicksand-latin-700-normal.woff2               -> web/vendor/fonts/quicksand-700.woff2
+  @fontsource/playfair-display/files/playfair-display-latin-400-normal.woff2 -> web/vendor/fonts/playfair-400.woff2
+  @fontsource/playfair-display/files/playfair-display-latin-700-normal.woff2 -> web/vendor/fonts/playfair-700.woff2
+  @fontsource/playfair-display/files/playfair-display-latin-400-italic.woff2 -> web/vendor/fonts/playfair-400-italic.woff2
+  @fontsource/great-vibes/files/great-vibes-latin-400-normal.woff2           -> web/vendor/fonts/great-vibes-400.woff2
+
+web/vendor/icon.js is GENERATED, not copied: it embeds the inner SVG markup of
+36 Lucide glyphs read from node_modules/lucide-static/icons/*.svg so the app has
+no runtime icon dependency.
+
+Globals exposed by the plain <script> vendor files:
+  react.production.min.js      -> window.React
+  react-dom.production.min.js  -> window.ReactDOM
+  htm.js                       -> window.htm
+  ds-bundle.js                 -> window.FlowtierDesignSystem_6b3d0d
+
+Source versions (installed 2026-07-15):
+  react                        18.3.1
+  react-dom                    18.3.1
+  htm                          3.1.1
+  lucide                       1.24.0   (not shipped; icon.js embeds paths instead)
+  lucide-static                1.24.0   (source of web/vendor/icon.js glyphs, ISC license)
+  @fontsource/quicksand        5.2.10
+  @fontsource/playfair-display 5.2.8
+  @fontsource/great-vibes      5.2.8
+
+Font families to reference in CSS:  "Quicksand", "Playfair Display", "Great Vibes"
+(declared as @font-face in web/styles/tokens.css, pointing at web/vendor/fonts/).

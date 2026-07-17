@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>Uncorked</title>
+  <link rel="stylesheet" href="./styles/tokens.css" />
+  <link rel="stylesheet" href="./styles/app.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Field diagnostics, BEFORE any module: on a phone there's no console, so a
+       failed script or uncaught error must surface on screen or "buttons do
+       nothing" is undiagnosable. ES5-only on purpose — must parse anywhere. -->
+  <script>
+    (function () {
+      function show(msg) {
+        var el = document.getElementById("ft-err");
+        if (!el) {
+          el = document.createElement("div");
+          el.id = "ft-err";
+          el.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:200;background:#B01B58;color:#fff;font:12px/1.4 monospace;padding:8px 34px 8px 10px;word-break:break-word;max-height:30vh;overflow:auto";
+          var x = document.createElement("button");
+          x.innerHTML = "&times;";
+          x.style.cssText = "position:absolute;top:2px;right:6px;background:none;border:none;color:#fff;font-size:18px";
+          x.onclick = function () { el.parentNode.removeChild(el); };
+          el.appendChild(x);
+          document.body.appendChild(el);
+        }
+        var line = document.createElement("div");
+        line.textContent = String(msg);
+        el.appendChild(line);
+      }
+      window.addEventListener("error", function (e) {
+        show((e.message || "Script error") + (e.filename ? " @ " + e.filename.split("/").pop() + ":" + e.lineno : ""));
+      }, true);
+      window.addEventListener("unhandledrejection", function (e) {
+        show("(async) " + (e.reason && e.reason.message ? e.reason.message : e.reason));
+      });
+    })();
+  </script>
+
+  <!-- Vendor globals (offline; no CDN). Order matters: React before the DS bundle. -->
+  <script src="./vendor/react.production.min.js"></script>
+  <script src="./vendor/react-dom.production.min.js"></script>
+  <script src="./vendor/htm.js"></script>
+  <script src="./vendor/ds-bundle.js"></script>
+
+  <!-- App (native ES module) -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

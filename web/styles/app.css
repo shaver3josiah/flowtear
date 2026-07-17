@@ -1,0 +1,117 @@
+/* Shell layout only. All component looks come from the design-system bundle
+   (each component self-injects its CSS) + the token variables in tokens.css.
+   This file just positions the screen, tab bar and overlay host. */
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg, #FDF2F7);
+  color: var(--text, #421527);
+  font-family: var(--font-body, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+button { font-family: inherit; }
+h1, h2, h3 { font-family: var(--font-display, var(--font-body)); margin: 0; }
+
+.app {
+  max-width: var(--screen-max, 440px);
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  background: var(--bg, #FDF2F7);
+}
+
+.screen {
+  padding: 20px 18px calc(92px + env(safe-area-inset-bottom));
+  min-height: 100dvh;
+}
+.pad { padding: 8px 2px; }
+
+/* Bottom tab bar */
+.tabbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: var(--screen-max, 440px);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--surface, #fff) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line, #f3d9e4);
+  z-index: 20;
+}
+.tabbtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: var(--muted, #b7889b);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 14px;
+  transition: color .18s ease, transform .12s ease;
+}
+/* deep, not primary-strong: the tiny active label sits on the surface-soft
+   pill, where deep clears 4.5:1 in every preset (TabBar.swift). */
+.tabbtn.active {
+  color: var(--deep, #b01b58);
+  background: var(--surface-soft, #fbe4ee);
+}
+.tabbtn:active { transform: scale(.94); }
+
+/* Overlay host — bottom sheet */
+.overlay-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim, rgba(66, 21, 39, .28));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 40;
+  animation: scrim-in .18s ease;
+}
+.overlay-sheet {
+  width: 100%;
+  max-width: var(--screen-max, 440px);
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--bg, #FDF2F7);
+  border-radius: 26px 26px 0 0;
+  padding: 8px 0 calc(12px + env(safe-area-inset-bottom));
+  box-shadow: 0 -18px 50px -20px var(--shadow, rgba(66, 21, 39, .3));
+  animation: sheet-up .28s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes sheet-up { from { transform: translateY(24px); opacity: .6; } }
+
+/* Privacy gate — opaque, above everything, and it blocks every tap behind it. */
+.lock-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg, #FDF2F7);
+}
+
+.screen-error { padding: 40px 20px; color: var(--muted, #b7889b); }
+.screen-error pre { white-space: pre-wrap; font-size: 12px; opacity: .7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-scrim, .overlay-sheet { animation: none; }
+}

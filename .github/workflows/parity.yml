@@ -1,0 +1,30 @@
+# Cross-platform drift gate. The repo holds two implementations of Uncorked —
+# native SwiftUI (App/) and the Capacitor web app (web/) — kept in sync through
+# contracts/. This job fails the moment either platform's version stamp falls
+# behind, the web engine stops reproducing the golden cycle vectors, or the
+# logged-data enums diverge (e.g. a Flow case added on one side only).
+#
+# Pure Node, no dependencies, no install step — it costs seconds on ubuntu,
+# unlike the macOS iOS build. Runs on every push and PR so an iOS-only change
+# that touches shared behavior turns main red instead of silently drifting.
+name: parity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Drift detector (contracts vs both platforms)
+        run: npm run check:parity
+      - name: Core self-checks (engine, store, report, rewards, stretch)
+        run: npm test
