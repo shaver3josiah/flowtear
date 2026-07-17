@@ -198,7 +198,7 @@ struct GardenShopView: View {
         } label: {
             VStack(spacing: 6) {
                 StickerView(id: f.id, size: 104)
-                    .frame(height: 140)   // rarity scaling without jagged grid rows
+                    .frame(height: 152)   // rarity scaling without jagged grid rows
                     .saturation(owned || affordable ? 1 : 0.35)
                 Text(f.name)
                     .font(ffBody(FFType.sm, weight: .semibold))

@@ -269,13 +269,14 @@ struct FlowerArt: View {
 
 extension FlowerItem {
     /// Rarer blooms render a touch larger — the shelf reads as a crescendo.
+    /// The whole ladder starts above 1 so even the Daisy feels substantial.
     var artScale: CGFloat {
         switch rarity {
-        case "Sweet":    1.06
-        case "Lovely":   1.14
-        case "Rare":     1.22
-        case "Precious": 1.32
-        default:         1.0
+        case "Sweet":    1.18
+        case "Lovely":   1.26
+        case "Rare":     1.34
+        case "Precious": 1.44
+        default:         1.12
         }
     }
 }

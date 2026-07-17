@@ -8,7 +8,7 @@
 // a plain object works in Node (see report.test.mjs).
 
 import { periodStarts } from "./engine.js";
-import { startOfDay, daysBetween } from "./dates.js";
+import { startOfDay, daysBetween, dateFromKey } from "./dates.js";
 import { cToF, monthShort } from "./format.js";
 
 // Swift's DateFormatter with dateStyle .medium — "Jul 16, 2026".
@@ -50,6 +50,17 @@ export function flags(store, today = new Date()) {
   }
   if (maxRecentRun > 7) {
     out.push(`One recent period lasted ${maxRecentRun} days. Bleeding past 7 days is something a clinician would want to hear about.`);
+  }
+
+  // Super heavy flow in the last ~month — no single day is alarming, but it's
+  // exactly the kind of thing a clinician asks about. monthAgo keeps the wall
+  // time (like Swift's Calendar.date(byAdding:)) so the 35-day boundary matches.
+  const monthAgo = new Date(today);
+  monthAgo.setDate(monthAgo.getDate() - 35);
+  const heavy = store.logsSnapshot.filter(
+    (l) => l.flow === "superHeavy" && dateFromKey(l.dateKey) >= monthAgo).length;
+  if (heavy > 0) {
+    out.push(`Super heavy flow on ${heavy} day${heavy === 1 ? "" : "s"} this month. If that's new for you, mention it at a visit.`);
   }
 
   // Overdue right now.
@@ -99,21 +110,28 @@ export function text(store, today = new Date()) {
   return lines.join("\n");
 }
 
-export const CSV_HEADER = "date,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note";
+export const CSV_HEADER = "date,cycle_day,phase,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note";
 export const CSV_FILENAME = "uncorked-cycle-data.csv"; // same name Swift's csvFile() writes
 
-/** The whole calendar's data as a spreadsheet (CSV). */
+/**
+ * The whole calendar's data as a spreadsheet (CSV). Each row carries its cycle
+ * day and phase (a per-day snapshot judged only from history up to that day) so
+ * the sheet sorts and pivots without cycle math. Mirrors CycleReport.csv.
+ */
 export function csv(store) {
   const rows = [CSV_HEADER];
   const byDate = [...store.logsSnapshot].sort((a, b) =>
     a.dateKey < b.dateKey ? -1 : a.dateKey > b.dateKey ? 1 : 0);
   for (const log of byDate) {
+    const snap = store.phaseSnapshot(dateFromKey(log.dateKey));
     const tempF = log.temperatureC == null ? "" : cToF(log.temperatureC).toFixed(2);
     const moods = [...(log.moods ?? [])].sort().join("; ");
     const symptoms = [...(log.symptoms ?? [])].sort().join("; ");
     const note = (log.note ?? "").replaceAll('"', '""');
     rows.push([
       log.dateKey,
+      snap.day == null ? "" : String(snap.day),
+      snap.phase ?? "",
       log.flow ?? "",
       log.discharge ?? "",
       tempF,

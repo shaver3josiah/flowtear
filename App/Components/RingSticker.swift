@@ -45,8 +45,10 @@ struct RingSticker: View {
     }
 
     var body: some View {
-        if let id = rewards.activeSticker {
-            ZStack {
+        ZStack {
+            chainBlooms
+
+            if let id = rewards.activeSticker {
                 // Confetti trail while she spins it fast.
                 ForEach(trail) { bit in
                     Ellipse()
@@ -65,7 +67,7 @@ struct RingSticker: View {
 
                 // The flower: its 44pt circle IS the hitbox — nothing else here
                 // grabs touches, so the ring's own scrub gesture keeps the rest.
-                StickerView(id: id, size: 30)
+                StickerView(id: id, size: 38)
                     .scaleEffect(dragging ? 1.2 : 1)
                     .shadow(color: theme.shadow, radius: dragging || spinning ? 6 : 0)
                     .frame(width: FFSpace.tapMin, height: FFSpace.tapMin)
@@ -73,23 +75,62 @@ struct RingSticker: View {
                     .offset(x: pos.x, y: pos.y)
                     .highPriorityGesture(stickerDrag)
                     .animation(dragging ? nil : FFMotion.spring, value: dragging)
+                    .accessibilityLabel("Your flower sticker")
+                    .accessibilityHint("Drag along the ring to spin it, or pull it off and set it anywhere")
             }
-            .frame(width: diameter, height: diameter)
-            .coordinateSpace(name: "ffRingSticker")
-            .overlay(alignment: .top) { teaseBubble }
-            .overlay(alignment: .bottom) { bonusBadge }
-            .onAppear {
-                angle = rewards.stickerAngle
-                onRing = rewards.stickerMode != "free"
-                // Normalized by RADIUS (not the frame) so a rest keeps the same
-                // relation to the band across ring sizes (hero vs preview).
-                freePos = CGPoint(x: CGFloat(rewards.stickerX) * radius,
-                                  y: CGFloat(rewards.stickerY) * radius)
-            }
-            .sensoryFeedback(.selection, trigger: settleBurst)
-            .accessibilityLabel("Your flower sticker")
-            .accessibilityHint("Drag along the ring to spin it, or pull it off and set it anywhere")
         }
+        .frame(width: diameter, height: diameter)
+        .coordinateSpace(name: "ffRingSticker")
+        .overlay(alignment: .top) { teaseBubble }
+        .overlay(alignment: .bottom) { bonusBadge }
+        .onAppear {
+            angle = rewards.stickerAngle
+            onRing = rewards.stickerMode != "free"
+            // Normalized by RADIUS (not the frame) so a rest keeps the same
+            // relation to the band across ring sizes (hero vs preview).
+            freePos = CGPoint(x: CGFloat(rewards.stickerX) * radius,
+                              y: CGFloat(rewards.stickerY) * radius)
+        }
+        .sensoryFeedback(.selection, trigger: settleBurst)
+    }
+
+    // MARK: the daisy chain — her other worn blooms, riding the same ring
+
+    /// Non-bead worn blooms. Spread: evenly spaced from 12 o'clock. Linked
+    /// (chain-together mode): snapped up behind the bead, so a drag or fling
+    /// of the bead spins the whole chain as one. Tapping any bloom toggles
+    /// the mode, same as the Today tab's chain button.
+    @ViewBuilder private var chainBlooms: some View {
+        let blooms = rewards.ringChain.filter { $0 != rewards.activeSticker }
+        ForEach(Array(blooms.enumerated()), id: \.offset) { i, id in
+            let p = chainPos(index: i, count: blooms.count)
+            StickerView(id: id, size: 26)
+                .frame(width: 36, height: 36)
+                .contentShape(Circle())
+                .onTapGesture {
+                    withAnimation(reduceMotion ? nil : FFMotion.spring) {
+                        rewards.chainLinked.toggle()
+                    }
+                }
+                .offset(x: p.x, y: p.y)
+                .animation(reduceMotion ? nil : FFMotion.spring, value: rewards.chainLinked)
+                .accessibilityLabel("\(RewardsStore.flowers.first { $0.id == id }?.name ?? id) on your ring")
+                .accessibilityHint(rewards.chainLinked ? "Spreads your flowers back around the ring"
+                                                       : "Snaps your flowers together into a chain")
+        }
+    }
+
+    /// Hoisted out of the ViewBuilder (release type-check lesson). Linked mode
+    /// trails the bead clockwise, one bloom-width apart; with no bead to trail
+    /// the blooms fall back to the even spread.
+    private func chainPos(index: Int, count: Int) -> CGPoint {
+        let a: Double
+        if rewards.chainLinked && rewards.activeSticker != nil {
+            a = angle + Double(index + 1) * Double(32 / radius)
+        } else {
+            a = Double(index) / Double(max(count, 1)) * 2 * .pi - .pi / 2
+        }
+        return CGPoint(x: radius * CGFloat(cos(a)), y: radius * CGFloat(sin(a)))
     }
 
     private var stickerDrag: some Gesture {

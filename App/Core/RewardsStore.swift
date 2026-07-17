@@ -59,6 +59,9 @@ final class RewardsStore {
     private(set) var ringChain: [String] = []
     /// Posey wears the chain as a flower crown (needs 3+ blooms chained).
     var poseyCrowned = false { didSet { save() } }
+    /// Chain-together mode: her worn blooms snap up behind the bead and spin
+    /// with it as one daisy chain (off = evenly spread around the ring).
+    var chainLinked = false { didSet { save() } }
 
     private static let key = "flowtear.rewards.v1"
 
@@ -307,6 +310,7 @@ final class RewardsStore {
         var poseAwardLog: [String: [Int]]? = [:]
         var ringChain: [String]? = []
         var poseyCrowned: Bool? = false
+        var chainLinked: Bool? = false
     }
 
     private func makeBlob() -> Blob {
@@ -319,7 +323,8 @@ final class RewardsStore {
              ownedSounds: ownedSounds, activeSound: activeSound,
              penalizedDays: penalizedDays, stickerAngle: stickerAngle,
              periodLandDays: periodLandDays, stickerMode: stickerMode,
-             poseAwardLog: poseAwardLog, ringChain: ringChain, poseyCrowned: poseyCrowned)
+             poseAwardLog: poseAwardLog, ringChain: ringChain, poseyCrowned: poseyCrowned,
+             chainLinked: chainLinked)
     }
 
     private func apply(_ b: Blob) {
@@ -342,6 +347,7 @@ final class RewardsStore {
         // chain, so the shop shows it as "on your ring" like everything else.
         if ringChain.isEmpty, let s = activeSticker, s != "posey" { ringChain = [s] }
         poseyCrowned = b.poseyCrowned ?? false
+        chainLinked = b.chainLinked ?? false
         // Migrate the old single-chime unlock into the crystal chime.
         if b.soundUnlocked == true && ownedSounds.isEmpty {
             ownedSounds.insert("crystal")

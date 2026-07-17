@@ -18,6 +18,11 @@ struct InsightsView: View {
     @State private var showRestorePicker = false
     @State private var pendingRestore: Data? = nil
     @State private var restoreNote: String? = nil
+    @State private var contact: TrustedContact? = TrustedContact.load()
+    @State private var showContactEditor = false
+    @State private var showMailCompose = false
+    @State private var showTextCompose = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollView {
@@ -50,6 +55,8 @@ struct InsightsView: View {
                     if CycleReport.flags(store: store).isEmpty {
                         reportCard
                     }
+                    webReportCard
+                    sendCard
                     exportCard
                 }
 
@@ -88,6 +95,41 @@ struct InsightsView: View {
         } message: {
             Text("Your current history, settings and garden will be replaced by the backup's.")
         }
+        .sheet(isPresented: $showContactEditor) {
+            TrustedContactEditor(contact: $contact)
+        }
+        .sheet(isPresented: $showMailCompose) {
+            MailComposer(to: contact?.email ?? "",
+                         subject: "Cycle update, \(Date().formatted(.dateTime.month(.wide).day()))",
+                         body: CycleReport.text(store: store),
+                         attachments: htmlAttachment.map { [($0, "text/html", "uncorked-cycle-report.html")] } ?? [],
+                         onDone: {})
+                .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showTextCompose) {
+            MessageComposer(to: contact?.phone ?? "",
+                            body: updateTextBody,
+                            attachments: htmlAttachment.map { [($0, "uncorked-cycle-report.html")] } ?? [],
+                            onDone: {})
+                .ignoresSafeArea()
+        }
+    }
+
+    /// The themed web report, freshly written for a send (nil if writing fails).
+    private var htmlAttachment: URL? {
+        CycleWebReport.htmlFile(store: store, theme: theme, recipient: contact?.name)
+    }
+
+    /// The one-breath text-message version of the update.
+    private var updateTextBody: String {
+        let df = DateFormatter(); df.dateStyle = .medium
+        var s = "My cycle update from Uncorked."
+        if let next = p.nextPeriodStart { s += " Next period expected around \(df.string(from: next))." }
+        let flags = CycleReport.flags(store: store)
+        s += flags.isEmpty
+            ? " Everything looks steady this month."
+            : " \(flags.count) thing\(flags.count == 1 ? "" : "s") worth knowing this month, details in the attached page."
+        return s
     }
 
     // MARK: header
@@ -130,6 +172,93 @@ struct InsightsView: View {
                         .foregroundStyle(theme.color(.onPrimary))
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .background(theme.color(.primaryStrong), in: Capsule())
+                }
+            }
+        }
+    }
+
+    @State private var htmlURL: URL? = nil
+
+    // The beautiful shareable: her month as an interactive page in her exact
+    // theme, made to be opened in any browser. Notes never leave the phone.
+    private var webReportCard: some View {
+        FFCard {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                Label("The pretty report", systemImage: "sparkles.rectangle.stack")
+                    .font(ffBody(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+                    .accessibilityAddTraits(.isHeader)
+                Text("Your month as an interactive page in your colors: a live countdown to the next period, temperature and flow charts, anything worth mentioning, and what to expect. Opens in any browser. Notes stay on your phone.")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+                if let url = htmlURL {
+                    ShareLink(item: url) {
+                        Label("Share the report page", systemImage: "square.and.arrow.up")
+                            .font(ffBody(FFType.sm, weight: .bold))
+                            .foregroundStyle(theme.color(.deep))
+                            .padding(.horizontal, 16).padding(.vertical, 9)
+                            .background(theme.color(.surfaceSoft), in: Capsule())
+                    }
+                } else {
+                    FFButton("Prepare the pretty report", style: .soft, size: .sm, icon: "sparkles") {
+                        htmlURL = CycleWebReport.htmlFile(store: store, theme: theme)
+                    }
+                }
+            }
+        }
+    }
+
+    // One trusted person (a partner, a parent, a sister) whose email or number
+    // is saved once, so a monthly update becomes two taps. Nothing ever sends
+    // until she taps Send in the mail or message sheet herself.
+    private var sendCard: some View {
+        FFCard(variant: .accent) {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                HStack {
+                    Label("Keep someone in the loop", systemImage: "heart.circle")
+                        .font(ffBody(FFType.md, weight: .semibold))
+                        .foregroundStyle(theme.color(.deep))
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    if contact != nil {
+                        Button("Edit") { showContactEditor = true }
+                            .font(ffBody(FFType.xs, weight: .bold))
+                            .foregroundStyle(theme.color(.primaryStrong))
+                            .buttonStyle(.plain)
+                            .frame(minHeight: FFSpace.tapMin)
+                            .accessibilityLabel("Edit trusted contact")
+                    }
+                }
+                if let c = contact {
+                    Text("Send \(c.name)\(c.relationship.isEmpty ? "" : ", your \(c.relationship.lowercased()),") this month's update: the pretty report page plus the plain summary.")
+                        .font(ffBody(FFType.xs))
+                        .foregroundStyle(theme.color(.muted))
+                    HStack(spacing: FFSpace.s2) {
+                        if c.hasEmail {
+                            FFButton("Email \(c.name)", style: .primary, size: .sm, icon: "envelope.fill") {
+                                if ComposerAvailability.canMail {
+                                    showMailCompose = true
+                                } else if let url = ComposerAvailability.mailtoFallback(
+                                    to: c.email,
+                                    subject: "Cycle update",
+                                    body: CycleReport.text(store: store)) {
+                                    openURL(url)   // no Mail app set up: plain mailto, no attachment
+                                }
+                            }
+                        }
+                        if c.hasPhone && ComposerAvailability.canText {
+                            FFButton("Text \(c.name)", style: .soft, size: .sm, icon: "message.fill") {
+                                showTextCompose = true
+                            }
+                        }
+                    }
+                } else {
+                    Text("A partner, parent or sister: add one trusted person and your monthly update becomes two taps, by email, text, or both. Nothing sends without you hitting Send.")
+                        .font(ffBody(FFType.xs))
+                        .foregroundStyle(theme.color(.muted))
+                    FFButton("Add a trusted contact", style: .primary, size: .sm, icon: "person.crop.circle.badge.plus") {
+                        showContactEditor = true
+                    }
                 }
             }
         }
@@ -582,5 +711,100 @@ private struct LegendLine: Shape {
         p.move(to: CGPoint(x: rect.minX, y: rect.midY))
         p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
         return p
+    }
+}
+
+// MARK: - TrustedContactEditor — the one person her updates go to
+
+// Saved locally (never synced), removable anytime. An email, a phone number,
+// or both; the send buttons on Insights only appear for what she's filled in.
+private struct TrustedContactEditor: View {
+    @Environment(Theme.self) private var theme
+    @Environment(\.dismiss) private var dismiss
+    @Binding var contact: TrustedContact?
+
+    @State private var name = ""
+    @State private var relationship = ""
+    @State private var email = ""
+    @State private var phone = ""
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
+        (!email.trimmingCharacters(in: .whitespaces).isEmpty ||
+         !phone.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FFSpace.s4) {
+                HStack {
+                    Text("Your trusted contact")
+                        .font(ffDisplay(FFType.lg, weight: .bold))
+                        .foregroundStyle(theme.color(.deep))
+                    Spacer()
+                    FFIconButton("xmark") { dismiss() }
+                }
+                Text("Updates only ever send when you tap Send yourself. Add an email, a phone number, or both.")
+                    .font(ffBody(FFType.sm))
+                    .foregroundStyle(theme.color(.muted))
+
+                field("Name", text: $name, placeholder: "Alex")
+                field("Who they are", text: $relationship, placeholder: "Partner, mom, sister")
+                field("Email", text: $email, placeholder: "alex@example.com", keyboard: .emailAddress)
+                field("Phone", text: $phone, placeholder: "555-867-5309", keyboard: .phonePad)
+
+                FFButton("Save", style: .primary, icon: "checkmark") {
+                    let c = TrustedContact(
+                        name: name.trimmingCharacters(in: .whitespaces),
+                        relationship: relationship.trimmingCharacters(in: .whitespaces),
+                        email: email.trimmingCharacters(in: .whitespaces),
+                        phone: phone.trimmingCharacters(in: .whitespaces))
+                    c.save()
+                    contact = c
+                    dismiss()
+                }
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.45)
+
+                if contact != nil {
+                    FFButton("Remove this contact", style: .ghost, size: .sm) {
+                        TrustedContact.clear()
+                        contact = nil
+                        dismiss()
+                    }
+                }
+            }
+            .padding(FFSpace.s5)
+        }
+        .background(theme.color(.bg))
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            if let c = contact {
+                name = c.name; relationship = c.relationship
+                email = c.email; phone = c.phone
+            }
+        }
+    }
+
+    private func field(_ label: String, text: Binding<String>, placeholder: String,
+                       keyboard: UIKeyboardType = .default) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
+                .foregroundStyle(theme.color(.muted))
+            TextField(placeholder, text: text)
+                .font(ffBody(FFType.md))
+                .foregroundStyle(theme.color(.text))
+                .tint(theme.color(.primaryStrong))
+                .keyboardType(keyboard)
+                .textInputAutocapitalization(keyboard == .default ? .words : .never)
+                .autocorrectionDisabled(keyboard != .default)
+                .padding(.horizontal, 14)
+                .frame(height: 46)
+                .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous)
+                    .strokeBorder(theme.color(.line), lineWidth: 1))
+        }
     }
 }

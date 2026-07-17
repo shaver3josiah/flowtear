@@ -9,6 +9,7 @@ struct TodayView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
     @Environment(RewardsStore.self) private var rewards
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var onLog: (Date) -> Void
     var onOpenStretch: () -> Void = {}
     var onOpenInsights: () -> Void = {}
@@ -19,6 +20,33 @@ struct TodayView: View {
     /// bloom never renders twice on the ring.
     private var chainMinusBead: [String] {
         rewards.ringChain.filter { $0 != rewards.activeSticker }
+    }
+
+    /// The chain-together toggle, riding the ring's corner. Only shown when
+    /// there's a bead plus at least one more bloom — something to snap.
+    @ViewBuilder private var chainButton: some View {
+        if rewards.activeSticker != nil, !chainMinusBead.isEmpty {
+            Button {
+                withAnimation(reduceMotion ? nil : FFMotion.spring) {
+                    rewards.chainLinked.toggle()
+                }
+            } label: {
+                Image(systemName: "link")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(theme.color(rewards.chainLinked ? .onPrimary : .primaryStrong))
+                    .frame(width: 40, height: 40)
+                    .background(theme.color(rewards.chainLinked ? .primaryStrong : .surfaceSoft), in: Circle())
+                    .overlay(Circle().strokeBorder(theme.color(.line),
+                                                   lineWidth: rewards.chainLinked ? 0 : 1))
+            }
+            .buttonStyle(FFPressButtonStyle(scale: 0.9))
+            .glitterHint("chainTogether")
+            // The hero frame is RingSticker's roaming area, wider than the
+            // drawn ring; tuck the button in toward the visible circle.
+            .offset(x: -18, y: -18)
+            .accessibilityLabel(rewards.chainLinked ? "Spread your flowers around the ring"
+                                                    : "Snap your flowers into a chain")
+        }
     }
     private var today: Date { Date() }
     @State private var showThemeEditor = false
@@ -162,14 +190,12 @@ struct TodayView: View {
                 // concentric, never offset.
                 ZStack {
                     CycleRing(prediction: p, size: 244)
-                    // Her daisy chain rides the ring beneath the draggable bead.
-                    if !chainMinusBead.isEmpty {
-                        RingChainView(chain: chainMinusBead,
-                                      radius: CycleRing.trackRadius(for: 244))
-                    }
+                    // The sticker draws her whole daisy chain too — spread out
+                    // or snapped together behind the bead (chain-together mode).
                     RingSticker(radius: CycleRing.trackRadius(for: 244),
                                 periodFraction: periodFraction(p))
                 }
+                .overlay(alignment: .bottomTrailing) { chainButton }
                 PhaseBadge(phase: p.phase)
                 Text(nextPeriodLine)
                     .font(ffBody(FFType.sm, weight: .medium))
@@ -309,13 +335,10 @@ struct TodayView: View {
         VStack(spacing: 8) {
             ZStack {
                 CycleRing(prediction: store.previewPrediction(), size: 220)
-                if !chainMinusBead.isEmpty {
-                    RingChainView(chain: chainMinusBead,
-                                  radius: CycleRing.trackRadius(for: 220))
-                }
                 RingSticker(radius: CycleRing.trackRadius(for: 220),
                             periodFraction: periodFraction(store.previewPrediction()))
             }
+            .overlay(alignment: .bottomTrailing) { chainButton }
             Text("A first guess. It sharpens as you log")
                 .font(ffBody(FFType.xs, weight: .medium))
                 .foregroundStyle(theme.color(.muted))
