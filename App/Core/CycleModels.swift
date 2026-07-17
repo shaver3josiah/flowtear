@@ -4,11 +4,18 @@ import Foundation
 // are date-keyed, timezone-stable, and trivially Codable.
 
 enum Flow: String, Codable, CaseIterable, Identifiable {
-    case spotting, light, medium, heavy
+    case spotting, light, medium, heavy, superHeavy
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
-    /// Relative weight — used if we later score flow intensity. Bleeding = any case.
-    var weight: Int { switch self { case .spotting: 1; case .light: 2; case .medium: 3; case .heavy: 4 } }
+    var label: String {
+        switch self {
+        case .superHeavy: "Super heavy"
+        default: rawValue.capitalized
+        }
+    }
+    /// Relative weight, also the y-value on the monthly flow chart. Bleeding = any case.
+    var weight: Int {
+        switch self { case .spotting: 1; case .light: 2; case .medium: 3; case .heavy: 4; case .superHeavy: 5 }
+    }
 }
 
 enum Mood: String, Codable, CaseIterable, Identifiable {

@@ -20,13 +20,13 @@ enum CycleReport {
                 if let d = cal.dateComponents([.day], from: starts[i-1], to: starts[i]).day { gaps.append(d) }
             }
             if let last = gaps.last {
-                if last < 21 { out.append("Your last cycle was \(last) days — shorter than the typical 21–35 range.") }
-                if last > 35 { out.append("Your last cycle was \(last) days — longer than the typical 21–35 range.") }
+                if last < 21 { out.append("Your last cycle ran \(last) days. Most run 21 to 35, so that one was short.") }
+                if last > 35 { out.append("Your last cycle ran \(last) days, a little past the usual 21 to 35. One long cycle is common. A pattern of them is worth raising at a visit.") }
                 if gaps.count >= 3 {
                     let prior = gaps.dropLast()
                     let avgPrior = Double(prior.reduce(0, +)) / Double(prior.count)
                     if abs(Double(last) - avgPrior) >= 7 {
-                        out.append("Your last cycle differed from your usual by about \(Int(abs(Double(last) - avgPrior).rounded())) days.")
+                        out.append("Your last cycle was about \(Int(abs(Double(last) - avgPrior).rounded())) days off your usual rhythm.")
                     }
                 }
             }
@@ -40,29 +40,33 @@ enum CycleReport {
             run = (gap == 1) ? run + 1 : 1
             maxRecentRun = max(maxRecentRun, run)
         }
-        if maxRecentRun > 7 { out.append("A recent period ran \(maxRecentRun) days — longer than 7 is worth mentioning to a clinician.") }
+        if maxRecentRun > 7 { out.append("One recent period lasted \(maxRecentRun) days. Bleeding past 7 days is something a clinician would want to hear about.") }
 
         // Overdue right now.
         let p = store.prediction()
         if let d = p.daysUntilNextPeriod, d < -3 {
-            out.append("Your period is currently \(abs(d)) days later than predicted.")
+            out.append("Your period is running \(abs(d)) days later than expected.")
         }
         return out
     }
 
-    /// The full shareable text report.
+    /// The full shareable text report, written the way a good nurse would talk
+    /// you through it: plain sentences, the numbers first, then anything worth
+    /// bringing up, and honest about what an estimate is.
     static func text(store: CycleStore) -> String {
         let cal = Calendar.current
         let p = store.prediction()
         let df = DateFormatter(); df.dateStyle = .medium
         var lines: [String] = []
-        lines.append("MY CYCLE REPORT — \(df.string(from: Date()))")
-        lines.append(String(repeating: "—", count: 28))
+        lines.append("CYCLE SUMMARY, prepared \(df.string(from: Date()))")
+        lines.append(String(repeating: "-", count: 30))
 
+        lines.append("")
+        lines.append("THE NUMBERS")
         if p.hasHistory {
-            lines.append("Average cycle: \(p.averageCycleLength) days · average period: \(p.averagePeriodLength) days")
-            if let last = p.lastPeriodStart { lines.append("Last period started: \(df.string(from: last))") }
-            if let next = p.nextPeriodStart { lines.append("Next period expected: \(df.string(from: next)) (estimate)") }
+            lines.append("Average cycle: \(p.averageCycleLength) days. Average period: \(p.averagePeriodLength) days.")
+            if let last = p.lastPeriodStart { lines.append("The last period started \(df.string(from: last)).") }
+            if let next = p.nextPeriodStart { lines.append("The next one is expected around \(df.string(from: next)). That date is an estimate.") }
             let starts = CycleEngine.periodStarts(from: store.periodDays, cal: cal).sorted().suffix(6)
             if starts.count >= 2 {
                 var gaps: [String] = []
@@ -70,22 +74,22 @@ enum CycleReport {
                 for i in 1..<arr.count {
                     if let d = cal.dateComponents([.day], from: arr[i-1], to: arr[i]).day { gaps.append("\(d)") }
                 }
-                lines.append("Recent cycle lengths: \(gaps.joined(separator: ", ")) days")
+                lines.append("Recent cycle lengths: \(gaps.joined(separator: ", ")) days.")
             }
         } else {
-            lines.append("Not enough period days logged yet for cycle statistics.")
+            lines.append("There isn't enough logged yet for cycle statistics. A month or two of notes will fill this in.")
         }
 
         let notes = flags(store: store)
         lines.append("")
+        lines.append("FOR YOUR VISIT")
         if notes.isEmpty {
-            lines.append("NOTES: nothing unusual in the recent data.")
+            lines.append("Nothing out of the ordinary in the recent notes. Things look steady.")
         } else {
-            lines.append("WORTH MENTIONING:")
             for n in notes { lines.append("• \(n)") }
         }
         lines.append("")
-        lines.append("From my cycle tracker. Estimates, not medical advice.")
+        lines.append("Prepared from the daily logs in this cycle tracker. These are estimates to talk over with a clinician, not a diagnosis.")
         return lines.joined(separator: "\n")
     }
 

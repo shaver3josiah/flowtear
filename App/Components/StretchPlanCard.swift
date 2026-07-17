@@ -49,12 +49,12 @@ struct StretchPlanCard: View {
             return "Day \(StretchPlan.planDay(s, tier: tier)) of \(tier.totalDays) · \(s.focus) · \(s.minutes) min"
         }
         if p.phase == .menstrual {
-            return "On your period — plan resumes after ovulation"
+            return "On your period. Plan resumes after ovulation"
         }
         if let start = p.nextPeriodStart,
            let planStart = Calendar.current.date(byAdding: .day, value: -tier.totalDays, to: start),
            planStart > Date() {
-            return "Starts \(planStart.formatted(.dateTime.month().day())) — see the schedule"
+            return "Starts \(planStart.formatted(.dateTime.month().day())). See the schedule"
         }
         return "Your \(tier.label.lowercased()) for the days before your period"
     }

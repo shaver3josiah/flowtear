@@ -19,7 +19,7 @@ struct FertileWindowCard: View {
                 windowRows
                 Divider().overlay(theme.color(.line))
                 tempSection
-                Text("Estimates — not a birth-control method.")
+                Text("Estimates, not a birth-control method.")
                     .font(ffBody(FFType.xs2))
                     .foregroundStyle(theme.color(.muted))
             }

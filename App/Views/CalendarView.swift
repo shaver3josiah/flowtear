@@ -9,16 +9,27 @@ struct CalendarView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
     var onLog: (Date) -> Void
+    /// When set, the calendar opens on this symptom's history: marked days,
+    /// an explaining banner, and prev/next stepping between occurrences.
+    @Binding var focus: SymptomFocus?
 
     @State private var month = Date()
+    @State private var focusedOccurrence: Date? = nil
     private let cal = Calendar.current
 
     private var p: CyclePrediction { store.prediction() }
+
+    /// Every day she's felt the focused symptom, oldest to newest.
+    private var occurrences: [Date] {
+        guard let f = focus else { return [] }
+        return store.daysFelt(f.symptom)
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: FFSpace.s4) {
                 SampleBanner()
+                if focus != nil { focusBanner }
                 FFCard {
                     VStack(spacing: FFSpace.s3) {
                         monthHeader
@@ -31,6 +42,88 @@ struct CalendarView: View {
             .padding(.horizontal, FFSpace.s4)
             .padding(.top, FFSpace.s2)
             .padding(.bottom, FFSpace.s5)
+        }
+        .onAppear { adoptFocus() }
+        .onChange(of: focus?.anchor) { _, _ in adoptFocus() }
+    }
+
+    /// Land on the anchor occurrence and scroll the month to it.
+    private func adoptFocus() {
+        guard let f = focus else { return }
+        focusedOccurrence = cal.startOfDay(for: f.anchor)
+        withAnimation(FFMotion.fast) { month = f.anchor }
+    }
+
+    // MARK: symptom history banner
+
+    // Explains what the marks mean and steps day to day through the history.
+    private var focusBanner: some View {
+        let days = occurrences
+        let selected = focusedOccurrence ?? days.last
+        let idx = selected.flatMap { s in days.firstIndex { cal.isDate($0, inSameDayAs: s) } }
+        return FFCard(variant: .accent) {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.heart")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(theme.color(.primaryStrong))
+                    Text("\(focus?.symptom.label ?? "") days")
+                        .font(ffBody(FFType.md, weight: .semibold))
+                        .foregroundStyle(theme.color(.deep))
+                    Spacer()
+                    FFIconButton("xmark") {
+                        withAnimation(FFMotion.fast) { focus = nil; focusedOccurrence = nil }
+                    }
+                    .accessibilityLabel("Close symptom history")
+                }
+                Text(days.count == 1
+                     ? "One day is marked below with a ring."
+                     : "\(days.count) days are marked below with rings. Step through them, or tap any marked day.")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+
+                if let sel = selected {
+                    HStack(spacing: FFSpace.s2) {
+                        navButton("chevron.left", "Earlier day") { step(-1, in: days) }
+                            .opacity(idx == 0 ? 0.35 : 1)
+                            .disabled(idx == 0)
+                        Spacer(minLength: 0)
+                        VStack(spacing: 1) {
+                            Text(sel.formatted(.dateTime.month(.wide).day().year()))
+                                .font(ffBody(FFType.sm, weight: .bold))
+                                .foregroundStyle(theme.color(.deep))
+                            if let phase = store.phaseSnapshot(at: sel).phase,
+                               let day = store.phaseSnapshot(at: sel).day {
+                                Text("\(phase.label) phase, cycle day \(day)")
+                                    .font(ffBody(FFType.xs))
+                                    .foregroundStyle(theme.color(.muted))
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        navButton("chevron.right", "Later day") { step(1, in: days) }
+                            .opacity(idx == days.count - 1 ? 0.35 : 1)
+                            .disabled(idx == days.count - 1)
+                    }
+
+                    if let log = store.log(for: sel) {
+                        DayLogSummary(log: log)
+                    }
+                    FFButton("Open this day's log", style: .soft, size: .sm, icon: "square.and.pencil") {
+                        onLog(sel)
+                    }
+                }
+            }
+        }
+    }
+
+    private func step(_ by: Int, in days: [Date]) {
+        guard let sel = focusedOccurrence ?? days.last,
+              let idx = days.firstIndex(where: { cal.isDate($0, inSameDayAs: sel) }) else { return }
+        let next = idx + by
+        guard days.indices.contains(next) else { return }
+        withAnimation(FFMotion.fast) {
+            focusedOccurrence = days[next]
+            month = days[next]
         }
     }
 
@@ -93,6 +186,9 @@ struct CalendarView: View {
 
     private func dayCell(_ date: Date) -> some View {
         let st = state(for: date)
+        let isOccurrence = focus != nil && occurrences.contains { cal.isDate($0, inSameDayAs: date) }
+        let isSelectedOccurrence = isOccurrence
+            && focusedOccurrence.map { cal.isDate($0, inSameDayAs: date) } == true
         return DayCell(
             day: cal.component(.day, from: date),
             isToday: cal.isDateInToday(date),
@@ -102,8 +198,33 @@ struct CalendarView: View {
             isOvulation: st.isOvulation,
             flow: st.flow,
             stretchDone: store.log(for: date)?.stretchDone ?? false,
-            action: { onLog(date) }
+            action: {
+                // In history mode a marked day selects itself in the banner;
+                // everything else still opens the day's log as always.
+                if isOccurrence {
+                    withAnimation(FFMotion.fast) { focusedOccurrence = cal.startOfDay(for: date) }
+                } else {
+                    onLog(date)
+                }
+            }
         )
+        // Rings mark the focused symptom's days; the selected one is bolder.
+        // Gold on dark, deep rose on light: the mark must read on white cards
+        // and on the pale period wash, not just on near-black.
+        .overlay {
+            if isOccurrence {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(theme.isDarkMode ? theme.color(.flowerCenter)
+                                                   : theme.color(.primaryStrong),
+                                  lineWidth: isSelectedOccurrence ? 2.5 : 1.5)
+                    .allowsHitTesting(false)
+            }
+        }
+        // VoiceOver hears what the ring shows: which days are marked, which is
+        // selected, and that tapping now selects instead of opening the log.
+        .accessibilityValue(isOccurrence ? "\(focus?.symptom.label ?? "symptom") day" : "")
+        .accessibilityHint(isOccurrence ? "Selects this day in the history banner" : "")
+        .accessibilityAddTraits(isSelectedOccurrence ? .isSelected : [])
     }
 
     // MARK: state per day
@@ -200,4 +321,10 @@ struct CalendarView: View {
         for d in range { cells.append(cal.date(byAdding: .day, value: d - 1, to: first)) }
         return cells
     }
+}
+
+/// A calendar deep-link: show one symptom's whole history, opened on `anchor`.
+struct SymptomFocus: Equatable {
+    let symptom: Symptom
+    let anchor: Date
 }

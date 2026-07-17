@@ -28,7 +28,7 @@ struct ThemeEditorSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: FFSpace.section) {
                 header
-                FFButton("Garden shop — spend your petal points", style: .soft, icon: "bag") {
+                FFButton("Garden shop: spend your petal points", style: .soft, icon: "bag") {
                     showShop = true
                 }
                 presetSection
@@ -37,7 +37,7 @@ struct ThemeEditorSheet: View {
                 touchesSection
                 remindersSection
                 privacySection
-                Text("Period, fertile and phase colors never change — they mean something.")
+                Text("Period, fertile and phase colors never change. They mean something.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
             }
@@ -261,7 +261,7 @@ struct ThemeEditorSheet: View {
                         Text("Quiet mode")
                             .font(ffBody(FFType.md, weight: .semibold))
                             .foregroundStyle(theme.color(.text))
-                        Text("Celebration sounds stay silent — the sparkle stays")
+                        Text("Celebration sounds stay silent. The sparkle stays")
                             .font(ffBody(FFType.xs))
                             .foregroundStyle(theme.color(.muted))
                     }
@@ -313,7 +313,7 @@ struct ThemeEditorSheet: View {
                         FFSwitch(isOn: $periodReminder)
                             .accessibilityLabel("Period heads-up reminder")
                     }
-                    Text("Reminders are scheduled on this phone only — nothing leaves it.")
+                    Text("Reminders are scheduled on this phone only. Nothing leaves it.")
                         .font(ffBody(FFType.xs2))
                         .foregroundStyle(theme.color(.muted))
                 }
@@ -350,7 +350,7 @@ struct ThemeEditorSheet: View {
                         Text("Lock with Face ID")
                             .font(ffBody(FFType.md, weight: .semibold))
                             .foregroundStyle(theme.color(.text))
-                        Text("Your garden opens only for you — Face ID or your passcode")
+                        Text("Your garden opens only for you: Face ID or your passcode")
                             .font(ffBody(FFType.xs))
                             .foregroundStyle(theme.color(.muted))
                     }

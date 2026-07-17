@@ -95,10 +95,11 @@ struct DayCell: View {
 
     private func dotColor(_ flow: Flow) -> Color {
         switch flow {
-        case .spotting: theme.color(.flowSpotting)
-        case .light:    theme.color(.flowLight)
-        case .medium:   theme.color(.flowMedium)
-        case .heavy:    theme.color(.flowHeavy)
+        case .spotting:   theme.color(.flowSpotting)
+        case .light:      theme.color(.flowLight)
+        case .medium:     theme.color(.flowMedium)
+        case .heavy:      theme.color(.flowHeavy)
+        case .superHeavy: theme.color(.flowSuperHeavy)
         }
     }
 

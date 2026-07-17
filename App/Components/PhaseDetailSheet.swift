@@ -138,13 +138,13 @@ struct PhaseDetailSheet: View {
             return ("Your period is over and estrogen is climbing as a new egg matures. Energy and mood usually lift.",
                     ["Rising energy", "Brighter mood", "Clearer skin", "Motivation"])
         case .fertile:
-            return ("Your fertile window. Estrogen peaks and cervical mucus turns clear and stretchy — the days conception is most likely.",
+            return ("Your fertile window. Estrogen peaks and cervical mucus turns clear and stretchy. These are the days conception is most likely.",
                     ["Higher libido", "Egg-white discharge", "More energy", "Sharper focus"])
         case .ovulation:
             return ("An egg is released. Some feel a brief one-sided twinge; your basal temperature rises just after.",
                     ["Peak libido", "One-sided twinge", "Temperature rise", "Confidence"])
         case .luteal:
-            return ("After ovulation, before your period. Progesterone rises then falls — the PMS window for many.",
+            return ("After ovulation, before your period. Progesterone rises then falls: the PMS window for many.",
                     ["Bloating", "Cravings", "Tender breasts", "Mood shifts", "Cramps building"])
         }
     }

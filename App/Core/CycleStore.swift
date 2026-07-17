@@ -135,6 +135,48 @@ final class CycleStore {
         CycleEngine.predict(periodDays: periodDays, today: today, settings: settings, cal: cal)
     }
 
+    /// The phase and cycle day AT a past date, judged only from the history
+    /// that existed by then. Feeds the "last time you felt this" comparisons.
+    func phaseSnapshot(at date: Date) -> (phase: CyclePhase?, day: Int?) {
+        let upToThen = periodDays.filter { $0 <= date }
+        let p = CycleEngine.predict(periodDays: upToThen, today: date, settings: settings, cal: cal)
+        return (p.phase, p.cycleDay)
+    }
+
+    /// The most recent day BEFORE `before` when she logged this symptom.
+    func lastFelt(_ symptom: Symptom, before: Date) -> Date? {
+        let cutoff = key(for: before)
+        return logs.values
+            .filter { $0.symptoms.contains(symptom) && $0.dateKey < cutoff }
+            .compactMap { Self.dateFmt.date(from: $0.dateKey) }
+            .max()
+    }
+
+    /// Every day she's logged this symptom, oldest to newest.
+    func daysFelt(_ symptom: Symptom) -> [Date] {
+        logs.values
+            .filter { $0.symptoms.contains(symptom) }
+            .compactMap { Self.dateFmt.date(from: $0.dateKey) }
+            .sorted()
+    }
+
+    /// Consecutive stretch days ending today (or yesterday, so an unfinished
+    /// today never breaks a run she's still on).
+    func stretchStreak(today: Date = Date()) -> Int {
+        var d = cal.startOfDay(for: today)
+        if !stretchDone(on: d) {
+            guard let y = cal.date(byAdding: .day, value: -1, to: d) else { return 0 }
+            d = y
+        }
+        var streak = 0
+        while stretchDone(on: d) {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: d) else { break }
+            d = prev
+        }
+        return streak
+    }
+
     /// A best-guess prediction even before a real period is logged, so the ring
     /// can always show a preview: anchor on any bleeding day (spotting counts
     /// here), else on her first log. Real data replaces it as soon as it exists.

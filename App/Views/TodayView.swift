@@ -173,12 +173,12 @@ struct TodayView: View {
             case 1:
                 teaserCard(icon: "chart.bar.fill", tint: .primaryStrong,
                            title: "Insights",
-                           line: "Your averages, rhythms and top symptoms — all from what you log.",
+                           line: "Your averages, rhythms and top symptoms, all from what you log.",
                            action: onOpenInsights)
             case 2:
                 teaserCard(icon: "calendar", tint: .phaseFertile,
                            title: "Calendar",
-                           line: "Your whole month at a glance — periods, fertile days, stretches.",
+                           line: "Your whole month at a glance: periods, fertile days, stretches.",
                            action: onOpenCalendar)
             default:
                 StretchPlanCard(action: onOpenStretch)
@@ -301,7 +301,7 @@ struct TodayView: View {
                 RingSticker(radius: CycleRing.trackRadius(for: 220),
                             periodFraction: periodFraction(store.previewPrediction()))
             }
-            Text("A first guess — it sharpens as you log")
+            Text("A first guess. It sharpens as you log")
                 .font(ffBody(FFType.xs, weight: .medium))
                 .foregroundStyle(theme.color(.muted))
         }
@@ -317,7 +317,7 @@ struct TodayView: View {
                 Text("Your log is growing")
                     .font(ffDisplay(FFType.lg, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
-                Text("Lovely start. The cycle ring and predictions appear once you log your first period days — light, medium or heavy flow.")
+                Text("Lovely start. The cycle ring and predictions appear once you log your first period days: light, medium or heavy flow.")
                     .font(ffBody(FFType.sm))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)

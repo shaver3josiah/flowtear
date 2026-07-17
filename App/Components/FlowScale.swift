@@ -9,12 +9,13 @@ struct FlowScale: View {
     @Environment(Theme.self) private var theme
     @Binding var selection: Flow?
 
-    // spotting → heavy: deepening ramp tint + growing droplet.
+    // spotting → super heavy: deepening ramp tint + growing droplet.
     private let levels: [(flow: Flow, tint: Tok, drop: CGFloat)] = [
-        (.spotting, .flowSpotting, 20),
-        (.light,    .flowLight,    24),
-        (.medium,   .flowMedium,   28),
-        (.heavy,    .flowHeavy,    32),
+        (.spotting,   .flowSpotting,   20),
+        (.light,      .flowLight,      24),
+        (.medium,     .flowMedium,     28),
+        (.heavy,      .flowHeavy,      32),
+        (.superHeavy, .flowSuperHeavy, 36),
     ]
 
     var body: some View {
