@@ -10,7 +10,8 @@
     "check:parity": "node scripts/check-parity.mjs",
     "assets": "node scripts/generate-assets.js && npx capacitor-assets generate --android",
     "sync": "npx cap sync android",
-    "apk": "npm run sync && cd android && ./gradlew assembleDebug"
+    "apk": "npm run sync && cd android && ./gradlew assembleDebug",
+    "cockpit": "node tools/cockpit/server.mjs"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
