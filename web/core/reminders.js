@@ -109,7 +109,7 @@ async function schedule(nextPeriodStart) {
     notifications.push({
       id: STRETCH_ID,
       title: "A few gentle minutes, petal?",
-      body: "Your stretches are ready — every pose grows the garden.",
+      body: "Your stretches are ready. Every pose grows the garden.",
       // `on` with hour+minute is Capacitor's daily calendar repeat — the same
       // shape as Swift's repeating UNCalendarNotificationTrigger.
       schedule: { on: { hour: Math.floor(minutes / 60), minute: minutes % 60 }, allowWhileIdle: true },

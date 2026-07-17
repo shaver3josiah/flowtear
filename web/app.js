@@ -30,6 +30,7 @@ import PhaseDetail from "./screens/phaseDetail.js";
 import NeedMorePetals from "./screens/needMorePetals.js";
 import Tips from "./screens/tips.js";
 import About from "./screens/about.js";
+import SymptomEcho from "./screens/symptomEcho.js";
 import * as appLock from "./core/appLock.js";
 
 const React = window.React;
@@ -60,6 +61,8 @@ const OVERLAYS = {
   needPetals: NeedMorePetals,
   tips: Tips,
   about: About,
+  // nav.open("symptomEcho", { symptom, lastDate, loggingDate, onShowCalendar })
+  symptomEcho: SymptomEcho,
 };
 
 // Matches Swift's Theme.presetKey so both builds read the same saved preset.

@@ -13,6 +13,9 @@
 
 import { MOODS, DISCHARGE, label, emptyLog, isEmptyLog } from "../core/models.js";
 import { addDays, daysBetween, dateFromKey } from "../core/dates.js";
+import { FlowScale } from "../components/flowScale.js";
+import { GlitterHint } from "../components/glitterHint.js";
+import { requestSymptomFocus } from "./calendar.js";
 
 const React = window.React;
 const { useState } = React;
@@ -30,7 +33,9 @@ const toggle = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...a
 
 export default function LogScreen({ ctx }) {
   const { store, html, ui, Icon, fmt, today, nav, screenProps } = ctx;
-  const { Card, Chip, SymptomChip, FlowScale, Button, IconButton, Toast } = ui;
+  // FlowScale comes from ../components/flowScale.js, NOT ctx.ui: the vendored
+  // one only knows four levels and can't render `superHeavy`.
+  const { Card, Chip, SymptomChip, Button, IconButton, Toast } = ui;
 
   const isOverlay = screenProps?.date != null;
   const [date, setDate] = useState(() => screenProps?.date ?? today);
@@ -60,6 +65,23 @@ export default function LogScreen({ ctx }) {
     : (tempF != null ? `${tempF.toFixed(2)}°` : null);
 
   const count = (n) => (n ? `${n} picked` : null);
+
+  // Selecting a symptom she's felt before opens its little history: when, that
+  // whole day, and where in her cycle she was. (LogView.swift symptom chip.)
+  // No commit dance here — every tap is already written through to the store.
+  const onSymptom = (s) => {
+    const turningOn = !log.symptoms.includes(s);
+    mutate({ symptoms: toggle(log.symptoms, s) });
+    if (!turningOn) return;
+    const last = store.lastFelt(s, date);
+    if (!last) return;
+    nav.open("symptomEcho", {
+      symptom: s, lastDate: last, loggingDate: date,
+      // Swift's onShowSymptomOnCalendar: the sheet asks, RootView wires the
+      // tab. Here the Calendar owns the channel (its nav has no params).
+      onShowCalendar: (sym, day) => { requestSymptomFocus(sym, day); nav.setTab("calendar"); },
+    });
+  };
 
   const onSave = () => {
     setSaved(true); // edits already persisted; this confirms + navigates
@@ -110,12 +132,18 @@ export default function LogScreen({ ctx }) {
 
   return html`
     <div style=${{ padding: "8px 16px 24px" }}>
-      <!-- header: serif date with day-stepping -->
+      <!-- header: serif date with day-stepping, plus the garden shop.
+           The date stays truly centered and the controls ride the edges: the
+           two side groups share the leftover width equally (flex-basis 0), so
+           the extra shop button on the right can't push the date off-center.
+           (Swift does the same with a ZStack.) -->
       <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
-        <${IconButton} label="Previous day" onClick=${() => step(-1)}>
-          <${Icon} name="chevron-left" size=${20} />
-        </${IconButton}>
-        <div style=${{ flex: 1, textAlign: "center" }}>
+        <div style=${{ flex: "1 0 0", display: "flex", justifyContent: "flex-start" }}>
+          <${IconButton} label="Previous day" onClick=${() => step(-1)}>
+            <${Icon} name="chevron-left" size=${20} />
+          </${IconButton}>
+        </div>
+        <div style=${{ textAlign: "center" }}>
           <div style=${{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, color: "var(--deep)" }}>
             ${atToday ? "Today" : fmt.weekday(date)}
           </div>
@@ -124,10 +152,19 @@ export default function LogScreen({ ctx }) {
             style=${{ border: "none", background: "none", color: "var(--muted)", font: "inherit",
                       fontSize: 13, textAlign: "center", padding: 0 }} />
         </div>
-        <${IconButton} label="Next day" onClick=${() => step(1)} disabled=${atToday}
-          style=${{ opacity: atToday ? 0.35 : 1 }}>
-          <${Icon} name="chevron-right" size=${20} />
-        </${IconButton}>
+        <div style=${{ flex: "1 0 0", display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+          <${GlitterHint} hintKey="logShop">
+            <${IconButton} label="Garden shop" onClick=${() => nav.open("garden")}>
+              <!-- Swift's "bag" glyph has no offline lucide counterpart; "gift"
+                   is the shop-shaped icon the vendored set does carry. -->
+              <${Icon} name="gift" size=${18} />
+            </${IconButton}>
+          </${GlitterHint}>
+          <${IconButton} label="Next day" onClick=${() => step(1)} disabled=${atToday}
+            style=${{ opacity: atToday ? 0.35 : 1 }}>
+            <${Icon} name="chevron-right" size=${20} />
+          </${IconButton}>
+        </div>
       </div>
 
       <!-- at-a-glance progress -->
@@ -191,7 +228,7 @@ export default function LogScreen({ ctx }) {
               <div style=${wrap}>
                 ${syms.map((s) => html`<${SymptomChip} key=${s} symptom=${s} label=${label(s)}
                   selected=${log.symptoms.includes(s)}
-                  onClick=${() => mutate({ symptoms: toggle(log.symptoms, s) })} />`)}
+                  onClick=${() => onSymptom(s)} />`)}
               </div>
             </div>`)}
         </div>`)}

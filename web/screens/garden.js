@@ -8,6 +8,8 @@
 // afford opens the "not yet" splash instead of doing nothing.
 
 import { rewards, FLOWERS, SOUNDS, PRICES, PAID_THEMES } from "../core/rewards.js";
+import { RingChain, crownSpot } from "../components/ringSticker.js";
+import { GlitterHint } from "../components/glitterHint.js";
 
 const { useState, useEffect } = window.React;
 
@@ -28,6 +30,11 @@ const THEME_SWATCH = {
 };
 const themeLabel = (n) => n[0].toUpperCase() + n.slice(1);
 
+// The chain tutorial's practice blooms (ChainTutorialView.demoBlooms) — five
+// real catalog ids, so they draw exactly like the ones she buys. Owning them is
+// beside the point: this chain is a toy and never reaches the rewards store.
+const DEMO_BLOOMS = ["daisy", "tulip", "blossom", "rose", "sunflower"];
+
 export default function GardenScreen({ ctx }) {
   const { html, ui, Icon, nav, store } = ctx;
   const { Card, IconButton, Button, Switch, FlowerMark, PetalRain } = ui;
@@ -36,6 +43,8 @@ export default function GardenScreen({ ctx }) {
   const [burst, setBurst] = useState(0);          // bumps a petal-rain celebration
   const [showShare, setShowShare] = useState(false);
   const [pendingBuy, setPendingBuy] = useState(null);   // { name, price, buy }
+  const [showChainTutorial, setShowChainTutorial] = useState(false);
+  const [demoChain, setDemoChain] = useState([]);   // the tutorial's practice chain
 
   const celebrate = () => {
     setBurst((n) => n + 1);
@@ -119,7 +128,7 @@ export default function GardenScreen({ ctx }) {
       padding: "14px 8px", background: "var(--surface)", borderRadius: 16,
       border: `${equipped ? 1.5 : 1}px solid ${equipped ? "var(--primary-strong)" : "var(--line)"}`,
     }}>
-      <${Bloom} id=${f.id} size=${34} dim=${!owned && !affordable} />
+      <${Bloom} id=${f.id} size=${52} dim=${!owned && !affordable} />
       <div style=${{ fontWeight: 600, color: "var(--deep)", fontSize: 14 }}>${f.name}</div>
       <div style=${{ fontWeight: 700, fontSize: 10, letterSpacing: 0.6, color: "var(--muted)" }}>${f.rarity.toUpperCase()}</div>
       ${action}
@@ -174,12 +183,12 @@ export default function GardenScreen({ ctx }) {
       title=${chained ? "Removes it from the chain" : "Adds it to the chain"}
       style=${{
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        gap: 3, minHeight: 52, padding: "6px 4px", cursor: "pointer",
+        gap: 3, minHeight: 60, padding: "6px 4px", cursor: "pointer",
         background: chained ? "var(--surface-soft)" : "var(--surface)", borderRadius: 12,
         border: `${chained ? 1.5 : 1}px solid ${chained ? "var(--primary-strong)" : "var(--line)"}`,
       }}>
-      <${Bloom} id=${f.id} size=${24} />
-      <${Icon} name=${chained ? "check" : "plus"} size=${12}
+      <${Bloom} id=${f.id} size=${32} />
+      <${Icon} name=${chained ? "check" : "plus"} size=${13}
         color=${chained ? "var(--good)" : "var(--muted)"} />
     </button>`;
   };
@@ -189,11 +198,20 @@ export default function GardenScreen({ ctx }) {
     const n = r.ringChain.length;
     return html`<${Card}>
       <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style=${{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "var(--deep)", fontSize: 15 }}>
-          <${Icon} name="flower-2" size=${16} color="var(--primary-strong)" />Your flower chain
+        <div style=${{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style=${{ flex: 1, display: "flex", alignItems: "center", gap: 6, fontWeight: 600, color: "var(--deep)", fontSize: 15 }}>
+            <${Icon} name="flower-2" size=${16} color="var(--primary-strong)" />Your flower chain
+          </div>
+          <${GlitterHint} hintKey="chainTutorial">
+            <button onClick=${() => setShowChainTutorial(true)}
+              title="Opens a hands-on chain tutorial"
+              style=${{ display: "inline-flex", alignItems: "center", minHeight: "var(--tap-min)", padding: "0 2px",
+                background: "none", border: "none", cursor: "pointer",
+                fontWeight: 700, fontSize: 12, color: "var(--primary-strong)" }}>See how</button>
+          </${GlitterHint}>
         </div>
         <div style=${{ fontSize: 12, color: "var(--muted)" }}>
-          Tap owned blooms into a chain — they circle your Today ring together. Three or more make a crown Posey can wear.
+          Tap owned blooms into a chain and they circle your Today ring together. Three or more make a crown Posey can wear.
         </div>
         ${ownedList.length === 0
           ? html`<div style=${{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>Flowers you own will appear here, ready to chain.</div>`
@@ -213,6 +231,94 @@ export default function GardenScreen({ ctx }) {
         </div>
       </div>
     <//>`;
+  };
+
+  // ---- the chain tutorial (ChainTutorialView.swift) — a hands-on little lesson:
+  // tap demo blooms and watch them join a practice ring, exactly like the real
+  // one on Today (it IS the real RingChain, fed a practice chain). Reach three
+  // and a crown appears on a practice Posey. Nothing here touches her real
+  // chain; it exists so the feature explains itself in twenty seconds of play.
+  const chainTutorial = () => {
+    const step = demoChain.length === 0 ? "Tap a bloom below to start the chain."
+      : demoChain.length === 1 ? "Lovely. Two more for a crown."
+      : demoChain.length === 2 ? "One more. Posey is watching."
+      : "A crown! She'll wear yours just like this.";
+    const crown = demoChain.slice(0, 7);
+
+    // Practice Posey: the bloom with the demo chain fanned over her petals,
+    // using the exact same crown geometry the real Posey wears.
+    const demoPosey = html`<div style=${{ position: "relative", lineHeight: 0 }}>
+      <${FlowerMark} size=${46} />
+      <div aria-hidden="true" style=${{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        ${crown.map((id, i) => {
+          const spot = crownSpot(i, crown.length);
+          return html`<span key=${i} style=${{ position: "absolute", left: "50%", top: "50%",
+            transform: `translate(-50%, -50%) translate(${spot.x}px, ${spot.y}px) rotate(${spot.tilt}deg)` }}>
+            <${Bloom} id=${id} size=${11} /></span>`;
+        })}
+      </div>
+    </div>`;
+
+    const demoChip = (id) => {
+      const chained = demoChain.includes(id);
+      const name = (FLOWERS.find((f) => f.id === id) || {}).name || id;
+      return html`<button key=${id}
+        onClick=${() => setDemoChain((c) => c.includes(id) ? c.filter((x) => x !== id) : c.concat(id))}
+        aria-label=${`Practice ${name}${chained ? ", chained" : ""}`}
+        style=${{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 3, minHeight: 60, padding: "6px 4px", cursor: "pointer",
+          background: chained ? "var(--surface-soft)" : "var(--surface)", borderRadius: 12,
+          border: `${chained ? 1.5 : 1}px solid ${chained ? "var(--primary-strong)" : "var(--line)"}` }}>
+        <${Bloom} id=${id} size=${32} />
+        <${Icon} name=${chained ? "check" : "plus"} size=${13} color=${chained ? "var(--good)" : "var(--muted)"} />
+      </button>`;
+    };
+
+    return html`<div style=${{
+      position: "fixed", inset: 0, background: "var(--bg)", zIndex: 70, overflowY: "auto",
+      padding: "18px 20px calc(24px + env(safe-area-inset-bottom))",
+    }}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 420, margin: "0 auto" }}>
+        <div style=${{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style=${{ flex: 1, display: "grid", gap: 2 }}>
+            <h2 style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--deep)", margin: 0 }}>Make a daisy chain</h2>
+            <div style=${{ fontSize: 13, color: "var(--muted)" }}>A practice ring. Tap blooms and watch them join it.</div>
+          </div>
+          <${IconButton} label="Close" onClick=${() => setShowChainTutorial(false)}><${Icon} name="x" size=${18} /><//>
+        </div>
+
+        <!-- the practice ring, with Posey at its heart once crowned -->
+        <div role="img" aria-label=${demoChain.length >= 3
+            ? `Practice ring with ${demoChain.length} blooms and a crowned Posey`
+            : `Practice ring with ${demoChain.length} of 3 blooms`}
+          style=${{ position: "relative", height: 190, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style=${{ position: "relative", width: 150, height: 150 }}>
+            <!-- SwiftUI strokes straddle the path, so a 12pt stroke on r=75 spans
+                 69…81 and the chain rides the band's centre. A CSS border insets
+                 instead, so bleed it out by half the width to land in the same place. -->
+            <div style=${{ position: "absolute", inset: -6, borderRadius: "50%", boxSizing: "border-box",
+              border: "12px solid var(--surface-soft)" }} />
+            <${RingChain} radius=${75} chain=${demoChain} />
+            <div style=${{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              ${demoChain.length >= 3 ? demoPosey
+                : html`<span style=${{ fontSize: 12, fontWeight: 700, letterSpacing: "0.05em", color: "var(--muted)" }}>
+                    ${demoChain.length === 0 ? "your ring" : `${demoChain.length} of 3`}</span>`}
+            </div>
+          </div>
+        </div>
+
+        <div style=${{ fontSize: 13, fontWeight: 600, color: "var(--deep)", textAlign: "center" }}>${step}</div>
+
+        <div style=${{ display: "flex", gap: 8 }}>${DEMO_BLOOMS.map(demoChip)}</div>
+
+        <div style=${{ fontSize: 12, color: "var(--muted)", textAlign: "center", lineHeight: 1.6 }}>
+          Your real chain works the same way: in the shop, tap the blooms you own into a chain and they circle your Today ring together. Three or more and Posey wears them as a crown.
+        </div>
+
+        <${Button} variant="primary" block=${true} iconLeft=${html`<${Icon} name="circle" size=${16} />`}
+          onClick=${() => setShowChainTutorial(false)}>Got it, let's chain mine<//>
+      </div>
+    </div>`;
   };
 
   // ---- Posey card ----
@@ -292,7 +398,7 @@ export default function GardenScreen({ ctx }) {
 
     <!-- flowers -->
     <div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <p style=${{ fontSize: 12, color: "var(--muted)", margin: 0 }}>Flowers you own become stickers — tap one to wear it on your Today tab.</p>
+      <p style=${{ fontSize: 12, color: "var(--muted)", margin: 0 }}>Flowers you own become stickers. Tap one to wear it on your Today tab.</p>
       <div style=${{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))" }}>
         ${FLOWERS.map(flowerCell)}
       </div>
@@ -335,7 +441,7 @@ export default function GardenScreen({ ctx }) {
       })}
       ${SOUNDS.map(soundRow)}
       ${unlockRow("studio", {
-        icon: "settings", title: "Color Studio — recolor nearly everything",
+        icon: "settings", title: "Color Studio: recolor nearly everything",
         owned: r.colorStudioUnlocked, price: PRICES.colorStudio,
         buy: () => confirmOrGap("the Color Studio", PRICES.colorStudio,
           () => { if (r.buyColorStudio()) setBurst((n) => n + 1); }),
@@ -347,5 +453,6 @@ export default function GardenScreen({ ctx }) {
 
     ${pendingBuy && confirmDialog()}
     ${showShare && shareCard()}
+    ${showChainTutorial && chainTutorial()}
   </div>`;
 }

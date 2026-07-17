@@ -8,6 +8,7 @@
 // wellness guidance, not medical advice.
 
 import { addDays, startOfDay } from "./dates.js";
+import { stretching } from "./phaseResearch.js";
 
 // ---- shapes ----------------------------------------------------------------
 
@@ -59,7 +60,7 @@ const knees = move("Knees-to-chest", "30–40s",
   "Hug both knees to your chest and let your low back soften. Rock side to side if it feels good.",
   { seconds: 40, icon: "figure.rolling" });
 const cobra = move("Cobra (gentle)", "20–25s × 3",
-  "Face down, press up low and easy through your arms. Keep it pain-free — shoulders down.",
+  "Face down, press up low and easy through your arms. Keep it pain-free, shoulders down.",
   { seconds: 75, icon: "figure.flexibility" });
 const fish = move("Supported Fish", "20–25s × 2",
   "Lie back over a rolled towel under your upper back, chest open. Skip if it strains your neck.",
@@ -84,15 +85,15 @@ export const starterDays = [
 export const fullDays = [
   day(14, "Foundations & breath", 8, [breathing, pelvicTilts, catCow, childs]),
   day(13, "Light mobility", 5, [catCow, knees, childs]),
-  day(12, "Core session — the luteal trio", 12, [catCow, cobra, fish, pelvicTilts, childs]),
-  day(11, "Light — hips & low back", 6, [
+  day(12, "Core session: the luteal trio", 12, [catCow, cobra, fish, pelvicTilts, childs]),
+  day(11, "Light: hips & low back", 6, [
     move("Butterfly / adductor", "40s",
       "Sit, soles together, let your knees ease down. Hinge gently forward from the hips."),
     move("Supine figure-4", "30s each side",
       "On your back, ankle over the opposite knee, draw the thigh toward you.", { seconds: 60 }),
     knees,
   ]),
-  day(10, "Core session — belly & pelvic", 13, [
+  day(10, "Core session: belly & pelvic", 13, [
     move("Standing warm-up", "2–3 min", "March in place and reach side to side to warm up.",
       { seconds: 150, icon: "figure.walk" }),
     move("Standing side stretch", "20s each side",
@@ -100,26 +101,26 @@ export const fullDays = [
     pelvicTilts, knees, childs,
   ]),
   day(9, "Restorative & breath", 5, [childs, restfulBreath]),
-  day(8, "Core session — full routine", 14, [
+  day(8, "Core session: full routine", 14, [
     catCow, cobra, fish,
     move("Standing side stretch", "20s each side",
       "Reach overhead and lean gently away, both sides.", { seconds: 40 }),
     pelvicTilts, childs,
   ]),
-  day(7, "Light — hamstrings & low back", 7, [
+  day(7, "Light: hamstrings & low back", 7, [
     move("Supine hamstring stretch", "30s each side",
       "On your back, raise one leg, hold behind the thigh or use a strap.", { seconds: 60 }),
     knees, childs,
   ]),
-  day(6, "Core session — Cobra/Cat/Fish", 12, [catCow, cobra, fish, childs]),
-  day(5, "Restorative — gentle twists", 6, [
+  day(6, "Core session: Cobra/Cat/Fish", 12, [catCow, cobra, fish, childs]),
+  day(5, "Restorative: gentle twists", 6, [
     catCow,
     move("Supine gentle twist", "30s each side",
       "On your back, drop bent knees to one side, gaze the other way.",
       { seconds: 60, icon: "figure.cooldown" }),
     childs,
   ]),
-  day(4, "Core session — gentler", 11, [
+  day(4, "Core session: gentler", 11, [
     move("Standing warm-up", "2 min", "March and reach to warm up.",
       { seconds: 120, icon: "figure.walk" }),
     move("Standing side stretch", "20s each side", "Reach overhead, lean gently.", { seconds: 40 }),
@@ -127,7 +128,7 @@ export const fullDays = [
   ]),
   day(3, "Gentle relief", 6, [catCow, knees, childs]),
   day(2, "Gentle relief & breath", 6, [restfulBreath, knees, childs]),
-  day(1, "Very gentle — optional", 5, [breathing, knees, childs]),
+  day(1, "Very gentle, optional", 5, [breathing, knees, childs]),
 ];
 
 // ---- lookups ---------------------------------------------------------------
@@ -173,46 +174,36 @@ export function maxDailyPoints(tier) {
 // ---- copy blocks (verbatim from Swift) -------------------------------------
 export const summary =
   "A gentle 14-day routine for the two weeks before your period. Across the research, " +
-  "low-intensity stretching and yoga can meaningfully ease period cramps — but it's " +
+  "low-intensity stretching and yoga can meaningfully ease period cramps, but it's " +
   "preventive, not a quick fix. Benefits build over a few weeks, so give it two cycles.";
 
-// The readable short report shown before the citations — verbatim from
-// PhaseResearch.stretching.body (the web has no PhaseResearch port, so the one
-// report the stretch screen needs lives here).
-export const stretchingReport =
-  "If cramps tend to visit you each cycle, gentle stretching may genuinely help. Randomized " +
-  "trials — including programs of simple active stretches done a few times a week — have found " +
-  "meaningful drops in menstrual pain intensity, and reviews pooling dozens of trials suggest " +
-  "most forms of movement, from stretching to yoga, ease period pain compared with doing " +
-  "nothing. Why might that be? Researchers think stretching may boost blood flow to your pelvic " +
-  "muscles, encourage your body's own endorphins, and nudge your nervous system toward its " +
-  "calmer, rest-and-digest mode — all of which could soften how cramps feel, though the exact " +
-  "mechanisms aren't fully settled. Benefits build over weeks of regular practice rather than " +
-  "one session, and results vary: many people notice a real difference, some notice little. " +
-  "Consistency matters more than intensity — a few relaxed minutes most days beats one long " +
-  "session. And if pain keeps disrupting your life despite these strategies, a clinician can help.";
+// The readable short report shown before the citations. ponytail: this is
+// PhaseResearch.stretching.body — the web HAS that port now (it didn't when this
+// prose was first copied here), so re-export the one copy rather than keep a
+// second that every copy sweep has to find twice. Both modules are pure.
+export const stretchingReport = stretching.body;
 
 export const evidenceNote =
   "Why it may help: a Cochrane review found exercise lowered cramp pain; a 2011 trial of " +
   "Cobra, Cat and Fish poses and a 2017 trial where ~10 minutes of belly-and-pelvic " +
   "stretching worked about as well as an anti-inflammatory both point the same way. " +
-  "The evidence is promising but from small studies — think “may help,” not a cure.";
+  "The evidence is promising but from small studies. Think “may help,” not a cure.";
 
 export const dosingNote =
   "The 30-second holds and ~3 fuller sessions a week follow the stretching-dose research " +
-  "popularized by David Thurin (“Stay Flexy”) — a 2025 meta-analysis on how to " +
+  "popularized by David Thurin (“Stay Flexy”): a 2025 meta-analysis on how to " +
   "stretch effectively. That one is about flexibility, not cramps; the cramp relief comes " +
   "from the cycle studies above.";
 
 export const disclaimer =
-  "This is wellness guidance, not medical advice. It's for typical period cramps — if your " +
+  "This is wellness guidance, not medical advice. It's for typical period cramps. If your " +
   "pain is new, severe, or different than usual, please see a clinician.";
 
 export const contraindications = [
-  "Possibly pregnant? This plan runs when pregnancy is possible — skip the deep belly stretches (Cobra, Fish) and check with a clinician first.",
+  "Possibly pregnant? This plan runs when pregnancy is possible, so skip the deep belly stretches (Cobra, Fish) and check with a clinician first.",
   "Stay gentle: only ever a mild sense of stretch, never sharp pain. Breathe slowly, especially on the exhale.",
   "Skip Fish pose with neck problems or blood-pressure concerns; skip Cobra after abdominal or pelvic surgery, a hernia, or significant back pain.",
-  "New, severe, or unusual pain — or a known condition your doctor has restricted exercise for — means check first, don't push through.",
+  "New, severe, or unusual pain (or a known condition your doctor has restricted exercise for) means check first, don't push through.",
 ];
 
 // ---- pose figures ----------------------------------------------------------

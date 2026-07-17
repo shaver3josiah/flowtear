@@ -19,7 +19,7 @@ const CONTENT = {
     common: ["Rising energy", "Brighter mood", "Clearer skin", "Motivation"],
   },
   fertile: {
-    whatsHappening: "Your fertile window. Estrogen peaks and cervical mucus turns clear and stretchy — the days conception is most likely.",
+    whatsHappening: "Your fertile window. Estrogen peaks and cervical mucus turns clear and stretchy. These are the days conception is most likely.",
     common: ["Higher libido", "Egg-white discharge", "More energy", "Sharper focus"],
   },
   ovulation: {
@@ -27,7 +27,7 @@ const CONTENT = {
     common: ["Peak libido", "One-sided twinge", "Temperature rise", "Confidence"],
   },
   luteal: {
-    whatsHappening: "After ovulation, before your period. Progesterone rises then falls — the PMS window for many.",
+    whatsHappening: "After ovulation, before your period. Progesterone rises then falls: the PMS window for many.",
     common: ["Bloating", "Cravings", "Tender breasts", "Mood shifts", "Cramps building"],
   },
 };

@@ -1,13 +1,15 @@
 // Insights — full-parity port of App/Views/InsightsView.swift: a StatTile summary
 // grid, the "right now" phase research card, IntensityBar breakdown charts
-// (rhythm + symptom frequency), the cycle-tuning controls, and the data doors
-// (cycle report, CSV export, full backup & restore), all in warm second person.
+// (rhythm + symptom frequency), the monthly flow chart, the cycle-tuning
+// controls, and the data doors (cycle report, CSV export, full backup &
+// restore), all in warm second person.
 // Adds the two web-only charts the brief asks for — flow breakdown and a
 // lightweight inline-SVG basal temperature curve. Everything derives from the
 // shared store; the only local effect marks insights seen on mount (mirrors
 // Swift .onAppear).
 import { periodStarts } from "../core/engine.js";
-import { FLOW } from "../core/models.js";
+import { FLOW, FLOW_WEIGHT } from "../core/models.js";
+import { startOfDay, addDays, daysBetween } from "../core/dates.js";
 import { flags as reportFlags, text as reportText, csv as reportCsv, CSV_FILENAME } from "../core/report.js";
 import { shareText, shareFile } from "../core/share.js";
 import { makeBackup, restoreBackup, backupFilename } from "../core/backup.js";
@@ -153,7 +155,7 @@ export default function InsightsScreen({ ctx }) {
           ${flowRows.map((r) => html`
             <${IntensityBar} key=${r.key} label=${fmt.flowLabel(r.key)}
               value=${totalFlow ? r.count / totalFlow : 0}
-              color=${`var(--flow-${r.key})`}
+              color=${flowRampColor(r.key)}
               meta=${`${r.count} ${r.count === 1 ? "day" : "days"}`} />`)}
         </div>
       </${Card}>`
@@ -161,6 +163,9 @@ export default function InsightsScreen({ ctx }) {
 
   // ---- basal temperature (inline SVG biphasic curve, shown in °F) ----
   const tempCard = temperatureCard(store, html, ui, fmt, cardTitle);
+
+  // ---- your flow, this month (InsightsView.flowChartCard) ----
+  const flowChartCard = monthlyFlowChart(store, today, html, ui, fmt, cardTitle);
 
   // ---- tune your cycle — her numbers beat the math whenever she says so ----
   const s = store.settings;
@@ -216,8 +221,8 @@ export default function InsightsScreen({ ctx }) {
       <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
         ${cardLabel(flags.length ? "bell" : "check",
           flags.length
-            ? `Cycle report — ${flags.length} thing${flags.length === 1 ? "" : "s"} worth noting`
-            : "Cycle report — all quiet")}
+            ? `Cycle report: ${flags.length} thing${flags.length === 1 ? "" : "s"} worth noting`
+            : "Cycle report: all quiet")}
         ${flags.slice(0, 2).map((f) => html`
           <div key=${f} style=${{ display: "flex", alignItems: "flex-start", gap: 8 }}>
             <span style=${{ width: 5, height: 5, marginTop: 7, borderRadius: "50%",
@@ -241,7 +246,7 @@ export default function InsightsScreen({ ctx }) {
       <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
         ${cardLabel("calendar", "Your data, your spreadsheet")}
         <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-          Everything from the calendar — flow, discharge, temps, moods, symptoms, stretches, notes — as a CSV file.
+          Everything from the calendar (flow, discharge, temps, moods, symptoms, stretches, notes) as a CSV file.
         </div>
         <${Button} variant="soft" size="sm" onClick=${saveCsv}>Share the spreadsheet</${Button}>
         ${saved && html`
@@ -275,21 +280,21 @@ export default function InsightsScreen({ ctx }) {
     if (!file) return;
     let text;
     try { text = await file.text(); }
-    catch { setBackupNote("Couldn't read that file — try picking it again."); return; }
+    catch { setBackupNote("Couldn't read that file. Try picking it again."); return; }
     // The destructive confirm the Swift confirmationDialog gives her — this
     // replaces everything on this phone, so she says so out loud first.
     if (!window.confirm("Replace everything on this phone with this backup?\n\nYour current history, settings and garden will be replaced by the backup's.")) return;
     const ok = restoreBackup(text, store, rewards); // all-or-nothing
     setBackupNote(ok
-      ? "Restored — everything's home again."
-      : "That didn't look like a complete backup from this app — nothing was changed.");
+      ? "Restored. Everything's home again."
+      : "That didn't look like a complete backup from this app, so nothing was changed.");
   };
   const backupCard = html`
     <${Card}>
       <div style=${{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
         ${cardLabel("settings", "Backup & restore")}
         <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-          One file with everything — history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.
+          One file with everything: history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.
         </div>
         <div style=${{ display: "flex", gap: 8 }}>
           <${Button} variant="soft" size="sm" onClick=${saveBackup}>Save a backup</${Button}>
@@ -316,10 +321,210 @@ export default function InsightsScreen({ ctx }) {
       ${p.hasHistory
         ? html`${summaryGrid}${phaseReportCard}${rhythmCard}${symptomsCard}${flowCard}${tempCard}`
         : emptyCard(html, ui, Icon)}
+      ${flowChartCard}
       ${tuningCard}
       ${store.hasAnyLogs ? html`${reportLeads ? null : reportCard}${exportCard}` : null}
       ${backupCard}
     </div>`;
+}
+
+// The flow ramp color for a level. superHeavy has no --flow-* token yet (that
+// lives in tokens.css, another slice), so the deepest ramp color stands in.
+// models.js keys are camelCase; the CSS ramp is kebab (--flow-super-heavy).
+const flowRampColor = (key) => `var(--flow-${key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())})`;
+
+// ---------------------------------------------------------------------------
+// Monthly flow chart (InsightsView.flowChartCard / flowChartData). Swift draws
+// it with Swift Charts; the web has no chart lib and must stay offline, so it's
+// inline SVG on the same scale: y 0…5 (spotting 1 → superHeavy 5), gridlines at
+// 1/3/5, a 30-day window, and the dashed projection of the next expected period.
+
+const Y_LABELS = { 1: "Spotting", 3: "Medium", 5: "Super" }; // InsightsView.yLabel
+
+/// Her average intensity for each period day, from every logged period; days
+/// she's never logged fall back to a gentle bell. (InsightsView.projectedPattern)
+function projectedPattern(store, len) {
+  const bell = [3, 4, 4, 3, 2, 1];
+  while (bell.length < len) bell.push(1);
+  const sums = Array(len).fill(0);
+  const counts = Array(len).fill(0);
+  for (const s of periodStarts(store.periodDays)) {
+    for (let k = 0; k < len; k++) {
+      const flow = store.logFor(addDays(s, k))?.flow;
+      if (flow) { sums[k] += FLOW_WEIGHT[flow]; counts[k] += 1; }
+    }
+  }
+  return Array.from({ length: len }, (_, k) =>
+    counts[k] > 0 ? Math.round(sums[k] / counts[k]) : bell[k]);
+}
+
+/// The last 30 days of logged flow (0 on quiet days) plus a dashed projection
+/// of the next expected period, shaped by her own pattern. With no flow logged
+/// at all, a labeled one-month preview shows instead. (InsightsView.flowChartData)
+function flowChartData(store, today) {
+  const t0 = startOfDay(today);
+  const hasFlow = store.logsSnapshot.some((l) => l.flow != null);
+
+  // First-month preview: a gentle example so the card teaches itself.
+  if (!hasFlow) {
+    const start = addDays(t0, -29);
+    const example = [0, 0, 0, 2, 4, 4, 3, 2, 1, ...Array(21).fill(0)];
+    return {
+      logged: example.map((weight, i) => ({ date: addDays(start, i), weight })),
+      projected: [], isPreview: true,
+    };
+  }
+
+  const logged = [];
+  for (let off = -29; off <= 0; off++) {
+    const date = addDays(t0, off);
+    const flow = store.logFor(date)?.flow;
+    logged.push({ date, weight: flow ? FLOW_WEIGHT[flow] : 0 });
+  }
+
+  // Projection: dashes from tomorrow through the predicted period's end, shaped
+  // by her own per-day intensity averages (a soft bell until then).
+  const projected = [];
+  const p = store.prediction(today);
+  if (p.nextPeriodStart) {
+    const start = startOfDay(p.nextPeriodStart);
+    const len = Math.max(p.averagePeriodLength, 1);
+    const pattern = projectedPattern(store, len);
+    const end = addDays(start, len - 1);
+    for (let d = addDays(t0, 1); d <= end && daysBetween(t0, d) <= 35; d = addDays(d, 1)) {
+      const k = daysBetween(start, d);
+      projected.push({ date: d, weight: (k >= 0 && k < len) ? pattern[Math.min(k, pattern.length - 1)] : 0 });
+    }
+  }
+  return { logged, projected, isPreview: false };
+}
+
+// Fritsch-Carlson monotone cubic through the points, as a bezier path — Swift's
+// .interpolationMethod(.monotone). Monotone and not a plain smoothing spline
+// because flow reads 0,0,4,0: anything that overshoots would draw negative flow.
+function monotonePath(pts) {
+  const n = pts.length;
+  if (n === 0) return "";
+  const r = (v) => +v.toFixed(1);
+  if (n === 1) return `M ${r(pts[0].x)},${r(pts[0].y)}`;
+
+  const slope = [];
+  for (let i = 0; i < n - 1; i++) slope.push((pts[i + 1].y - pts[i].y) / (pts[i + 1].x - pts[i].x));
+  const m = [slope[0]];
+  for (let i = 1; i < n - 1; i++) m.push(slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2);
+  m.push(slope[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (slope[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / slope[i], b = m[i + 1] / slope[i];
+    const s = a * a + b * b;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * slope[i]; m[i + 1] = t * b * slope[i]; }
+  }
+
+  let out = `M ${r(pts[0].x)},${r(pts[0].y)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = (pts[i + 1].x - pts[i].x) / 3;
+    out += ` C ${r(pts[i].x + h)},${r(pts[i].y + m[i] * h)}` +
+           ` ${r(pts[i + 1].x - h)},${r(pts[i + 1].y - m[i + 1] * h)}` +
+           ` ${r(pts[i + 1].x)},${r(pts[i + 1].y)}`;
+  }
+  return out;
+}
+
+// InsightsView.chartA11y — the whole chart in one sentence for a screen reader.
+function chartA11y(data, fmt) {
+  if (data.isPreview) return "A preview flow chart. It fills in with your own flow as you log.";
+  const wide = (d) => `${fmt.monthName(d)} ${d.getDate()}`;
+  const peak = data.logged.reduce((a, b) => (b.weight > a.weight ? b : a), data.logged[0]);
+  let out = "Flow over the last 30 days.";
+  if (peak && peak.weight > 0) out += ` Heaviest on ${wide(peak.date)}.`;
+  const first = data.projected.find((pt) => pt.weight > 0);
+  if (first) out += ` The next period is expected around ${wide(first.date)}.`;
+  return out;
+}
+
+function monthlyFlowChart(store, today, html, ui, fmt, cardTitle) {
+  const { Card } = ui;
+  const data = flowChartData(store, today);
+  const all = [...data.logged, ...data.projected];
+  if (all.length < 2) return null; // two points to draw a line, as everywhere else
+
+  // One shared x scale across both series (Swift's single Chart domain).
+  const first = all[0].date, last = all[all.length - 1].date;
+  const spanDays = Math.max(daysBetween(first, last), 1);
+  // Gutters: left for the y labels ("Spotting"), bottom for the dates, right
+  // wide enough that the last date label stays inside the viewBox (it's centred
+  // on the final gridline, which lands exactly on the plot's right edge).
+  const W = 320, H = 150, P = { t: 8, r: 20, b: 18, l: 54 };
+  const iw = W - P.l - P.r, ih = H - P.t - P.b, bottom = P.t + ih;
+  const X = (d) => P.l + iw * (daysBetween(first, d) / spanDays);
+  const Y = (w) => P.t + ih * (1 - w / 5); // chartYScale(domain: 0...5)
+
+  const toPts = (series) => series.map((pt) => ({ x: X(pt.date), y: Y(pt.weight) }));
+  const loggedPts = toPts(data.logged);
+  const loggedLine = monotonePath(loggedPts);
+  const loggedArea = loggedPts.length
+    ? `${loggedLine} L ${loggedPts[loggedPts.length - 1].x.toFixed(1)},${bottom} L ${loggedPts[0].x.toFixed(1)},${bottom} Z`
+    : "";
+
+  // X gridlines every 7 days (AxisMarks(.stride(by: .day, count: 7))).
+  const ticks = [];
+  for (let k = 0; k <= spanDays; k += 7) ticks.push(addDays(first, k));
+
+  const legendSwatch = (dashed, label) => html`
+    <div key=${label} style=${{ display: "flex", alignItems: "center", gap: 5 }}>
+      <svg width="18" height="3" viewBox="0 0 18 3" aria-hidden="true" style=${{ flex: "0 0 auto" }}>
+        <line x1="1.5" y1="1.5" x2="16.5" y2="1.5" stroke=${dashed ? "var(--muted)" : "var(--phase-menstrual)"}
+          strokeWidth=${2.5} strokeLinecap="round" strokeDasharray=${dashed ? "4 3" : undefined} />
+      </svg>
+      <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 500, color: "var(--muted)" }}>${label}</span>
+    </div>`;
+
+  return html`
+    <${Card}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
+          ${cardTitle("Your flow, this month")}
+          <div style=${{ flex: 1 }} />
+          ${data.isPreview && html`
+            <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.8px",
+              color: "var(--on-primary)", background: "var(--primary-strong)",
+              padding: "2px 8px", borderRadius: "var(--radius-pill)" }}>PREVIEW</span>`}
+        </div>
+
+        <svg viewBox=${`0 0 ${W} ${H}`} width="100%" style=${{ display: "block", height: "auto" }}
+          role="img" aria-label=${chartA11y(data, fmt)}>
+          ${[1, 3, 5].map((w) => html`
+            <g key=${w}>
+              <line x1=${P.l} y1=${Y(w).toFixed(1)} x2=${W - P.r} y2=${Y(w).toFixed(1)}
+                stroke="var(--line)" strokeWidth=${1} />
+              <text x=${P.l - 6} y=${(Y(w) + 3).toFixed(1)} textAnchor="end"
+                fontSize=${9} fontWeight=${500} fill="var(--muted)">${Y_LABELS[w]}</text>
+            </g>`)}
+          ${ticks.map((d) => html`
+            <g key=${d.getTime()}>
+              <line x1=${X(d).toFixed(1)} y1=${P.t} x2=${X(d).toFixed(1)} y2=${bottom}
+                stroke="var(--line)" strokeWidth=${1} />
+              <text x=${X(d).toFixed(1)} y=${H - 5} textAnchor="middle"
+                fontSize=${9} fontWeight=${500} fill="var(--muted)">${fmt.monthShort(d.getMonth())} ${d.getDate()}</text>
+            </g>`)}
+          ${loggedArea && html`<path d=${loggedArea} fill="var(--phase-menstrual)" fillOpacity=${0.14} />`}
+          <path d=${loggedLine} fill="none" stroke="var(--phase-menstrual)"
+            strokeWidth=${2.5} strokeLinecap="round" strokeLinejoin="round" />
+          ${data.projected.length > 1 && html`
+            <path d=${monotonePath(toPts(data.projected))} fill="none" stroke="var(--muted)"
+              strokeWidth=${2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 4" />`}
+        </svg>
+
+        <div style=${{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+          ${legendSwatch(false, data.isPreview ? "A month like yours could look" : "What you logged")}
+          ${data.projected.length > 0 && legendSwatch(true, "Next period, as expected")}
+        </div>
+        ${data.isPreview && html`
+          <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+            This becomes your own curve as you log your flow.
+          </div>`}
+      </div>
+    </${Card}>`;
 }
 
 // Lightweight offline line/area chart — no chart lib. Maps the recent basal

@@ -82,18 +82,57 @@ function checkExists(p, hard) {
   if (existsSync(join(root, p))) ok(`${p} present`);
   else if (hard) fail(`${p} missing`); else warn(`${p} missing (build the web app to create it)`);
 }
-// Sanity: the web enums and the Swift enums should list the same cases.
+// The web enums and the Swift enums must list the SAME cases.
+//
+// This EXTRACTS both sides and compares them as sets, in both directions. An
+// earlier version hardcoded the expected case list and only asserted those
+// existed in both files — which silently missed an ADDED case (Swift grew
+// Flow.superHeavy and this check still said "match"). Never assert against a
+// list you wrote down; read both sources.
+function swiftEnumCases(src, name) {
+  // Bound the enum to its OWN body by brace-matching (a fixed window bleeds
+  // into the next enum), then take only `case a, b, c` DECLARATIONS — a
+  // switch's `case .superHeavy:` has a leading dot and a colon, and must not
+  // be mistaken for one.
+  const head = new RegExp(`enum\\s+${name}\\s*:[^{]*\\{`).exec(src);
+  if (!head) return null;
+  let i = head.index + head[0].length, depth = 1;
+  while (i < src.length && depth > 0) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") depth--;
+    i++;
+  }
+  const body = src.slice(head.index, i);
+  const out = [];
+  for (const m of body.matchAll(/^[ \t]*case[ \t]+([A-Za-z_][A-Za-z0-9_,\s]*)$/gm)) {
+    for (const part of m[1].split(",")) {
+      const id = part.trim();
+      if (id) out.push(id);
+    }
+  }
+  return out.length ? out : null;
+}
+function jsArrayLiteral(src, name) {
+  const m = src.match(new RegExp(`export const ${name}\\s*=\\s*\\[([^\\]]*)\\]`));
+  if (!m) return null;
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+}
 function checkModelsMirror() {
   const jsPath = "web/core/models.js", swPath = "App/Core/CycleModels.swift";
   if (!existsSync(join(root, jsPath)) || !existsSync(join(root, swPath))) { warn("model files missing"); return; }
   const js = read(jsPath), sw = read(swPath);
-  const checks = [
-    ["Flow", ["spotting", "light", "medium", "heavy"]],
-    ["Discharge", ["dry", "sticky", "creamy", "watery", "eggWhite"]],
-  ];
-  for (const [enumName, cases] of checks) {
-    const missing = cases.filter((c) => !js.includes(`"${c}"`) || !sw.includes(c));
-    if (missing.length) fail(`${enumName} cases differ between platforms: ${missing.join(", ")}`);
-    else ok(`${enumName} cases match (${cases.length})`);
+  // Swift enum name -> the web's exported array of the same vocabulary.
+  for (const [enumName, jsName] of [["Flow", "FLOW"], ["Mood", "MOODS"], ["Symptom", "SYMPTOMS"], ["Discharge", "DISCHARGE"]]) {
+    const a = swiftEnumCases(sw, enumName);
+    const b = jsArrayLiteral(js, jsName);
+    if (!a || !b) { warn(`${enumName}: couldn't read cases from ${!a ? swPath : jsPath}`); continue; }
+    const onlyIOS = a.filter((c) => !b.includes(c));
+    const onlyWeb = b.filter((c) => !a.includes(c));
+    if (onlyIOS.length || onlyWeb.length) {
+      const bits = [];
+      if (onlyIOS.length) bits.push(`iOS-only: ${onlyIOS.join(", ")}`);
+      if (onlyWeb.length) bits.push(`web-only: ${onlyWeb.join(", ")}`);
+      fail(`${enumName} cases differ — ${bits.join(" · ")}`);
+    } else ok(`${enumName} cases match (${a.length})`);
   }
 }

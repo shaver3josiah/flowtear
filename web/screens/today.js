@@ -13,6 +13,9 @@ import { rewards } from "../core/rewards.js";
 import { emptyLog } from "../core/models.js";
 import { RingSticker, RingChain, trackRadius } from "../components/ringSticker.js";
 import { GlitterHint } from "../components/glitterHint.js";
+// Five levels, not the vendored four: the DS FlowScale predates Flow.superHeavy
+// and can't show it (ds-bundle.js is uneditable). Drop-in same props.
+import { FlowScale } from "../components/flowScale.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
@@ -215,7 +218,7 @@ function RingPolish({ size, day, cycleLength, periodLength, phase }) {
 
 export default function TodayScreen({ ctx }) {
   const { store, html, ui, Icon, fmt, today, nav } = ctx;
-  const { Card, Button, FlowerMark, IconButton, PetalRain, CycleRing, PhaseBadge, FlowScale } = ui;
+  const { Card, Button, FlowerMark, IconButton, PetalRain, CycleRing, PhaseBadge } = ui;
 
   const p = store.prediction(today);
   const flow = store.logFor(today)?.flow ?? null;
@@ -400,13 +403,13 @@ export default function TodayScreen({ ctx }) {
 
   const panes = [
     { icon: "activity", tint: "var(--phase-luteal)", title: "Stretch",
-      line: "Gentle cramp-ease moves, a little every day — Posey guides you.",
+      line: "Gentle cramp-ease moves, a little every day. Posey guides you.",
       action: () => nav.setTab("stretch") },
     { icon: "bar-chart-2", tint: "var(--primary-strong)", title: "Insights",
-      line: "Your averages, rhythms and top symptoms — all from what you log.",
+      line: "Your averages, rhythms and top symptoms, all from what you log.",
       action: () => nav.setTab("insights") },
     { icon: "calendar", tint: "var(--phase-fertile)", title: "Calendar",
-      line: "Your whole month at a glance — periods, fertile days, stretches.",
+      line: "Your whole month at a glance: periods, fertile days, stretches.",
       action: () => nav.setTab("calendar") },
   ];
   const pc = panes[pane];
@@ -535,7 +538,7 @@ function FertileWindow({ ctx, p }) {
                 onClick=${() => store.setTemperatureC(fmt.fToC(97.8), today)}>Log today's temp</${Button}>`}
         </div>
 
-        <span style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>Estimates — not a birth-control method.</span>
+        <span style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>Estimates, not a birth-control method.</span>
       </div>
     </${Card}>`;
 }

@@ -12,27 +12,27 @@ const TIPS = [
   {
     icon: "edit-3",
     title: "Scrub the ring",
-    text: "Drag anywhere on the cycle ring to travel day by day — tap it to read the story of that phase.",
+    text: "Drag anywhere on the cycle ring to travel day by day. Tap it to read the story of that phase.",
   },
   {
     icon: "flower-2",
     title: "Spin, fling & pluck your flower",
-    text: "Your flower sticker rides the ring like a bead. Fling it and it spins like a fidget; pull it clearly off and rest it anywhere — inside the ring or beside it. Carry it back and it beads on again.",
+    text: "Your flower sticker rides the ring like a bead. Fling it and it spins like a fidget; pull it clearly off and rest it anywhere, inside the ring or beside it. Carry it back and it beads on again.",
   },
   {
     icon: "sparkles",
     title: "The period-arc bonus",
-    text: "Land your flower on the colored period arc and a few bonus petals fall out — once a day, for luck.",
+    text: "Land your flower on the colored period arc and a few bonus petals fall out. Once a day, for luck.",
   },
   {
     icon: "zap",
     title: "Tap-to-jump sliders",
-    text: "The flow and log sliders jump straight to wherever you tap — no dragging required.",
+    text: "The flow and log sliders jump straight to wherever you tap. No dragging required.",
   },
   {
     icon: "check",
     title: "The whole plan is tappable",
-    text: "In Stretch, open any day of your plan to see its moves, check them off, or run that day's guided session on the spot — even off-schedule.",
+    text: "In Stretch, open any day of your plan to see its moves, check them off, or run that day's guided session on the spot, even off-schedule.",
   },
   {
     icon: "circle",
@@ -42,7 +42,7 @@ const TIPS = [
   {
     icon: "gift",
     title: "Petals buy the pretty things",
-    text: "Every stretch earns petal points; the garden shop turns them into flowers, palettes, sounds — even Posey. The book icon has the full rules.",
+    text: "Every stretch earns petal points; the garden shop turns them into flowers, palettes, sounds. Even Posey. The book icon has the full rules.",
   },
   {
     icon: "flower",
@@ -79,7 +79,7 @@ export default function TipsSheet({ ctx }) {
         <div style=${{ flex: 1, display: "grid", gap: 2 }}>
           <h2 style=${{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--deep)", margin: 0 }}>The hidden magic</h2>
           <div style=${{ fontSize: 13, color: "var(--muted)" }}>
-            Everything this garden can do — including the parts that don't announce themselves.
+            Everything this garden can do, including the parts that don't announce themselves.
           </div>
         </div>
         <${IconButton} label="Close" onClick=${nav.close}><${Icon} name="x" size=${18} /><//>

@@ -1,6 +1,6 @@
 {
   "product": "Uncorked (Flowtear)",
-  "contractsVersion": "1.3.0",
+  "contractsVersion": "1.4.0",
   "updated": "2026-07-16",
   "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
   "platforms": {
@@ -156,6 +156,30 @@
       "since": "1.3.0",
       "ios": "App/Components/CoachFlower.swift",
       "web": "web/screens/stretch.js"
+    },
+    {
+      "id": "super-heavy-flow",
+      "since": "1.4.0",
+      "ios": "App/Core/CycleModels.swift (Flow.superHeavy)",
+      "web": "web/core/models.js"
+    },
+    {
+      "id": "symptom-echo",
+      "since": "1.4.0",
+      "ios": "App/Components/SymptomEchoSheet.swift",
+      "web": "web/screens/symptomEcho.js"
+    },
+    {
+      "id": "monthly-flow-chart",
+      "since": "1.4.0",
+      "ios": "App/Views/InsightsView.swift",
+      "web": "web/screens/insights.js"
+    },
+    {
+      "id": "chain-tutorial",
+      "since": "1.4.0",
+      "ios": "App/Views/GardenShopView.swift",
+      "web": "web/screens/garden.js"
     }
   ],
   "platformDivergences": {
@@ -166,7 +190,8 @@
       "cycle-report-csv: identical CSV bytes. iOS shares via ShareLink; Android writes to the app cache (@capacitor/filesystem) and opens the system share sheet (@capacitor/share). A plain browser falls back to a Blob download.",
       "motion: several SwiftUI flourishes (Posey's animations, SparkleBurst) render as calmer static/CSS equivalents on web.",
       "larger-text: iOS raised its Dynamic Type clamp to xxxLarge (FlowtearApp.swift). The web uses fixed px type; honoring OS font scaling needs a rem-based type refactor \u2014 deliberate gap, not drift.",
-      "backup wire format: identical JSON (FFBackupFile v1, inner store blobs base64-encoded, ISO-8601 dates) \u2014 a backup from either platform restores on the other. Verified by web/core/store.test.mjs round-trip."
+      "backup wire format: identical JSON (FFBackupFile v1, inner store blobs base64-encoded, ISO-8601 dates) \u2014 a backup from either platform restores on the other. Verified by web/core/store.test.mjs round-trip.",
+      "flow selector: the vendored design-system FlowScale/DayCell predate Flow.superHeavy and cannot render it (ds-bundle.js is generated, not editable). The web uses web/components/flowScale.js and draws the 5th dot itself; both read the shared --flow-super-heavy token, so colors still come from Theme.swift."
     ]
   },
   "howToStaySynced": [

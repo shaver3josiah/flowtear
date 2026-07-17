@@ -2,11 +2,12 @@
 // Kept dead simple so the web and Swift enums stay obviously in sync.
 // If you add a case here, add it in CycleModels.swift too (and bump contracts).
 
-export const FLOW = ["spotting", "light", "medium", "heavy"];
-// Relative bleeding weight. CRITICAL: cycle math only counts weight >= 2
-// (light/medium/heavy). Spotting (1) logs + shows on the calendar but must never
-// open a period start — see store.periodDays and CycleStore.swift:120-128.
-export const FLOW_WEIGHT = { spotting: 1, light: 2, medium: 3, heavy: 4 };
+export const FLOW = ["spotting", "light", "medium", "heavy", "superHeavy"];
+// Relative bleeding weight, also the y-value on the monthly flow chart.
+// CRITICAL: cycle math only counts weight >= 2 (light and up). Spotting (1)
+// logs + shows on the calendar but must never open a period start — see
+// store.periodDays and CycleStore.swift:120-128.
+export const FLOW_WEIGHT = { spotting: 1, light: 2, medium: 3, heavy: 4, superHeavy: 5 };
 
 export const MOODS = ["happy", "calm", "sensitive", "sad", "irritable", "anxious", "energized", "tired"];
 
@@ -20,7 +21,7 @@ export const DISCHARGE = ["dry", "sticky", "creamy", "watery", "eggWhite"];
 
 export const PHASES = ["menstrual", "follicular", "fertile", "ovulation", "luteal"];
 
-const SPECIAL_LABELS = { tenderBreasts: "Tender breasts", eggWhite: "Egg white" };
+const SPECIAL_LABELS = { tenderBreasts: "Tender breasts", eggWhite: "Egg white", superHeavy: "Super heavy" };
 export const label = (raw) =>
   SPECIAL_LABELS[raw] ?? (raw ? raw[0].toUpperCase() + raw.slice(1) : "");
 

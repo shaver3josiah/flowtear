@@ -98,6 +98,7 @@
   --flow-light: #F492B7;
   --flow-medium: #E85C90;
   --flow-heavy: #BE2C60;
+  --flow-super-heavy: #96164A;
   --flow-none: #D9C4CE;
   --flow-soft: #FBDCE6; /* alias of --phase-menstrual-soft; dark presets override */
 
@@ -311,6 +312,8 @@
   --phase-ovulation-soft: #3C2D1C;
   --phase-luteal-soft: #32263D;
 
+  /* Deepest flow needs to be the MOST visible on dark, not the least. */
+  --flow-super-heavy: #FF4D6D;
   --flow-none: #5E4D56;
   --flow-soft: #3E2433;
 
@@ -339,6 +342,8 @@
   --phase-ovulation-soft: #362919;
   --phase-luteal-soft: #2B2338;
 
+  /* Deepest flow stays the most visible on near-black too. */
+  --flow-super-heavy: #FF4D6D;
   --flow-none: #555064;
   --flow-soft: #391F2E;
 

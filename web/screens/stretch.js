@@ -7,8 +7,13 @@
 // The garden header (points pill, shop, share, rules, tutorial sheets) is the garden
 // feature and lives on its own screen — see web/screens/garden.js.
 import * as lib from "../core/stretchLibrary.js";
-import { addDays, startOfDay, isSameDay } from "../core/dates.js";
+import { startOfDay, isSameDay } from "../core/dates.js";
 import { rewards, FLOWERS } from "../core/rewards.js";
+import { crownSpot } from "../components/ringSticker.js";
+
+const reduceMotion = () =>
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const React = window.React;
 const { useState, useEffect } = React;
@@ -101,17 +106,15 @@ function CoachFlower({ ctx, message }) {
   const { html, ui } = ctx;
   const { FlowerMark } = ui;
   // The crown she chained on her ring, resting on Posey's petals — same blooms,
-  // same order, as the ring. Defensive reads: the rewards fields land in a
-  // parallel change. (CoachFlower.crown in Swift: fanned across the top arc.)
+  // same order, as the ring, through the same crownSpot geometry the garden's
+  // chain tutorial draws its practice Posey with (CoachFlower.crownSpot in Swift).
   const chain = (rewards.ringChain ?? []).slice(0, 7);   // a crown, not a hedge
   const crowned = (rewards.poseyCrowned ?? false) && chain.length >= 3;
   const crown = crowned && html`<div aria-hidden="true" style=${{ position: "absolute", inset: 0, pointerEvents: "none" }}>
     ${chain.map((id, i) => {
-      const t = chain.length === 1 ? 0.5 : i / (chain.length - 1);
-      const deg = -142 + 104 * t;                        // fan across the top arc
-      const rad = (deg * Math.PI) / 180;
+      const spot = crownSpot(i, chain.length);
       return html`<span key=${i} style=${{ position: "absolute", left: "50%", top: "50%",
-        transform: `translate(-50%, -50%) translate(${24 * Math.cos(rad)}px, ${24 * Math.sin(rad)}px) rotate(${(deg + 90) * 0.5}deg)` }}>
+        transform: `translate(-50%, -50%) translate(${spot.x}px, ${spot.y}px) rotate(${spot.tilt}deg)` }}>
         <${Bloom} ctx=${ctx} id=${id} size=${11} /></span>`;
     })}
   </div>`;
@@ -229,12 +232,10 @@ export default function StretchScreen({ ctx }) {
     setPenaltyCharged(charged);
   }, [tier.key]);
 
-  // Streak: consecutive days done, ending today (or yesterday if today's not done yet).
-  const streak = (() => {
-    let n = 0, cursor = store.stretchDone(today) ? today : addDays(today, -1);
-    while (store.stretchDone(cursor)) { n++; cursor = addDays(cursor, -1); }
-    return n;
-  })();
+  // Streak: consecutive days done, ending today (or yesterday, so an unfinished
+  // today never breaks the run). The store owns the definition now, so this
+  // screen and the guided session's finish card can never drift apart.
+  const streak = store.stretchStreak(today);
   const totalLogged = store.logsSnapshot.filter((l) => l.stretchDone).length;
 
   const coachLine = coachMessage({ store, today, p, todaySession });
@@ -318,6 +319,28 @@ export default function StretchScreen({ ctx }) {
   // ---- today's session card ----
   // Collapsible cards fold to just the header — one tap opens (Swift's
   // anytimeExpanded: the no-schedule card rests folded so the schedule leads).
+  // A live little ring: poses done today out of the session (StretchCoachView's
+  // 34pt progress ring). The count is the reward — she can watch the session
+  // close itself without opening the guided player.
+  const poseRing = (s) => {
+    const total = s.moves.length;
+    const done = movesDone.length;
+    const R = 15, C = 2 * Math.PI * R;                    // r=15 in a 34 box
+    return html`<span role="img" aria-label=${`${done} of ${total} poses done`}
+      style=${{ position: "relative", width: 34, height: 34, flex: "0 0 auto", display: "inline-flex" }}>
+      <svg width=${34} height=${34} viewBox="0 0 34 34" aria-hidden="true" style=${{ display: "block" }}>
+        <circle cx=${17} cy=${17} r=${R} fill="none" stroke="var(--surface-soft)" stroke-width=${4} />
+        <circle cx=${17} cy=${17} r=${R} fill="none" stroke="var(--phase-luteal)" stroke-width=${4}
+          stroke-linecap="round" stroke-dasharray=${C} transform="rotate(-90 17 17)"
+          stroke-dashoffset=${C * (1 - (total ? done / total : 0))}
+          style=${{ transition: reduceMotion() ? "none" : "stroke-dashoffset var(--dur-base) var(--ease-signature)" }} />
+      </svg>
+      <span aria-hidden="true" style=${{ position: "absolute", inset: 0, display: "flex", alignItems: "center",
+        justifyContent: "center", fontSize: "var(--text-2xs)", fontWeight: 600, color: "var(--deep)",
+        fontVariantNumeric: "tabular-nums" }}>${done}/${total}</span>
+    </span>`;
+  };
+
   const todayCard = (s, heading, collapsible = false) => {
     const open = !collapsible || anytimeExpanded;
     return html`<${Card}>
@@ -332,6 +355,7 @@ export default function StretchScreen({ ctx }) {
           <div style=${{ fontFamily: "var(--font-display)", fontSize: "var(--text-lg)", fontWeight: 600, color: "var(--deep)", marginTop: 2 }}>${s.focus}</div>
         </div>
         <div style=${{ display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" }}>
+          ${poseRing(s)}
           <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--phase-luteal)" }}>${s.minutes} min</span>
           ${collapsible && html`<span style=${{ color: "var(--muted)", display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast)" }}><${Icon} name="chevron-down" size=${16} /></span>`}
         </div>
@@ -351,7 +375,7 @@ export default function StretchScreen({ ctx }) {
       }}
         style=${{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", minHeight: "var(--tap-min)" }}>
         <span style=${{ color: dayDone ? "var(--good)" : "var(--muted)" }}><${Icon} name=${dayDone ? "check" : "circle"} size=${19} /></span>
-        <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)" }}>${dayDone ? "Today's stretching — done" : "Mark the whole day done"}</span>
+        <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)" }}>${dayDone ? "Today's stretching: done" : "Mark the whole day done"}</span>
       </button>`}
     </div>
   </${Card}>`;
@@ -373,7 +397,7 @@ export default function StretchScreen({ ctx }) {
   };
 
   const penaltyNote = () => html`<div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-    ${penaltyCharged * 5} petals drifted off for ${penaltyCharged === 1 ? "a missed day" : "missed days"} — today's a fresh bloom.
+    ${penaltyCharged * 5} petals drifted off for ${penaltyCharged === 1 ? "a missed day" : "missed days"}. Today's a fresh bloom.
   </div>`;
 
   // ---- out-of-window notice ----
@@ -381,7 +405,7 @@ export default function StretchScreen({ ctx }) {
     let title, body;
     if (p.phase === "menstrual") {
       title = "You're on your period";
-      body = "Gentle knees-to-chest and child's pose can still ease cramps today. The plan picks back up before your next period — the schedule is below.";
+      body = "Gentle knees-to-chest and child's pose can still ease cramps today. The plan picks back up before your next period. The schedule is below.";
     } else if (daysUntil == null) {
       title = "Your plan appears with a bit of history";
       body = "Log a couple of cycles and the plan will time itself to the days before your period.";
@@ -475,7 +499,7 @@ export default function StretchScreen({ ctx }) {
     const days = lib.daysFor(tier);
     return html`<${Card}>
       <div style=${{ fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>${tier.key === "starter" ? "The 3 days" : "The 14 days"}</div>
-      <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", margin: "2px 0 6px" }}>Tap a day for its moves, run any session guided, and check off any day — even ahead of schedule.</div>
+      <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", margin: "2px 0 6px" }}>Tap a day for its moves, run any session guided, and check off any day, even ahead of schedule.</div>
       ${days.map((d, i) => html`<div key=${d.id}>
         ${scheduleRow(d)}
         ${i < days.length - 1 && html`<div style=${{ height: 1, background: "var(--line)" }} />`}
@@ -542,25 +566,25 @@ function coachMessage({ store, today, p, todaySession }) {
   const dayNumber = today.getDate();
   const done = store.stretchMovesDone(today);
   if (store.stretchDone(today)) {
-    return ["All done — I'm so proud I could wilt. Rest those roots.",
+    return ["All done. I'm so proud I could wilt. Rest those roots.",
       "Beautiful work today, petal. Even the sun took notes.",
       "Stretches complete. Somewhere, a garden applauds."][dayNumber % 3];
   }
   if (done.length) {
-    return ["You've started — that's the hard part. Keep going, petal.",
+    return ["You've started, and that's the hard part. Keep going, petal.",
       "Look at you go. A couple more and we're done.",
       "Halfway feelings are the best feelings, I always say."][dayNumber % 3];
   }
   if (todaySession) {
-    return ["Ready when you are — even five gentle minutes counts.",
+    return ["Ready when you are. Even five gentle minutes counts.",
       `Just ${todaySession.minutes} easy minutes today. I'll be right here on my stem.`,
       "No rush, petal. We bloom on our own schedule."][dayNumber % 3];
   }
   if (p.phase === "menstrual") {
     return ["Rest week, petal. A gentle knees-to-chest still helps if cramps bite.",
-      "You made it — be soft with yourself this week."][dayNumber % 2];
+      "You made it. Be soft with yourself this week."][dayNumber % 2];
   }
-  return ["No schedule today — but stretching is always in season. Care for a quick trio?",
+  return ["No schedule today, but stretching is always in season. Care for a quick trio?",
     "Off-plan days are my favorite: no rules, just a little reach and bend.",
     "I'll wave when your plan starts. Meanwhile, the anytime session is right below."][dayNumber % 3];
 }

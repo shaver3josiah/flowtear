@@ -54,15 +54,30 @@ function Bloom({ id, size }) {
   </svg>`;
 }
 
+// Crown geometry (CoachFlower.crownSpot in Swift): the chain fanned across the
+// top arc of a bloom's petals. Lives here beside the ring geometry because two
+// callers share it exactly as they do in Swift — Posey's crown on the Stretch
+// coach, and the practice Posey in the garden's chain tutorial.
+export function crownSpot(index, count, radius = 24) {
+  const t = count <= 1 ? 0.5 : index / (count - 1);
+  const deg = -142 + 104 * t;
+  const rad = (deg * Math.PI) / 180;
+  return { x: radius * Math.cos(rad), y: radius * Math.sin(rad), tilt: (deg + 90) * 0.5 };
+}
+
 // RingChainView (RingSticker.swift) — her daisy chain: every bloom she's
 // chained in the shop rides the ring together, evenly spaced from 12 o'clock.
 // Purely decorative (the one ACTIVE sticker stays the draggable bead); no
 // touches stolen from the scrub. Subscribes to rewards itself so chaining in
 // the garden shop shows up the moment she's back on Today.
-export function RingChain({ radius }) {
+//
+// `chain` overrides the real one — the chain tutorial drives this same ring with
+// practice blooms, so the lesson looks exactly like the thing it teaches and
+// nothing it does touches her actual chain.
+export function RingChain({ radius, chain: override }) {
   const [, force] = useState(0);
   useEffect(() => rewards.subscribe(() => force((n) => n + 1)), []);
-  const chain = rewards.ringChain ?? [];
+  const chain = override ?? rewards.ringChain ?? [];
   if (!chain.length) return null;
   return html`
     <div aria-hidden="true" style=${{
@@ -305,7 +320,7 @@ export function RingSticker({ radius, periodFraction = 0 }) {
           fontSize: "var(--text-xs)", fontWeight: 500, color: "var(--text)",
         }}>
           ${UI.FlowerMark && html`<${UI.FlowerMark} size=${22} />`}
-          All that spinning, petal — imagine the petals if we stretched.
+          All that spinning, petal. Imagine the petals if we stretched.
         </div>`}
 
       ${bonus && html`
@@ -314,7 +329,7 @@ export function RingSticker({ radius, periodFraction = 0 }) {
           whiteSpace: "nowrap", padding: "7px 12px", borderRadius: 999,
           background: "var(--phase-menstrual-soft)", color: "var(--deep)",
           fontSize: "var(--text-xs)", fontWeight: 700,
-        }}>+5 — right on your period day</div>`}
+        }}>+5, right on your period day</div>`}
     </div>`;
 }
 

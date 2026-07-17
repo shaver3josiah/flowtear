@@ -30,13 +30,13 @@ export function flags(store, today = new Date()) {
     const gaps = [];
     for (let i = 1; i < starts.length; i++) gaps.push(daysBetween(starts[i - 1], starts[i]));
     const last = gaps[gaps.length - 1];
-    if (last < 21) out.push(`Your last cycle was ${last} days — shorter than the typical 21–35 range.`);
-    if (last > 35) out.push(`Your last cycle was ${last} days — longer than the typical 21–35 range.`);
+    if (last < 21) out.push(`Your last cycle ran ${last} days. Most run 21 to 35, so that one was short.`);
+    if (last > 35) out.push(`Your last cycle ran ${last} days, a little past the usual 21 to 35. One long cycle is common. A pattern of them is worth raising at a visit.`);
     if (gaps.length >= 3) {
       const prior = gaps.slice(0, -1);
       const avgPrior = prior.reduce((a, b) => a + b, 0) / prior.length;
       const drift = Math.abs(last - avgPrior);
-      if (drift >= 7) out.push(`Your last cycle differed from your usual by about ${Math.round(drift)} days.`);
+      if (drift >= 7) out.push(`Your last cycle was about ${Math.round(drift)} days off your usual rhythm.`);
     }
   }
 
@@ -49,47 +49,53 @@ export function flags(store, today = new Date()) {
     maxRecentRun = Math.max(maxRecentRun, run);
   }
   if (maxRecentRun > 7) {
-    out.push(`A recent period ran ${maxRecentRun} days — longer than 7 is worth mentioning to a clinician.`);
+    out.push(`One recent period lasted ${maxRecentRun} days. Bleeding past 7 days is something a clinician would want to hear about.`);
   }
 
   // Overdue right now.
   const d = store.prediction(today).daysUntilNextPeriod;
-  if (d != null && d < -3) out.push(`Your period is currently ${Math.abs(d)} days later than predicted.`);
+  if (d != null && d < -3) out.push(`Your period is running ${Math.abs(d)} days later than expected.`);
 
   return out;
 }
 
-/** The full shareable text report. */
+/**
+ * The full shareable text report, written the way a good nurse would talk you
+ * through it: plain sentences, the numbers first, then anything worth bringing
+ * up, and honest about what an estimate is.
+ */
 export function text(store, today = new Date()) {
   const p = store.prediction(today);
   const lines = [];
-  lines.push(`MY CYCLE REPORT — ${mediumDate(today)}`);
-  lines.push("—".repeat(28));
+  lines.push(`CYCLE SUMMARY, prepared ${mediumDate(today)}`);
+  lines.push("-".repeat(30));
 
+  lines.push("");
+  lines.push("THE NUMBERS");
   if (p.hasHistory) {
-    lines.push(`Average cycle: ${p.averageCycleLength} days · average period: ${p.averagePeriodLength} days`);
-    if (p.lastPeriodStart) lines.push(`Last period started: ${mediumDate(p.lastPeriodStart)}`);
-    if (p.nextPeriodStart) lines.push(`Next period expected: ${mediumDate(p.nextPeriodStart)} (estimate)`);
+    lines.push(`Average cycle: ${p.averageCycleLength} days. Average period: ${p.averagePeriodLength} days.`);
+    if (p.lastPeriodStart) lines.push(`The last period started ${mediumDate(p.lastPeriodStart)}.`);
+    if (p.nextPeriodStart) lines.push(`The next one is expected around ${mediumDate(p.nextPeriodStart)}. That date is an estimate.`);
     const starts = periodStarts(store.periodDays).sort(ascending).slice(-6);
     if (starts.length >= 2) {
       const gaps = [];
       for (let i = 1; i < starts.length; i++) gaps.push(String(daysBetween(starts[i - 1], starts[i])));
-      lines.push(`Recent cycle lengths: ${gaps.join(", ")} days`);
+      lines.push(`Recent cycle lengths: ${gaps.join(", ")} days.`);
     }
   } else {
-    lines.push("Not enough period days logged yet for cycle statistics.");
+    lines.push("There isn't enough logged yet for cycle statistics. A month or two of notes will fill this in.");
   }
 
   const notes = flags(store, today);
   lines.push("");
+  lines.push("FOR YOUR VISIT");
   if (notes.length === 0) {
-    lines.push("NOTES: nothing unusual in the recent data.");
+    lines.push("Nothing out of the ordinary in the recent notes. Things look steady.");
   } else {
-    lines.push("WORTH MENTIONING:");
     for (const n of notes) lines.push(`• ${n}`);
   }
   lines.push("");
-  lines.push("From my cycle tracker. Estimates, not medical advice.");
+  lines.push("Prepared from the daily logs in this cycle tracker. These are estimates to talk over with a clinician, not a diagnosis.");
   return lines.join("\n");
 }
 

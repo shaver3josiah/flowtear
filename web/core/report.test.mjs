@@ -3,7 +3,7 @@
 // order, the quoted moods/symptoms/note fields, "" escaping, %.2f °F, and the
 // dateKey sort. A broken port fails loudly here.
 import assert from "node:assert";
-import { csv, CSV_HEADER, CSV_FILENAME } from "./report.js";
+import { csv, text, CSV_HEADER, CSV_FILENAME } from "./report.js";
 
 const store = {
   logsSnapshot: [
@@ -30,5 +30,13 @@ assert.deepEqual(csv(store).split("\n"), [
 assert.equal(CSV_HEADER, "date,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note");
 assert.equal(CSV_FILENAME, "uncorked-cycle-data.csv");
 assert.equal(csv({ logsSnapshot: [] }), CSV_HEADER); // header-only, never empty
+
+// The shared report — nurse voice, and zero em-dashes (v0.1.7 swept them out of
+// the copy, so one creeping back in is a regression).
+const empty = { logsSnapshot: [], periodDays: [], prediction: () => ({ hasHistory: false }) };
+const summary = text(empty, new Date(2026, 5, 2));
+assert.equal(summary.split("\n")[0], "CYCLE SUMMARY, prepared Jun 2, 2026");
+assert.ok(summary.includes("THE NUMBERS") && summary.includes("FOR YOUR VISIT"));
+assert.ok(!summary.includes("—"), "the report copy must carry no em-dashes");
 
 console.log("report.test.mjs ok");

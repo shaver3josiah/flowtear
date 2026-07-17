@@ -52,23 +52,50 @@ export default function StretchSession({ ctx }) {
   const [remaining, setRemaining] = useState(() => moves[0] ? moves[0].seconds : 0);
   const [paused, setPaused] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [earned, setEarned] = useState(0);      // petals collected this session
+  const [cheer, setCheer] = useState(null);     // Posey's between-move encouragement
 
   const move = moves[Math.min(index, moves.length - 1)];
   const progress = move && move.seconds > 0 ? 1 - remaining / move.seconds : 1;
 
+  // A different whisper each transition; the midpoint gets its own. `at` is the
+  // move she just landed on (state hasn't repainted yet), matching Swift's
+  // sayCheer() being called after index advances.
+  const sayCheer = (at) => {
+    const midpoint = Math.floor(moves.length / 2);
+    if (at === midpoint && moves.length >= 3) { setCheer("Halfway there. You're doing lovely."); return; }
+    const lines = ["Beautiful. Next one, petal.",
+      "That's it. Shoulders soft.",
+      "Gorgeous work. Keep breathing.",
+      "One more bloom in the garden."];
+    setCheer(lines[at % lines.length]);
+  };
+
+  // Gone again in a couple of seconds (Swift's .task(id: line) sleep). Re-arms
+  // per line, so a new cheer cancels the old timer instead of racing it.
+  useEffect(() => {
+    if (!cheer) return undefined;
+    const t = setTimeout(() => setCheer(null), 2400);
+    return () => clearTimeout(t);
+  }, [cheer]);
+
   // The move she just finished counts — check it off (never uncheck), award its
   // points, and pay the first-ever-guided bonus for this pose. Then advance or
-  // finish the day.
+  // finish the day. Every petal it pays lands in `earned`, so the header can
+  // count them up in front of her.
   const advance = () => {
     const doneBefore = store.stretchMovesDone(logDate);
+    let gained = 0;
     if (!doneBefore.includes(index)) {
       store.toggleStretchMove(index, logDate, moves.length);
-      awardPose(store.key(logDate), doneBefore.length, moves.length, multiplier);
+      gained += awardPose(store.key(logDate), doneBefore.length, moves.length, multiplier);
     }
-    rewards.awardGuidedFirstTime(move.name, multiplier);
+    gained += rewards.awardGuidedFirstTime(move.name, multiplier);
+    if (gained) setEarned((n) => n + gained);
     if (index + 1 < moves.length) {
       setIndex(index + 1);
       setRemaining(moves[index + 1].seconds);
+      sayCheer(index + 1);
     } else {
       store.setStretchDone(true, logDate);
       rewards.playCelebrationIfOwned();
@@ -93,12 +120,24 @@ export default function StretchSession({ ctx }) {
 
   if (finished) {
     const { PetalRain } = ui;
+    // Her run of stretch days, worn like a little medal. The store owns the
+    // streak definition, so this card and the Stretch screen always agree.
+    const streak = store.stretchStreak(today);
     return html`<div style=${{ position: "relative", overflow: "hidden", padding: "48px 24px calc(28px + env(safe-area-inset-bottom))", textAlign: "center" }}>
       ${PetalRain && html`<${PetalRain} count=${18} />`}
-      <div style=${{ position: "relative" }}>
-        <div style=${{ color: "var(--good)", display: "flex", justifyContent: "center", marginBottom: 8 }}><${Icon} name="check" size=${56} /></div>
+      <div style=${{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <div style=${{ color: "var(--good)", display: "flex", justifyContent: "center" }}><${Icon} name="check" size=${56} /></div>
         <div style=${{ fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 700, color: "var(--deep)" }}>${finishTitle}</div>
-        <div style=${{ fontSize: "var(--text-base)", color: "var(--muted)", margin: "10px 0 20px", lineHeight: 1.5 }}>That's ${day.minutes} gentle minutes toward an easier period.</div>
+        ${earned > 0 && html`<div style=${{ display: "grid", gap: 2 }}>
+          <div style=${{ fontFamily: "var(--font-display)", fontSize: "var(--text-3xl)", fontWeight: 600, color: "var(--flower-center)", lineHeight: 1.1 }}>+${earned}</div>
+          <div style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.12em", color: "var(--muted)" }}>PETAL POINTS EARNED</div>
+        </div>`}
+        ${streak >= 2 && html`<div style=${{ display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px",
+          borderRadius: 999, background: "var(--surface)", border: "1px solid var(--flower-center)" }}>
+          <${Icon} name="zap" size=${13} color="var(--flower-center)" />
+          <span style=${{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--deep)" }}>That makes a ${streak} day streak</span>
+        </div>`}
+        <div style=${{ fontSize: "var(--text-base)", color: "var(--muted)", margin: "0 0 6px", lineHeight: 1.5 }}>That's ${day.minutes} gentle minutes toward an easier period.</div>
         <${Button} variant="primary" onClick=${nav.close}>Done</${Button}>
       </div>
     </div>`;
@@ -109,13 +148,20 @@ export default function StretchSession({ ctx }) {
 
   return html`<div style=${{ display: "flex", flexDirection: "column", gap: 20, padding: "12px 20px calc(20px + env(safe-area-inset-bottom))", minHeight: "70dvh" }}>
     <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style=${{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style=${{ display: "flex", alignItems: "center", gap: 10 }}>
         <${IconButton} variant="soft" label="End session" onClick=${nav.close}><${Icon} name="x" size=${20} /></${IconButton}>
+        <span style=${{ flex: 1 }} />
+        ${earned > 0 && html`<span aria-label=${`${earned} petals earned so far`}
+          style=${{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <${Icon} name="sparkles" size=${11} color="var(--flower-center)" />
+          <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--deep)", fontVariantNumeric: "tabular-nums" }}>+${earned}</span>
+        </span>`}
         <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--muted)" }}>Move ${index + 1} of ${moves.length}</span>
       </div>
       <div style=${{ display: "flex", gap: 4 }} aria-hidden="true">
         ${moves.map((m, i) => html`<div key=${i} style=${{ flex: 1, height: 4, borderRadius: 999, background: i < index ? "var(--phase-luteal)" : i === index ? "var(--primary-strong)" : "var(--surface-soft)" }} />`)}
       </div>
+      ${cheer && html`<div role="status" style=${{ fontSize: "var(--text-xs)", fontWeight: 600, color: "var(--primary-strong)" }}>${cheer}</div>`}
     </div>
 
     <div style=${{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, flex: 1, justifyContent: "center", paddingTop: 8 }}>

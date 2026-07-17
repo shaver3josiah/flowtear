@@ -345,8 +345,8 @@ export default function ThemeEditor({ ctx }) {
           onChange=${(next) => { setPeriodOn(next); remind.setPeriodOn(next); replan(next); }} />`,
       )}
       ${note(remindersAvailable
-        ? "Reminders are scheduled on this phone only — nothing leaves it."
-        : "Reminders need the app on your phone — this browser can't schedule them.")}
+        ? "Reminders are scheduled on this phone only. Nothing leaves it."
+        : "Reminders need the app on your phone: this browser can't schedule them.")}
     </div>
   </${Card}>`);
 
@@ -356,7 +356,7 @@ export default function ThemeEditor({ ctx }) {
       "Lock with biometrics",
       lockAvailable === false
         ? "This phone has no fingerprint, face unlock or screen lock set"
-        : "Your garden opens only for you — your fingerprint, face or screen lock",
+        : "Your garden opens only for you: your fingerprint, face or screen lock",
       html`<${Switch} checked=${lockOn} disabled=${lockAvailable !== true}
         label="Lock the app with biometrics"
         onChange=${async (next) => {
@@ -377,7 +377,7 @@ export default function ThemeEditor({ ctx }) {
       </div>
 
       <${Button} variant="soft" block iconLeft=${html`<${Icon} name="gift" size=${16} />`}
-        onClick=${() => nav.open("garden")}>Garden shop — spend your petal points<//>
+        onClick=${() => nav.open("garden")}>Garden shop: spend your petal points<//>
 
       ${section("Palette", html`<div style=${{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         ${PRESETS.map(presetChip)}
@@ -397,7 +397,7 @@ export default function ThemeEditor({ ctx }) {
           <div style=${{ height: 1, background: "var(--line)" }} />
           ${toggleRow(
             "Quiet mode",
-            "Celebration sounds stay silent — the sparkle stays",
+            "Celebration sounds stay silent. The sparkle stays",
             html`<${Switch} checked=${quiet} label="Quiet mode, silence celebration sounds"
               onChange=${(next) => { setQuiet(next); write(QUIET_KEY, next ? "true" : "false"); }} />`,
           )}
@@ -407,7 +407,7 @@ export default function ThemeEditor({ ctx }) {
       ${remindersSection()}
       ${privacySection()}
 
-      ${note("Period, fertile and phase colors never change — they mean something.")}
+      ${note("Period, fertile and phase colors never change. They mean something.")}
     </div>
   `;
 }

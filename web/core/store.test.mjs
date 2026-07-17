@@ -13,7 +13,7 @@ globalThis.localStorage = {
 };
 
 const { CycleStore, STRETCH_TIERS } = await import("./store.js");
-const { keyFromDate, dateFromKey } = await import("./dates.js");
+const { keyFromDate, dateFromKey, addDays } = await import("./dates.js");
 const { emptyLog } = await import("./models.js");
 
 const fresh = () => { mem.clear(); return new CycleStore(); };
@@ -91,5 +91,35 @@ assert.equal(dst.restore(blob), true, "valid restore succeeds");
 assert.equal(dst.logFor(dateFromKey("2026-05-01")).note, "héllo — utf8 ✓", "logs survive round-trip");
 assert.equal(dst.settings.lockCycleLength, true, "settings survive round-trip");
 assert.equal(mem.get("flowtear.sample.seeded"), "false", "sample banner retired on restore");
+
+// ---- symptom history + streak (v1.4.0) ----
+const h = fresh();
+h.upsert({ ...emptyLog("2026-05-02"), symptoms: ["cramps"] });
+h.upsert({ ...emptyLog("2026-05-20"), symptoms: ["cramps", "bloating"] });
+h.upsert({ ...emptyLog("2026-06-05"), symptoms: ["cramps"] });
+assert.deepEqual(h.daysFelt("cramps").map(keyFromDate), ["2026-05-02", "2026-05-20", "2026-06-05"], "daysFelt sorted oldest->newest");
+assert.deepEqual(h.daysFelt("bloating").map(keyFromDate), ["2026-05-20"]);
+assert.equal(h.daysFelt("acne").length, 0, "never-felt symptom is empty");
+// lastFelt is strictly BEFORE the cutoff (never the day itself).
+assert.equal(keyFromDate(h.lastFelt("cramps", dateFromKey("2026-06-05"))), "2026-05-20", "lastFelt excludes the day itself");
+assert.equal(h.lastFelt("cramps", dateFromKey("2026-05-02")), null, "nothing before the first time");
+
+// phaseSnapshot judges a past date only from the history that existed by then.
+const snap = fresh();
+for (const k of ["2026-04-01", "2026-04-02", "2026-04-03", "2026-04-29", "2026-04-30", "2026-05-01"]) {
+  snap.upsert({ ...emptyLog(k), flow: "medium" });
+}
+assert.equal(snap.phaseSnapshot(dateFromKey("2026-04-02")).phase, "menstrual", "day 2 of a period reads menstrual");
+assert.equal(snap.phaseSnapshot(dateFromKey("2026-04-02")).day, 2, "cycle day at that date");
+
+// stretchStreak: an unfinished today never breaks a run she's still on.
+const st = fresh();
+const kd = (n) => keyFromDate(addDays(new Date(), n));
+st.upsert({ ...emptyLog(kd(-1)), stretchDone: true });
+st.upsert({ ...emptyLog(kd(-2)), stretchDone: true });
+assert.equal(st.stretchStreak(new Date()), 2, "yesterday+2 days ago count while today is unfinished");
+st.upsert({ ...emptyLog(kd(0)), stretchDone: true });
+assert.equal(st.stretchStreak(new Date()), 3, "finishing today extends the run");
+assert.equal(fresh().stretchStreak(new Date()), 0, "no stretches, no streak");
 
 console.log("store.test.mjs: all assertions passed");

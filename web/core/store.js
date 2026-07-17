@@ -4,7 +4,7 @@
 // Predictions are derived on demand from logs (see prediction()).
 
 import { emptyLog, isEmptyLog, FLOW_WEIGHT, DEFAULT_SETTINGS } from "./models.js";
-import { keyFromDate, dateFromKey, startOfDay } from "./dates.js";
+import { keyFromDate, dateFromKey, startOfDay, addDays } from "./dates.js";
 import { predict } from "./engine.js";
 import { buildSampleLogs } from "./sampleData.js";
 
@@ -164,6 +164,43 @@ export class CycleStore {
         return;
       } catch { /* try the backup next */ }
     }
+  }
+
+  // ---- symptom history (feeds the "last time you felt this" echo) ----
+
+  /// The phase and cycle day AT a past date, judged only from the history that
+  /// existed by then. (CycleStore.phaseSnapshot)
+  phaseSnapshot(date) {
+    const upToThen = this.periodDays.filter((d) => d <= startOfDay(date));
+    const p = predict(upToThen, date, this.settings);
+    return { phase: p.phase, day: p.cycleDay };
+  }
+
+  /// The most recent day BEFORE `before` when she logged this symptom.
+  lastFelt(symptom, before) {
+    const cutoff = this.key(before);
+    const days = this.logsSnapshot
+      .filter((l) => (l.symptoms || []).includes(symptom) && l.dateKey < cutoff)
+      .map((l) => dateFromKey(l.dateKey));
+    return days.length ? new Date(Math.max(...days.map((d) => d.getTime()))) : null;
+  }
+
+  /// Every day she's logged this symptom, oldest to newest.
+  daysFelt(symptom) {
+    return this.logsSnapshot
+      .filter((l) => (l.symptoms || []).includes(symptom))
+      .map((l) => dateFromKey(l.dateKey))
+      .sort((a, b) => a - b);
+  }
+
+  /// Consecutive stretch days ending today (or yesterday, so an unfinished
+  /// today never breaks a run she's still on).
+  stretchStreak(today = new Date()) {
+    let d = startOfDay(today);
+    if (!this.stretchDone(d)) d = addDays(d, -1);
+    let streak = 0;
+    while (this.stretchDone(d)) { streak += 1; d = addDays(d, -1); }
+    return streak;
   }
 
   // ---- backup & restore (her history + settings, portable) ----
