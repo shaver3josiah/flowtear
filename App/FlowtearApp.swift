@@ -27,6 +27,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab: FFTab = .today
     @State private var logDate = Date()
+    @State private var symptomFocus: SymptomFocus? = nil
 
     var body: some View {
         ZStack {
@@ -37,11 +38,15 @@ struct RootView: View {
                     case .today:    TodayView(onLog: openLog, onOpenStretch: { switchTo(.stretch) },
                                               onOpenInsights: { switchTo(.insights) },
                                               onOpenCalendar: { switchTo(.calendar) })
-                    case .calendar: CalendarView(onLog: openLog)
+                    case .calendar: CalendarView(onLog: openLog, focus: $symptomFocus)
                     case .log:      LogView(date: $logDate, onLogged: { switchTo(.today) },
                                             onOpenStretch: { switchTo(.stretch) },
                                             onOpenCalendar: { switchTo(.calendar) },
-                                            onOpenInsights: { switchTo(.insights) })
+                                            onOpenInsights: { switchTo(.insights) },
+                                            onShowSymptomOnCalendar: { symptom, day in
+                                                symptomFocus = SymptomFocus(symptom: symptom, anchor: day)
+                                                switchTo(.calendar)
+                                            })
                     case .stretch:  StretchCoachView()
                     case .insights: InsightsView()
                     }

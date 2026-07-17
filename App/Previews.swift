@@ -25,7 +25,7 @@ extension View {
 // MARK: - Screens
 
 #Preview("Today") { TodayView(onLog: { _ in }).previewEnv() }
-#Preview("Calendar") { CalendarView(onLog: { _ in }).previewEnv() }
+#Preview("Calendar") { CalendarView(onLog: { _ in }, focus: .constant(nil)).previewEnv() }
 #Preview("Log") { LogPreviewHost().previewEnv() }
 #Preview("Insights") { InsightsView().previewEnv() }
 #Preview("Stretch coach") { StretchCoachView().previewEnv() }
@@ -56,7 +56,7 @@ extension View {
 }
 
 #Preview("Coach flower") {
-    CoachFlower(message: "Ready when you are — even five gentle minutes counts.")
+    CoachFlower(message: "Ready when you are. Even five gentle minutes counts.")
         .previewEnv().padding()
 }
 

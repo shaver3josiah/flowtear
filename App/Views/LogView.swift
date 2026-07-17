@@ -15,10 +15,14 @@ struct LogView: View {
     var onOpenStretch: () -> Void = {}
     var onOpenCalendar: () -> Void = {}
     var onOpenInsights: () -> Void = {}
+    /// Jump to the calendar focused on one symptom's history (wired by RootView).
+    var onShowSymptomOnCalendar: (Symptom, Date) -> Void = { _, _ in }
 
     @State private var draft = DayLog(dateKey: "")
     @State private var loadedKey = ""
     @State private var showAllSet = false
+    @State private var showShop = false
+    @State private var symptomEcho: SymptomEcho? = nil
     @FocusState private var noteFocused: Bool
 
     private let cal = Calendar.current
@@ -84,7 +88,16 @@ struct LogView: View {
                                 FlowLayout(spacing: FFSpace.inline) {
                                     ForEach(group.1) { symptom in
                                         SymptomChip(symptom, selected: draft.symptoms.contains(symptom)) {
+                                            let turningOn = !draft.symptoms.contains(symptom)
                                             draft.symptoms.formSymmetricDifference([symptom])
+                                            // Selecting a symptom she's felt before opens
+                                            // its little history: when, that whole day,
+                                            // and where in her cycle she was.
+                                            if turningOn, let last = store.lastFelt(symptom, before: date) {
+                                                symptomEcho = SymptomEcho(symptom: symptom,
+                                                                          lastDate: last,
+                                                                          loggingDate: date)
+                                            }
                                         }
                                     }
                                 }
@@ -127,6 +140,13 @@ struct LogView: View {
         }
         .onDisappear { commitIfDirty() }
         .overlay { if showAllSet { allSetOverlay } }
+        .sheet(isPresented: $showShop) { GardenShopView() }
+        .sheet(item: $symptomEcho) { echo in
+            SymptomEchoSheet(echo: echo, onShowCalendar: { sym, day in
+                commitIfDirty()   // her taps are saved before the tab changes
+                onShowSymptomOnCalendar(sym, day)
+            })
+        }
     }
 
     // After the slide: a proud moment, then three clear places to go next.
@@ -140,10 +160,10 @@ struct LogView: View {
                 FFButton("Grow flowers in Stretch", style: .primary, icon: "figure.cooldown") {
                     showAllSet = false; onOpenStretch()
                 }
-                FFButton("Calendar — your month at a glance", style: .soft, size: .sm, icon: "calendar") {
+                FFButton("Calendar: your month at a glance", style: .soft, size: .sm, icon: "calendar") {
                     showAllSet = false; onOpenCalendar()
                 }
-                FFButton("Insights — your patterns over time", style: .soft, size: .sm, icon: "chart.bar.fill") {
+                FFButton("Insights: your patterns over time", style: .soft, size: .sm, icon: "chart.bar.fill") {
                     showAllSet = false; onOpenInsights()
                 }
                 FFButton("Back to Today", style: .ghost, size: .sm) {
@@ -159,10 +179,8 @@ struct LogView: View {
     // MARK: header — serif date with day-stepping
 
     private var header: some View {
-        HStack(spacing: FFSpace.s2) {
-            FFIconButton("chevron.left") { step(-1) }
-                .accessibilityLabel("Previous day")
-            Spacer(minLength: 0)
+        ZStack {
+            // The date stays truly centered; the controls ride the edges.
             VStack(spacing: 3) {
                 Text(isToday ? "Today" : date.formatted(.dateTime.weekday(.wide)))
                     .font(ffDisplay(FFType.xl, weight: .bold))
@@ -173,11 +191,18 @@ struct LogView: View {
                     .datePickerStyle(.compact)
                     .tint(theme.color(.primaryStrong))
             }
-            Spacer(minLength: 0)
-            FFIconButton("chevron.right") { step(1) }
-                .accessibilityLabel("Next day")
-                .opacity(isToday ? 0.35 : 1)
-                .disabled(isToday)
+            HStack(spacing: FFSpace.s2) {
+                FFIconButton("chevron.left") { step(-1) }
+                    .accessibilityLabel("Previous day")
+                Spacer(minLength: 0)
+                FFIconButton("bag") { showShop = true }
+                    .glitterHint("logShop")
+                    .accessibilityLabel("Garden shop")
+                FFIconButton("chevron.right") { step(1) }
+                    .accessibilityLabel("Next day")
+                    .opacity(isToday ? 0.35 : 1)
+                    .disabled(isToday)
+            }
         }
         .animation(reduceMotion ? nil : FFMotion.signature, value: date)
     }

@@ -167,7 +167,7 @@ struct RingSticker: View {
         if showTease {
             HStack(spacing: 8) {
                 FlowerMark(size: 22)
-                Text("All that spinning, petal — imagine the petals if we stretched.")
+                Text("All that spinning, petal. Imagine the petals if we stretched.")
                     .font(ffBody(FFType.xs, weight: .medium))
                     .foregroundStyle(theme.color(.text))
             }
@@ -182,7 +182,7 @@ struct RingSticker: View {
 
     @ViewBuilder private var bonusBadge: some View {
         if showBonus {
-            Label("+5 — right on your period day", systemImage: "sparkle")
+            Label("+5, right on your period day", systemImage: "sparkle")
                 .font(ffBody(FFType.xs, weight: .bold))
                 .foregroundStyle(theme.color(.deep))
                 .padding(.horizontal, 12).padding(.vertical, 7)

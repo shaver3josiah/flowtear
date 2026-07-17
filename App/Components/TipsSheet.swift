@@ -17,25 +17,25 @@ struct TipsSheet: View {
     private let tips: [Tip] = [
         Tip(icon: "hand.draw",
             title: "Scrub the ring",
-            text: "Drag anywhere on the cycle ring to travel day by day — tap it to read the story of that phase."),
+            text: "Drag anywhere on the cycle ring to travel day by day. Tap it to read the story of that phase."),
         Tip(icon: "arrow.triangle.2.circlepath",
             title: "Spin, fling & pluck your flower",
-            text: "Your flower sticker rides the ring like a bead. Fling it and it spins like a fidget; pull it clearly off and rest it anywhere — inside the ring or beside it. Carry it back and it beads on again."),
+            text: "Your flower sticker rides the ring like a bead. Fling it and it spins like a fidget; pull it clearly off and rest it anywhere, inside the ring or beside it. Carry it back and it beads on again."),
         Tip(icon: "sparkle",
             title: "The period-arc bonus",
-            text: "Land your flower on the colored period arc and a few bonus petals fall out — once a day, for luck."),
+            text: "Land your flower on the colored period arc and a few bonus petals fall out. Once a day, for luck."),
         Tip(icon: "hand.tap",
             title: "Tap-to-jump sliders",
-            text: "The flow and log sliders jump straight to wherever you tap — no dragging required."),
+            text: "The flow and log sliders jump straight to wherever you tap. No dragging required."),
         Tip(icon: "checkmark.circle",
             title: "The whole plan is tappable",
-            text: "In Stretch, open any day of your plan to see its moves, check them off, or run that day's guided session on the spot — even off-schedule."),
+            text: "In Stretch, open any day of your plan to see its moves, check them off, or run that day's guided session on the spot, even off-schedule."),
         Tip(icon: "link",
             title: "Chain your blooms",
             text: "In the garden shop, chain the flowers you own and they circle your Today ring together. Three or more, and Posey can wear them as a crown."),
         Tip(icon: "bag",
             title: "Petals buy the pretty things",
-            text: "Every stretch earns petal points; the garden shop turns them into flowers, palettes, sounds — even Posey. The book icon has the full rules."),
+            text: "Every stretch earns petal points; the garden shop turns them into flowers, palettes, sounds. Even Posey. The book icon has the full rules."),
         Tip(icon: "wand.and.stars",
             title: "Double-tap the bloom",
             text: "The flower in Today's corner opens a little about page with honest answers about predictions and privacy."),
@@ -52,7 +52,7 @@ struct TipsSheet: View {
                         Text("The hidden magic")
                             .font(ffDisplay(FFType.xl, weight: .bold))
                             .foregroundStyle(theme.color(.deep))
-                        Text("Everything this garden can do — including the parts that don't announce themselves.")
+                        Text("Everything this garden can do, including the parts that don't announce themselves.")
                             .font(ffBody(FFType.sm))
                             .foregroundStyle(theme.color(.muted))
                     }

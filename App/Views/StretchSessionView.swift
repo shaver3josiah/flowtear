@@ -24,6 +24,8 @@ struct StretchSessionView: View {
     @State private var paused = false
     @State private var finished = false
     @State private var transitionToken = 0  // haptic trigger
+    @State private var earned = 0           // petals collected this session
+    @State private var cheer: String? = nil // Posey's between-move encouragement
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private var move: StretchMove { day.moves[min(index, day.moves.count - 1)] }
@@ -105,6 +107,19 @@ struct StretchSessionView: View {
                 FFIconButton("xmark") { dismiss() }
                     .accessibilityLabel("End session")
                 Spacer()
+                if earned > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(theme.color(.flowerCenter))
+                        Text("+\(earned)")
+                            .font(ffNumber(FFType.sm, weight: .semibold))
+                            .foregroundStyle(theme.color(.deep))
+                            .contentTransition(.numericText())
+                    }
+                    .animation(reduceMotion ? nil : FFMotion.spring, value: earned)
+                    .accessibilityLabel("\(earned) petals earned so far")
+                }
                 Text("Move \(index + 1) of \(day.moves.count)")
                     .font(ffBody(FFType.sm, weight: .semibold))
                     .foregroundStyle(theme.color(.muted))
@@ -118,7 +133,36 @@ struct StretchSessionView: View {
                 }
             }
             .accessibilityHidden(true)
+            // Posey's between-move whisper, gone again in a couple of seconds.
+            if let line = cheer {
+                Text(line)
+                    .font(ffBody(FFType.xs, weight: .semibold))
+                    .foregroundStyle(theme.color(.primaryStrong))
+                    .transition(.opacity)
+                    .task(id: line) {
+                        try? await Task.sleep(for: .seconds(2.4))
+                        withAnimation(reduceMotion ? nil : FFMotion.fast) {
+                            if cheer == line { cheer = nil }
+                        }
+                    }
+            }
         }
+    }
+
+    /// A different whisper each transition; the midpoint gets its own.
+    private func sayCheer() {
+        let midpoint = day.moves.count / 2
+        let line: String
+        if index == midpoint && day.moves.count >= 3 {
+            line = "Halfway there. You're doing lovely."
+        } else {
+            let lines = ["Beautiful. Next one, petal.",
+                         "That's it. Shoulders soft.",
+                         "Gorgeous work. Keep breathing.",
+                         "One more bloom in the garden."]
+            line = lines[index % lines.count]
+        }
+        withAnimation(reduceMotion ? nil : FFMotion.fast) { cheer = line }
     }
 
     private var controls: some View {
@@ -149,16 +193,17 @@ struct StretchSessionView: View {
         if !store.stretchMovesDone(on: logDate).contains(index) {
             let doneBefore = store.stretchMovesDone(on: logDate).count
             store.toggleStretchMove(index, on: logDate, totalMoves: day.moves.count)
-            rewards.awardPose(dateKey: store.key(for: logDate),
-                              alreadyDone: doneBefore, total: day.moves.count,
-                              multiplier: multiplier)
+            earned += rewards.awardPose(dateKey: store.key(for: logDate),
+                                        alreadyDone: doneBefore, total: day.moves.count,
+                                        multiplier: multiplier)
         }
-        rewards.awardGuidedFirstTime(moveName: move.name, multiplier: multiplier)
+        earned += rewards.awardGuidedFirstTime(moveName: move.name, multiplier: multiplier)
         if index + 1 < day.moves.count {
             withAnimation(reduceMotion ? nil : FFMotion.signature) {
                 index += 1
                 remaining = day.moves[index].seconds
             }
+            sayCheer()
         } else {
             store.setStretchDone(true, on: logDate)
             rewards.playCelebrationIfOwned()
@@ -178,7 +223,8 @@ struct StretchSessionView: View {
     // MARK: finished
 
     private var finishedView: some View {
-        ZStack {
+        let streak = store.stretchStreak()
+        return ZStack {
             PetalRain(count: 18)
             VStack(spacing: FFSpace.s4) {
                 Image(systemName: "checkmark.circle.fill")
@@ -187,6 +233,30 @@ struct StretchSessionView: View {
                 Text(finishTitle)
                     .font(ffDisplay(FFType.xl2, weight: .bold))
                     .foregroundStyle(theme.color(.deep))
+                if earned > 0 {
+                    VStack(spacing: 2) {
+                        Text("+\(earned)")
+                            .font(ffNumber(FFType.xl3, weight: .semibold))
+                            .foregroundStyle(theme.color(.flowerCenter))
+                        Text("PETAL POINTS EARNED")
+                            .font(ffBody(FFType.xs2, weight: .bold)).tracking(1.2)
+                            .foregroundStyle(theme.color(.muted))
+                    }
+                    .overlay(SparkleBurst(trigger: 1, count: 16))
+                }
+                if streak >= 2 {
+                    HStack(spacing: 5) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(theme.color(.flowerCenter))
+                        Text("That makes a \(streak) day streak")
+                            .font(ffBody(FFType.sm, weight: .bold))
+                            .foregroundStyle(theme.color(.deep))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(theme.color(.surface), in: Capsule())
+                    .overlay(Capsule().strokeBorder(theme.color(.flowerCenter).opacity(0.6), lineWidth: 1))
+                }
                 Text("That's \(day.minutes) gentle minutes toward an easier period.")
                     .font(ffBody(FFType.base))
                     .foregroundStyle(theme.color(.muted))

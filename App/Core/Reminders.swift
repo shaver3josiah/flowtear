@@ -49,7 +49,7 @@ enum FFReminders {
             comps.minute = minutes % 60
             let content = UNMutableNotificationContent()
             content.title = "A few gentle minutes, petal?"
-            content.body = "Your stretches are ready — every pose grows the garden."
+            content.body = "Your stretches are ready. Every pose grows the garden."
             content.sound = .default
             center.add(UNNotificationRequest(
                 identifier: stretchID, content: content,

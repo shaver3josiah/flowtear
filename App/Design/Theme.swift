@@ -158,7 +158,7 @@ final class Theme {
         "phaseOvulationSoft": "#FBE4C6", "phaseLutealSoft": "#F3E1F1",
         // flow-intensity ramp
         "flowSpotting": "#F7C6D9", "flowLight": "#F492B7", "flowMedium": "#E85C90",
-        "flowHeavy": "#BE2C60", "flowNone": "#D9C4CE",
+        "flowHeavy": "#BE2C60", "flowSuperHeavy": "#96164A", "flowNone": "#D9C4CE",
         // ── back-compat aliases used by existing screens (map onto the ramps) ──
         "flow": "#E14B7A",          // period fill = phaseMenstrual
         "flowSoft": "#FBDCE6",      // = phaseMenstrualSoft
@@ -217,6 +217,9 @@ final class Theme {
                 "phaseMenstrualSoft": "#3E2433", "phaseFollicularSoft": "#372230",
                 "phaseFertileSoft": "#3C2F20", "phaseOvulationSoft": "#3C2D1C", "phaseLutealSoft": "#32263D",
                 "flowNone": "#5E4D56",
+                // Deepest flow needs to be the MOST visible on dark, not the
+                // least: a hot crimson that clears 3:1 on the dark washes.
+                "flowSuperHeavy": "#FF4D6D",
                 // aliases that point at soft washes
                 "flowSoft": "#3E2433",
             ]
@@ -234,6 +237,8 @@ final class Theme {
                 "phaseMenstrualSoft": "#391F2E", "phaseFollicularSoft": "#32202C",
                 "phaseFertileSoft": "#372B1E", "phaseOvulationSoft": "#362919", "phaseLutealSoft": "#2B2338",
                 "flowNone": "#555064",
+                // Deepest flow stays the most visible on near-black too.
+                "flowSuperHeavy": "#FF4D6D",
                 // aliases that point at soft washes
                 "flowSoft": "#391F2E",
             ]
@@ -275,7 +280,7 @@ enum Tok: String {
     case text, muted, line, flowerCenter, good, bloomInk, onPrimary
     case phaseMenstrual, phaseFollicular, phaseFertile, phaseOvulation, phaseLuteal
     case phaseMenstrualSoft, phaseFollicularSoft, phaseFertileSoft, phaseOvulationSoft, phaseLutealSoft
-    case flowSpotting, flowLight, flowMedium, flowHeavy, flowNone
+    case flowSpotting, flowLight, flowMedium, flowHeavy, flowSuperHeavy, flowNone
 }
 
 // MARK: - Spacing & radius (spacing.css)

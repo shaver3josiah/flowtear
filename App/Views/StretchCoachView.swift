@@ -150,7 +150,7 @@ struct StretchCoachView: View {
     }
 
     private var penaltyNote: some View {
-        Text("\(penaltyCharged * 5) petals drifted off for \(penaltyCharged == 1 ? "a missed day" : "missed days") — today's a fresh bloom.")
+        Text("\(penaltyCharged * 5) petals drifted off for \(penaltyCharged == 1 ? "a missed day" : "missed days"). Today's a fresh bloom.")
             .font(ffBody(FFType.xs))
             .foregroundStyle(theme.color(.muted))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,10 +249,13 @@ struct StretchCoachView: View {
         return (20 * m + 5) * t.multiplier
     }
 
-    // Points pill + the shop, with the RULES in the top-right corner.
+    // Points pill + streak + the shop, with the RULES in the top-right corner.
     private var gardenHeader: some View {
         HStack(spacing: FFSpace.s2) {
             PointsPill(action: { showShop = true })
+            if store.stretchStreak() >= 2 {
+                streakChip(store.stretchStreak())
+            }
             Spacer(minLength: 0)
             FFIconButton("bag") { showShop = true }
                 .glitterHint("gardenShop")
@@ -263,6 +266,23 @@ struct StretchCoachView: View {
                 .glitterHint("rules")
                 .accessibilityLabel("How points and unlocks work")
         }
+    }
+
+    /// Her run of stretch days, worn like a little medal.
+    private func streakChip(_ days: Int) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(theme.color(.flowerCenter))
+            Text("\(days) days")
+                .font(ffNumber(FFType.sm, weight: .semibold))
+                .foregroundStyle(theme.color(.deep))
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .background(theme.color(.surface), in: Capsule())
+        .overlay(Capsule().strokeBorder(theme.color(.flowerCenter).opacity(0.6), lineWidth: 1))
+        .accessibilityLabel("\(days) day stretch streak")
     }
 
     private var sessionFinishTitle: String {
@@ -278,25 +298,25 @@ struct StretchCoachView: View {
         let dayNumber = Calendar.current.component(.day, from: today)
         let done = store.stretchMovesDone(on: today)
         if store.stretchDone(on: today) {
-            return ["All done — I'm so proud I could wilt. Rest those roots.",
+            return ["All done. I'm so proud I could wilt. Rest those roots.",
                     "Beautiful work today, petal. Even the sun took notes.",
                     "Stretches complete. Somewhere, a garden applauds."][dayNumber % 3]
         }
         if !done.isEmpty {
-            return ["You've started — that's the hard part. Keep going, petal.",
+            return ["You've started, and that's the hard part. Keep going, petal.",
                     "Look at you go. A couple more and we're done.",
                     "Halfway feelings are the best feelings, I always say."][dayNumber % 3]
         }
         if let s = todaySession {
-            return ["Ready when you are — even five gentle minutes counts.",
+            return ["Ready when you are. Even five gentle minutes counts.",
                     "Just \(s.minutes) easy minutes today. I'll be right here on my stem.",
                     "No rush, petal. We bloom on our own schedule."][dayNumber % 3]
         }
         if p.phase == .menstrual {
             return ["Rest week, petal. A gentle knees-to-chest still helps if cramps bite.",
-                    "You made it — be soft with yourself this week."][dayNumber % 2]
+                    "You made it. Be soft with yourself this week."][dayNumber % 2]
         }
-        return ["No schedule today — but stretching is always in season. Care for a quick trio?",
+        return ["No schedule today, but stretching is always in season. Care for a quick trio?",
                 "Off-plan days are my favorite: no rules, just a little reach and bend.",
                 "I'll wave when your plan starts. Meanwhile, the anytime session is right below."][dayNumber % 3]
     }
@@ -324,6 +344,22 @@ struct StretchCoachView: View {
                                 .foregroundStyle(theme.color(.deep))
                         }
                         Spacer()
+                        // A live little ring: poses done today out of the session.
+                        ZStack {
+                            Circle().stroke(theme.color(.surfaceSoft), lineWidth: 4)
+                            Circle()
+                                .trim(from: 0, to: s.moves.isEmpty ? 0
+                                      : Double(movesDone.count) / Double(s.moves.count))
+                                .stroke(theme.color(.phaseLuteal),
+                                        style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                            Text("\(movesDone.count)/\(s.moves.count)")
+                                .font(ffNumber(FFType.xs2, weight: .semibold))
+                                .foregroundStyle(theme.color(.deep))
+                        }
+                        .frame(width: 34, height: 34)
+                        .animation(FFMotion.spring, value: movesDone.count)
+                        .accessibilityLabel("\(movesDone.count) of \(s.moves.count) poses done")
                         Text("\(s.minutes) min")
                             .font(ffBody(FFType.sm, weight: .semibold))
                             .foregroundStyle(theme.color(.phaseLuteal))
@@ -362,7 +398,7 @@ struct StretchCoachView: View {
                             Image(systemName: dayDone ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 19, weight: .medium))
                                 .foregroundStyle(theme.color(dayDone ? .good : .muted))
-                            Text(dayDone ? "Today's stretching — done" : "Mark the whole day done")
+                            Text(dayDone ? "Today's stretching: done" : "Mark the whole day done")
                                 .font(ffBody(FFType.sm, weight: .semibold))
                                 .foregroundStyle(theme.color(.text))
                             Spacer(minLength: 0)
@@ -409,6 +445,7 @@ struct StretchCoachView: View {
                 Image(systemName: checked ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(theme.color(checked ? .good : .line))
+                    .symbolEffect(.bounce, value: checked)
                     .padding(.top, 1)
                 PoseFigure(move: m, size: 24, color: theme.color(.phaseLuteal))
                     .padding(.top, 2)
@@ -486,7 +523,7 @@ struct StretchCoachView: View {
 
     private var outOfWindowBody: String {
         if p.phase == .menstrual {
-            return "Gentle knees-to-chest and child's pose can still ease cramps today. The plan picks back up before your next period — the schedule is below."
+            return "Gentle knees-to-chest and child's pose can still ease cramps today. The plan picks back up before your next period. The schedule is below."
         }
         if daysUntil == nil {
             return "Log a couple of cycles and the plan will time itself to the days before your period."
@@ -504,7 +541,7 @@ struct StretchCoachView: View {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 Text(tier == .starter ? "The 3 days" : "The 14 days")
                     .font(ffBody(FFType.md, weight: .semibold)).foregroundStyle(theme.color(.deep))
-                Text("Tap a day for its moves, run any session guided, and check off any day — even ahead of schedule.")
+                Text("Tap a day for its moves, run any session guided, and check off any day, even ahead of schedule.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 VStack(spacing: 0) {

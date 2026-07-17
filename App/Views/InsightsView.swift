@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Charts
 import UniformTypeIdentifiers
 
 // Insights — the "what your cycle is telling you" screen. A StatTile summary
@@ -41,6 +42,8 @@ struct InsightsView: View {
                     emptyCard
                 }
 
+                flowChartCard
+
                 tuningCard
 
                 if store.hasAnyLogs {
@@ -63,7 +66,7 @@ struct InsightsView: View {
             if let data = try? Data(contentsOf: url) {
                 pendingRestore = data
             } else {
-                restoreNote = "Couldn't read that file — try picking it again."
+                restoreNote = "Couldn't read that file. Try picking it again."
             }
         }
         .confirmationDialog(
@@ -75,8 +78,8 @@ struct InsightsView: View {
             Button("Replace & restore", role: .destructive) {
                 guard let data = pendingRestore else { return }
                 let ok = FFBackup.restore(data: data, store: store, rewards: rewards)
-                restoreNote = ok ? "Restored — everything's home again."
-                                 : "That didn't look like a complete backup from this app — nothing was changed."
+                restoreNote = ok ? "Restored. Everything's home again."
+                                 : "That didn't look like a complete backup from this app, so nothing was changed."
                 pendingRestore = nil
                 if let note = restoreNote {
                     UIAccessibility.post(notification: .announcement, argument: note)
@@ -110,7 +113,7 @@ struct InsightsView: View {
         let flags = CycleReport.flags(store: store)
         return FFCard(variant: flags.isEmpty ? .plain : .accent) {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
-                Label(flags.isEmpty ? "Cycle report — all quiet" : "Cycle report — \(flags.count) thing\(flags.count == 1 ? "" : "s") worth noting",
+                Label(flags.isEmpty ? "Cycle report: all quiet" : "Cycle report: \(flags.count) thing\(flags.count == 1 ? "" : "s") worth noting",
                       systemImage: flags.isEmpty ? "doc.text" : "exclamationmark.bubble")
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
@@ -140,7 +143,7 @@ struct InsightsView: View {
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
                     .accessibilityAddTraits(.isHeader)
-                Text("Everything from the calendar — flow, discharge, temps, moods, symptoms, stretches, notes — as a CSV file.")
+                Text("Everything from the calendar (flow, discharge, temps, moods, symptoms, stretches, notes) as a CSV file.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 if let url = csvURL {
@@ -157,6 +160,195 @@ struct InsightsView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: monthly flow chart
+
+    private struct FlowChartPoint: Identifiable {
+        let date: Date
+        let weight: Int
+        var id: Date { date }
+    }
+
+    /// The last 30 days of logged flow (0 on quiet days) plus a dashed
+    /// projection of the next expected period, shaped by her own pattern.
+    /// With no flow logged at all, a labeled one-month preview shows instead.
+    private var flowChartCard: some View {
+        let data = flowChartData()
+        return FFCard {
+            VStack(alignment: .leading, spacing: FFSpace.s2) {
+                HStack {
+                    cardTitle("Your flow, this month")
+                    Spacer()
+                    if data.isPreview {
+                        Text("PREVIEW")
+                            .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
+                            .foregroundStyle(theme.color(.onPrimary))
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .background(theme.color(.primaryStrong), in: Capsule())
+                    }
+                }
+                Chart {
+                    ForEach(data.logged) { pt in
+                        AreaMark(x: .value("Day", pt.date, unit: .day),
+                                 y: .value("Flow", pt.weight),
+                                 series: .value("Series", "Logged"))
+                            .foregroundStyle(theme.color(.phaseMenstrual).opacity(0.14))
+                            .interpolationMethod(.monotone)
+                        LineMark(x: .value("Day", pt.date, unit: .day),
+                                 y: .value("Flow", pt.weight),
+                                 series: .value("Series", "Logged"))
+                            .foregroundStyle(theme.color(.phaseMenstrual))
+                            .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .interpolationMethod(.monotone)
+                    }
+                    ForEach(data.projected) { pt in
+                        LineMark(x: .value("Day", pt.date, unit: .day),
+                                 y: .value("Flow", pt.weight),
+                                 series: .value("Series", "Expected"))
+                            .foregroundStyle(theme.color(.muted))
+                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5, 4]))
+                            .interpolationMethod(.monotone)
+                    }
+                }
+                .chartYScale(domain: 0...5)
+                .chartYAxis {
+                    AxisMarks(values: [1, 3, 5]) { value in
+                        AxisGridLine().foregroundStyle(theme.color(.line))
+                        AxisValueLabel {
+                            Text(yLabel(value.as(Int.self) ?? 0))
+                                .font(ffBody(FFType.xs2, weight: .medium))
+                                .foregroundStyle(theme.color(.muted))
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                        AxisGridLine().foregroundStyle(theme.color(.line))
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                            .font(ffBody(FFType.xs2, weight: .medium))
+                            .foregroundStyle(theme.color(.muted))
+                    }
+                }
+                .chartLegend(.hidden)
+                .frame(height: 150)
+                .accessibilityLabel(chartA11y(data))
+
+                HStack(spacing: FFSpace.s4) {
+                    legendSwatch(dashed: false, label: data.isPreview ? "A month like yours could look" : "What you logged")
+                    if !data.projected.isEmpty {
+                        legendSwatch(dashed: true, label: "Next period, as expected")
+                    }
+                    Spacer(minLength: 0)
+                }
+                if data.isPreview {
+                    Text("This becomes your own curve as you log your flow.")
+                        .font(ffBody(FFType.xs))
+                        .foregroundStyle(theme.color(.muted))
+                }
+            }
+        }
+    }
+
+    private func yLabel(_ w: Int) -> String {
+        switch w {
+        case 1: "Spotting"
+        case 3: "Medium"
+        case 5: "Super"
+        default: ""
+        }
+    }
+
+    private func legendSwatch(dashed: Bool, label: String) -> some View {
+        HStack(spacing: 5) {
+            LegendLine(dashed: dashed)
+                .stroke(dashed ? theme.color(.muted) : theme.color(.phaseMenstrual),
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round,
+                                           dash: dashed ? [4, 3] : []))
+                .frame(width: 18, height: 3)
+            Text(label)
+                .font(ffBody(FFType.xs2, weight: .medium))
+                .foregroundStyle(theme.color(.muted))
+        }
+    }
+
+    private func chartA11y(_ data: (logged: [FlowChartPoint], projected: [FlowChartPoint], isPreview: Bool)) -> String {
+        if data.isPreview { return "A preview flow chart. It fills in with your own flow as you log." }
+        let peak = data.logged.max { $0.weight < $1.weight }
+        var out = "Flow over the last 30 days."
+        if let peak, peak.weight > 0 {
+            out += " Heaviest on \(peak.date.formatted(.dateTime.month(.wide).day()))."
+        }
+        if let first = data.projected.first(where: { $0.weight > 0 }) {
+            out += " The next period is expected around \(first.date.formatted(.dateTime.month(.wide).day()))."
+        }
+        return out
+    }
+
+    private func flowChartData() -> (logged: [FlowChartPoint], projected: [FlowChartPoint], isPreview: Bool) {
+        let today = cal.startOfDay(for: Date())
+        let hasFlow = store.logsSnapshot.contains { $0.flow != nil }
+
+        // First-month preview: a gentle example so the card teaches itself.
+        guard hasFlow else {
+            guard let start = cal.date(byAdding: .day, value: -29, to: today) else {
+                return ([], [], true)
+            }
+            let example = [0, 0, 0, 2, 4, 4, 3, 2, 1] + Array(repeating: 0, count: 21)
+            let pts = example.enumerated().compactMap { i, w in
+                cal.date(byAdding: .day, value: i, to: start).map { FlowChartPoint(date: $0, weight: w) }
+            }
+            return (pts, [], true)
+        }
+
+        var logged: [FlowChartPoint] = []
+        for off in -29...0 {
+            if let d = cal.date(byAdding: .day, value: off, to: today) {
+                logged.append(FlowChartPoint(date: d, weight: store.log(for: d)?.flow?.weight ?? 0))
+            }
+        }
+
+        // Projection: dashes from tomorrow through the predicted period's end,
+        // shaped by her own per-day intensity averages (a soft bell until then).
+        var projected: [FlowChartPoint] = []
+        if let next = p.nextPeriodStart {
+            let start = cal.startOfDay(for: next)
+            let len = max(p.averagePeriodLength, 1)
+            let pattern = projectedPattern(len: len)
+            if let end = cal.date(byAdding: .day, value: len - 1, to: start),
+               var d = cal.date(byAdding: .day, value: 1, to: today) {
+                while d <= end, (cal.dateComponents([.day], from: today, to: d).day ?? 99) <= 35 {
+                    let k = cal.dateComponents([.day], from: start, to: d).day ?? -1
+                    let w = (k >= 0 && k < len) ? pattern[min(k, pattern.count - 1)] : 0
+                    projected.append(FlowChartPoint(date: d, weight: w))
+                    guard let n = cal.date(byAdding: .day, value: 1, to: d) else { break }
+                    d = n
+                }
+            }
+        }
+        return (logged, projected, false)
+    }
+
+    /// Her average intensity for each period day, from every logged period;
+    /// days she's never logged fall back to a gentle bell.
+    private func projectedPattern(len: Int) -> [Int] {
+        var bell = [3, 4, 4, 3, 2, 1]
+        while bell.count < len { bell.append(1) }
+        let starts = CycleEngine.periodStarts(from: store.periodDays, cal: cal)
+        var sums = Array(repeating: 0, count: len)
+        var counts = Array(repeating: 0, count: len)
+        for s in starts {
+            for k in 0..<len {
+                if let d = cal.date(byAdding: .day, value: k, to: s),
+                   let w = store.log(for: d)?.flow?.weight {
+                    sums[k] += w
+                    counts[k] += 1
+                }
+            }
+        }
+        return (0..<len).map {
+            counts[$0] > 0 ? Int((Double(sums[$0]) / Double(counts[$0])).rounded()) : bell[$0]
         }
     }
 
@@ -222,7 +414,7 @@ struct InsightsView: View {
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
                     .accessibilityAddTraits(.isHeader)
-                Text("One file with everything — history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.")
+                Text("One file with everything: history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 HStack(spacing: FFSpace.s2) {
@@ -379,5 +571,16 @@ struct InsightsView: View {
             .font(ffBody(FFType.md, weight: .semibold))
             .foregroundStyle(theme.color(.deep))
             .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A short horizontal stroke for the chart legend swatches.
+private struct LegendLine: Shape {
+    var dashed: Bool
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return p
     }
 }

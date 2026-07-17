@@ -34,7 +34,7 @@ struct StretchTutorialView: View {
             CoachFlower(message: "Welcome to the stretch garden! Stretch a little, earn petals, grow something lovely.")
             VStack(alignment: .leading, spacing: FFSpace.s3) {
                 tutorialRow("checkmark.circle.fill", "Check off a pose, earn petal points")
-                tutorialRow("bag.fill", "Spend petals on flowers, colors — even me")
+                tutorialRow("bag.fill", "Spend petals on flowers, colors, even me")
                 tutorialRow("gift.fill", "Here's 100 petals to start. Your Daisy awaits!")
             }
             .padding(FFSpace.s4)
@@ -116,6 +116,7 @@ struct GardenShopView: View {
     @State private var buyBurst = 0
     @State private var petalGap: PetalGap?
     @State private var pendingBuy: PendingBuy?
+    @State private var showChainTutorial = false
 
     private let columns = [GridItem(.adaptive(minimum: 104), spacing: FFSpace.s3)]
 
@@ -142,6 +143,7 @@ struct GardenShopView: View {
             })
         }
         .petalPurchaseConfirm($pendingBuy, balance: rewards.balance)
+        .sheet(isPresented: $showChainTutorial) { ChainTutorialView() }
     }
 
     private var header: some View {
@@ -162,7 +164,7 @@ struct GardenShopView: View {
     }
 
     private var stickerNote: some View {
-        Text("Flowers you own become stickers — tap one to wear it on your Today tab.")
+        Text("Flowers you own become stickers. Tap one to wear it on your Today tab.")
             .font(ffBody(FFType.xs))
             .foregroundStyle(theme.color(.muted))
     }
@@ -194,8 +196,8 @@ struct GardenShopView: View {
             }
         } label: {
             VStack(spacing: 6) {
-                StickerView(id: f.id, size: 34)
-                    .frame(height: 48)   // rarity scaling without jagged grid rows
+                StickerView(id: f.id, size: 52)
+                    .frame(height: 72)   // rarity scaling without jagged grid rows
                     .saturation(owned || affordable ? 1 : 0.35)
                 Text(f.name)
                     .font(ffBody(FFType.sm, weight: .semibold))
@@ -237,10 +239,20 @@ struct GardenShopView: View {
         let ownedList = RewardsStore.flowers.filter { rewards.ownedFlowers.contains($0.id) }
         return FFCard {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
-                Label("Your flower chain", systemImage: "link")
-                    .font(ffBody(FFType.md, weight: .semibold))
-                    .foregroundStyle(theme.color(.deep))
-                Text("Tap owned blooms into a chain — they circle your Today ring together. Three or more make a crown Posey can wear.")
+                HStack {
+                    Label("Your flower chain", systemImage: "link")
+                        .font(ffBody(FFType.md, weight: .semibold))
+                        .foregroundStyle(theme.color(.deep))
+                    Spacer()
+                    Button("See how") { showChainTutorial = true }
+                        .font(ffBody(FFType.xs, weight: .bold))
+                        .foregroundStyle(theme.color(.primaryStrong))
+                        .buttonStyle(.plain)
+                        .frame(minHeight: FFSpace.tapMin)
+                        .glitterHint("chainTutorial")
+                        .accessibilityHint("Opens a hands-on chain tutorial")
+                }
+                Text("Tap owned blooms into a chain and they circle your Today ring together. Three or more make a crown Posey can wear.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 if ownedList.isEmpty {
@@ -286,13 +298,13 @@ struct GardenShopView: View {
             withAnimation(FFMotion.fast) { rewards.toggleChain(f.id) }
         } label: {
             VStack(spacing: 3) {
-                StickerView(id: f.id, size: 24)
-                    .frame(height: 30)
+                StickerView(id: f.id, size: 32)
+                    .frame(height: 40)
                 Image(systemName: chained ? "checkmark.circle.fill" : "plus.circle")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(theme.color(chained ? .good : .muted))
             }
-            .frame(maxWidth: .infinity, minHeight: FFSpace.tapMin + 8)
+            .frame(maxWidth: .infinity, minHeight: FFSpace.tapMin + 16)
             .background(theme.color(chained ? .surfaceSoft : .surface),
                         in: RoundedRectangle(cornerRadius: FFRadius.sm, style: .continuous))
             .overlay(
@@ -368,7 +380,7 @@ struct GardenShopView: View {
                 }
             }
             soundShelf
-            unlockRow(icon: "slider.horizontal.3", swatch: nil, title: "Color Studio — recolor nearly everything",
+            unlockRow(icon: "slider.horizontal.3", swatch: nil, title: "Color Studio: recolor nearly everything",
                       owned: rewards.colorStudioUnlocked, price: RewardsStore.colorStudioPrice) {
                 confirmOrGap(name: "the Color Studio", price: RewardsStore.colorStudioPrice) {
                     if rewards.buyColorStudio() { buyBurst += 1 }
@@ -499,15 +511,15 @@ struct StretchRulesView: View {
 
                 rulesCard("Earning petal points", "sparkle", [
                     "Every pose you check off earns 15 points.",
-                    "Each pose after the first that day earns an extra +5 — stringing them together pays.",
+                    "Each pose after the first that day earns an extra +5. Stringing them together pays.",
                     "Finish every pose in the day's session: +10 bonus on top.",
-                    "The first time you ever do a pose with the guided player: +30 bonus (once per pose — there are new ones to discover across the plans).",
+                    "The first time you ever do a pose with the guided player: +30 bonus (once per pose, and there are new ones to discover across the plans).",
                 ])
 
                 rulesCard("Plan multipliers & lock-ins", "arrow.up.circle", [
-                    "Core trio: any day, no schedule — everything counts ×1.",
-                    "3-day starter: everything counts ×2 — but it's a lock-in.",
-                    "Full 14-day: everything counts ×4 — the biggest lock-in.",
+                    "Core trio: any day, no schedule. Everything counts ×1.",
+                    "3-day starter: everything counts ×2, but it's a lock-in.",
+                    "Full 14-day: everything counts ×4, the biggest lock-in.",
                     "Lock-in means a missed plan day costs 5 petals. Your lifetime score never drops.",
                     "The multiplier applies to every point you earn that day, bonuses included.",
                 ])
@@ -519,17 +531,17 @@ struct StretchRulesView: View {
                 ])
 
                 rulesCard("Spending", "bag", [
-                    "Your first 100 petals are a welcome gift — enough for the Daisy.",
-                    "Ten flowers of rising rarity — Daisy (100) up to the red rose bouquet (7,500). Own one, wear it on your Today ring — spin it around the ring, or pluck it off and rest it anywhere you like.",
+                    "Your first 100 petals are a welcome gift, enough for the Daisy.",
+                    "Ten flowers of rising rarity: Daisy (100) up to the red rose bouquet (7,500). Own one, wear it on your Today ring. Spin it around the ring, or pluck it off and rest it anywhere you like.",
                     "Posey herself is the legendary sticker: 10,000.",
-                    "Celebration sounds — Petal swoosh 800, Songbird 1,200, Crystal chime 1,600. They ring when a session ends or a log slides home.",
-                    "Palettes — Pink, Peony, Soft, Light: 600 each. Cherry, Rose and Dark are always free.",
-                    "Custom accent color: 1,500 — tint the whole app any color you like.",
-                    "Color Studio: 4,000 — recolor nearly everything, one color at a time.",
+                    "Celebration sounds: Petal swoosh 800, Songbird 1,200, Crystal chime 1,600. They ring when a session ends or a log slides home.",
+                    "Palettes (Pink, Peony, Soft, Light): 600 each. Cherry, Rose and Dark are always free.",
+                    "Custom accent color: 1,500. Tint the whole app any color you like.",
+                    "Color Studio: 4,000. Recolor nearly everything, one color at a time.",
                 ])
 
                 rulesCard("The fine print (the kind you'll like)", "heart", [
-                    "Your lifetime score only ever goes up — spending never touches it.",
+                    "Your lifetime score only ever goes up. Spending never touches it.",
                     "Unchecking a pose returns its points, so no take-backs needed.",
                     "Everything you unlock is yours forever, on this phone.",
                 ])
