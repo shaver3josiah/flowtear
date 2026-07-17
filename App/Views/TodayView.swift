@@ -22,30 +22,50 @@ struct TodayView: View {
         rewards.ringChain.filter { $0 != rewards.activeSticker }
     }
 
-    /// The chain-together toggle, riding the ring's corner. Only shown when
+    /// Where she's parked the chain toggle, relative to the ring's corner.
+    @AppStorage("flowtear.chainBtnX") private var chainBtnX = -18.0
+    @AppStorage("flowtear.chainBtnY") private var chainBtnY = -18.0
+    @State private var chainBtnDrag: CGSize = .zero
+
+    /// The chain-together toggle: a quiet little link she can drag anywhere
+    /// around the ring and tap to snap or spread her flowers. It twinkles
+    /// only until the first tap (glitterHint retires itself). Only shown when
     /// there's a bead plus at least one more bloom — something to snap.
     @ViewBuilder private var chainButton: some View {
         if rewards.activeSticker != nil, !chainMinusBead.isEmpty {
-            Button {
-                withAnimation(reduceMotion ? nil : FFMotion.spring) {
-                    rewards.chainLinked.toggle()
+            Image(systemName: "link")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.color(rewards.chainLinked ? .primaryStrong : .muted))
+                .frame(width: 34, height: 34)
+                .background(theme.color(rewards.chainLinked ? .surfaceSoft : .surface).opacity(0.9),
+                            in: Circle())
+                .overlay(Circle().strokeBorder(
+                    theme.color(rewards.chainLinked ? .primaryStrong : .line),
+                    lineWidth: rewards.chainLinked ? 1.2 : 1))
+                .contentShape(Circle())
+                .onTapGesture {
+                    withAnimation(reduceMotion ? nil : FFMotion.spring) {
+                        rewards.chainLinked.toggle()
+                    }
                 }
-            } label: {
-                Image(systemName: "link")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(theme.color(rewards.chainLinked ? .onPrimary : .primaryStrong))
-                    .frame(width: 40, height: 40)
-                    .background(theme.color(rewards.chainLinked ? .primaryStrong : .surfaceSoft), in: Circle())
-                    .overlay(Circle().strokeBorder(theme.color(.line),
-                                                   lineWidth: rewards.chainLinked ? 0 : 1))
-            }
-            .buttonStyle(FFPressButtonStyle(scale: 0.9))
-            .glitterHint("chainTogether")
-            // The hero frame is RingSticker's roaming area, wider than the
-            // drawn ring; tuck the button in toward the visible circle.
-            .offset(x: -18, y: -18)
-            .accessibilityLabel(rewards.chainLinked ? "Spread your flowers around the ring"
-                                                    : "Snap your flowers into a chain")
+                .gesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { chainBtnDrag = $0.translation }
+                        .onEnded { v in
+                            // Commit and clamp so it can never wander off the hero.
+                            chainBtnX = min(max(chainBtnX + v.translation.width, -250), 6)
+                            chainBtnY = min(max(chainBtnY + v.translation.height, -250), 6)
+                            chainBtnDrag = .zero
+                        }
+                )
+                .glitterHint("chainTogether")
+                .offset(x: chainBtnX + chainBtnDrag.width,
+                        y: chainBtnY + chainBtnDrag.height)
+                .sensoryFeedback(.selection, trigger: rewards.chainLinked)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(rewards.chainLinked ? "Spread your flowers around the ring"
+                                                        : "Snap your flowers into a chain")
+                .accessibilityHint("Drag to move this button")
         }
     }
     private var today: Date { Date() }

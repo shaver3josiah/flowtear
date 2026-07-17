@@ -188,7 +188,7 @@ struct InsightsView: View {
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
                     .accessibilityAddTraits(.isHeader)
-                Text("Your month as an interactive page in your colors: a live countdown to the next period, temperature and flow charts, anything worth mentioning, and what to expect. Opens in any browser. Notes stay on your phone.")
+                Text("Your month as an interactive page in your colors, for any browser. Notes stay on your phone.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 if let url = htmlURL {
@@ -230,7 +230,7 @@ struct InsightsView: View {
                     }
                 }
                 if let c = contact {
-                    Text("Send \(c.name)\(c.relationship.isEmpty ? "" : ", your \(c.relationship.lowercased()),") this month's update: the pretty report page plus the plain summary.")
+                    Text("The report page plus a plain summary, prefilled for \(c.name).")
                         .font(ffBody(FFType.xs))
                         .foregroundStyle(theme.color(.muted))
                     HStack(spacing: FFSpace.s2) {
@@ -253,7 +253,7 @@ struct InsightsView: View {
                         }
                     }
                 } else {
-                    Text("A partner, parent or sister: add one trusted person and your monthly update becomes two taps, by email, text, or both. Nothing sends without you hitting Send.")
+                    Text("Add one trusted person and updates become two taps. Nothing sends until you tap Send.")
                         .font(ffBody(FFType.xs))
                         .foregroundStyle(theme.color(.muted))
                     FFButton("Add a trusted contact", style: .primary, size: .sm, icon: "person.crop.circle.badge.plus") {
@@ -272,7 +272,7 @@ struct InsightsView: View {
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
                     .accessibilityAddTraits(.isHeader)
-                Text("Everything from the calendar (flow, discharge, temps, moods, symptoms, stretches, notes) as a CSV file.")
+                Text("Every logged day as a CSV file for your own records.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 if let url = csvURL {
@@ -543,7 +543,7 @@ struct InsightsView: View {
                     .font(ffBody(FFType.md, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
                     .accessibilityAddTraits(.isHeader)
-                Text("One file with everything: history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.")
+                Text("One file with everything, ready for a safe place or a new phone.")
                     .font(ffBody(FFType.xs))
                     .foregroundStyle(theme.color(.muted))
                 HStack(spacing: FFSpace.s2) {
@@ -569,10 +569,11 @@ struct InsightsView: View {
         }
     }
 
-    // The research report for where she is right now — the same short report
-    // the ring's phase sheet shows, sitting right under the summary tiles so
-    // what this week feels like (and what the evidence says helps) is never
-    // more than one scroll away.
+    @State private var phaseReportOpen = false
+
+    // The research report for where she is right now. The headline is always
+    // visible; the paragraph, tips and evidence wait behind one tap so the
+    // screen never reads as a wall of text (same move as the symptom tour).
     @ViewBuilder private var phaseReportCard: some View {
         if let phase = p.phase {
             let report = PhaseResearch.report(for: phase,
@@ -580,29 +581,46 @@ struct InsightsView: View {
                                               cycleLength: max(p.averageCycleLength, 1))
             FFCard {
                 VStack(alignment: .leading, spacing: FFSpace.s2) {
-                    HStack(spacing: 8) {
-                        Circle().fill(theme.color(CycleRing.tint(phase))).frame(width: 10, height: 10)
-                        Text("Right now · \(report.title)")
-                            .font(ffBody(FFType.md, weight: .semibold))
-                            .foregroundStyle(theme.color(.deep))
-                    }
-                    .accessibilityAddTraits(.isHeader)
-                    Text(report.body)
-                        .font(ffBody(FFType.sm))
-                        .foregroundStyle(theme.color(.text))
-                        .lineSpacing(3)
-                    ForEach(report.tips, id: \.self) { tip in
-                        HStack(alignment: .top, spacing: 8) {
-                            Circle().fill(theme.color(CycleRing.tint(phase)))
-                                .frame(width: 5, height: 5).padding(.top, 6)
-                            Text(tip).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.text))
+                    Button {
+                        withAnimation(FFMotion.spring) { phaseReportOpen.toggle() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle().fill(theme.color(CycleRing.tint(phase))).frame(width: 10, height: 10)
+                            Text("Right now · \(report.title)")
+                                .font(ffBody(FFType.md, weight: .semibold))
+                                .foregroundStyle(theme.color(.deep))
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(theme.color(.muted))
+                                .rotationEffect(.degrees(phaseReportOpen ? 180 : 0))
                         }
+                        .contentShape(Rectangle())
+                        .frame(minHeight: FFSpace.tapMin)
                     }
-                    Text(report.evidenceNote)
-                        .font(ffBody(FFType.xs))
-                        .foregroundStyle(theme.color(.muted))
-                        .lineSpacing(2)
-                        .padding(.top, 2)
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityHint(phaseReportOpen ? "Collapses the phase report" : "Expands the phase report")
+
+                    if phaseReportOpen {
+                        Text(report.body)
+                            .font(ffBody(FFType.sm))
+                            .foregroundStyle(theme.color(.text))
+                            .lineSpacing(3)
+                        ForEach(report.tips, id: \.self) { tip in
+                            HStack(alignment: .top, spacing: 8) {
+                                Circle().fill(theme.color(CycleRing.tint(phase)))
+                                    .frame(width: 5, height: 5).padding(.top, 6)
+                                Text(tip).font(ffBody(FFType.sm)).foregroundStyle(theme.color(.text))
+                            }
+                        }
+                        Text(report.evidenceNote)
+                            .font(ffBody(FFType.xs))
+                            .foregroundStyle(theme.color(.muted))
+                            .lineSpacing(2)
+                            .padding(.top, 2)
+                    }
                 }
             }
         }
