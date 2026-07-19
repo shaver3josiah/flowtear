@@ -93,14 +93,14 @@ export default function GardenScreen({ ctx }) {
   </div>`;
 
   // A small pill button used across the shop for buy / wear / owned states.
-  const pill = (label, { onClick, tone = "soft", icon } = {}) => {
+  const pill = (label, { onClick, tone = "soft", icon, title } = {}) => {
     const bg = tone === "strong" ? "var(--primary-strong)" : "var(--surface-soft)";
     // Swift moved these pills from .white to theme.color(.onPrimary) so the
     // label stays readable on every palette's primary — same token here.
     const fg = tone === "strong" ? "var(--text-on-primary)"
       : tone === "muted" ? "var(--muted)"
       : tone === "primary" ? "var(--primary-strong)" : "var(--deep)";
-    return html`<button onClick=${onClick}
+    return html`<button onClick=${onClick} title=${title}
       style=${{
         display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 999,
         border: "none", background: bg, color: fg, fontWeight: 700, fontSize: 12, cursor: "pointer",
@@ -110,25 +110,28 @@ export default function GardenScreen({ ctx }) {
   };
 
   // ---- flower cell ----
+  // Wearing is additive (no cap): tapping an owned bloom chains/unchains it
+  // straight from the grid (Swift: `toggleChain`, replacing the old
+  // single-select `equip`). "Worn" == inChain, not activeSticker.
   const flowerCell = (f) => {
     const owned = r.ownedFlowers.has(f.id);
-    const equipped = r.activeSticker === f.id;
+    const worn = r.inChain(f.id);
     const affordable = r.canAfford(f.price);
     const onClick = () => {
-      if (owned) { r.equip(f.id); return; }
+      if (owned) { r.toggleChain(f.id); return; }
       confirmOrGap(`the ${f.name}`, f.price, () => { if (r.buyFlower(f.id)) celebrate(); });
     };
     let action;
-    if (equipped) action = pill("Worn", { onClick, tone: "strong", icon: "check" });
-    else if (owned) action = pill("Tap to wear", { onClick, tone: "primary" });
+    if (worn) action = pill("On your ring", { onClick, tone: "strong", icon: "check", title: "Takes it off your ring" });
+    else if (owned) action = pill("Tap to wear", { onClick, tone: "primary", title: "Wears it on your ring" });
     else action = pill(String(f.price), { onClick, tone: affordable ? "soft" : "muted", icon: "sparkles" });
 
     return html`<div key=${f.id} style=${{
       display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center",
       padding: "14px 8px", background: "var(--surface)", borderRadius: 16,
-      border: `${equipped ? 1.5 : 1}px solid ${equipped ? "var(--primary-strong)" : "var(--line)"}`,
+      border: `${worn ? 1.5 : 1}px solid ${worn ? "var(--primary-strong)" : "var(--line)"}`,
     }}>
-      <${Bloom} id=${f.id} size=${52} dim=${!owned && !affordable} />
+      <${Bloom} id=${f.id} size=${104} dim=${!owned && !affordable} />
       <div style=${{ fontWeight: 600, color: "var(--deep)", fontSize: 14 }}>${f.name}</div>
       <div style=${{ fontWeight: 700, fontSize: 10, letterSpacing: 0.6, color: "var(--muted)" }}>${f.rarity.toUpperCase()}</div>
       ${action}
@@ -325,7 +328,7 @@ export default function GardenScreen({ ctx }) {
   const poseyOwned = r.poseyOwned;
   const poseyEquipped = r.activeSticker === "posey";
   const poseyAction = () => {
-    if (poseyOwned) { r.equip("posey"); return; }
+    if (poseyOwned) { r.wearPosey(); return; }
     confirmOrGap("Posey herself", PRICES.posey, () => { if (r.buyPosey()) setBurst((n) => n + 1); });
   };
 
@@ -398,8 +401,8 @@ export default function GardenScreen({ ctx }) {
 
     <!-- flowers -->
     <div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <p style=${{ fontSize: 12, color: "var(--muted)", margin: 0 }}>Flowers you own become stickers. Tap one to wear it on your Today tab.</p>
-      <div style=${{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))" }}>
+      <p style=${{ fontSize: 12, color: "var(--muted)", margin: 0 }}>Tap flowers you own to wear them on your Today ring. Wear as many as you like; they chain together.</p>
+      <div style=${{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
         ${FLOWERS.map(flowerCell)}
       </div>
     </div>

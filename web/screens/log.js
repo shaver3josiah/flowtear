@@ -66,13 +66,13 @@ export default function LogScreen({ ctx }) {
 
   const count = (n) => (n ? `${n} picked` : null);
 
-  // Selecting a symptom she's felt before opens its little history: when, that
-  // whole day, and where in her cycle she was. (LogView.swift symptom chip.)
   // No commit dance here — every tap is already written through to the store.
-  const onSymptom = (s) => {
-    const turningOn = !log.symptoms.includes(s);
-    mutate({ symptoms: toggle(log.symptoms, s) });
-    if (!turningOn) return;
+  const onSymptom = (s) => mutate({ symptoms: toggle(log.symptoms, s) });
+
+  // A quiet clock pops up beside a picked symptom she's felt before. Nothing
+  // opens on its own; the history tour waits for this tap. (LogView.swift
+  // historyButton.)
+  const openHistory = (s) => {
     const last = store.lastFelt(s, date);
     if (!last) return;
     nav.open("symptomEcho", {
@@ -218,7 +218,9 @@ export default function LogScreen({ ctx }) {
             onClick=${() => mutate({ moods: toggle(log.moods, m) })}>${label(m)}</${Chip}>`)}
         </div>`)}
 
-      <!-- Symptoms (grouped, multi-select over our SYMPTOMS) -->
+      <!-- Symptoms (grouped, multi-select over our SYMPTOMS). A selected
+           symptom she's felt before grows a little clock beside its chip —
+           tapping IT (not the chip) opens the history tour. -->
       ${Section("heart", "Symptoms", "--primary-strong", "--surface-soft", count(log.symptoms.length),
         html`<div>
           ${SYMPTOM_GROUPS.map(([group, syms]) => html`
@@ -226,9 +228,27 @@ export default function LogScreen({ ctx }) {
               <div style=${{ textTransform: "uppercase", letterSpacing: "var(--tracking-label)",
                   fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>${group}</div>
               <div style=${wrap}>
-                ${syms.map((s) => html`<${SymptomChip} key=${s} symptom=${s} label=${label(s)}
-                  selected=${log.symptoms.includes(s)}
-                  onClick=${() => onSymptom(s)} />`)}
+                ${syms.map((s) => {
+                  const selected = log.symptoms.includes(s);
+                  const last = selected ? store.lastFelt(s, date) : null;
+                  return html`
+                    <div key=${s} style=${{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <${SymptomChip} symptom=${s} label=${label(s)}
+                        selected=${selected} onClick=${() => onSymptom(s)} />
+                      ${last && html`
+                        <button type="button" onClick=${() => openHistory(s)}
+                          aria-label=${`${label(s)} history`}
+                          aria-description="Shows the last time you felt this"
+                          style=${{
+                            display: "grid", placeItems: "center", flex: "none",
+                            width: 40, height: 40, borderRadius: "50%", padding: 0, cursor: "pointer",
+                            background: "var(--surface-soft)", border: "1px solid var(--line)",
+                            animation: "flowtier-bloom-in var(--dur-base) var(--ease-signature)",
+                          }}>
+                          <${Icon} name="clock" size=${15} color="var(--primary-strong)" />
+                        </button>`}
+                    </div>`;
+                })}
               </div>
             </div>`)}
         </div>`)}

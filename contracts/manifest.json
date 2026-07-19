@@ -1,7 +1,7 @@
 {
   "product": "Uncorked (Flowtear)",
-  "contractsVersion": "1.4.0",
-  "updated": "2026-07-16",
+  "contractsVersion": "1.5.0",
+  "updated": "2026-07-17",
   "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
   "platforms": {
     "ios": {
@@ -180,6 +180,54 @@
       "since": "1.4.0",
       "ios": "App/Views/GardenShopView.swift",
       "web": "web/screens/garden.js"
+    },
+    {
+      "id": "chain-wearing",
+      "since": "1.5.0",
+      "ios": "App/Core/RewardsStore.swift (additive chain, chainLinked)",
+      "web": "web/core/rewards.js"
+    },
+    {
+      "id": "chain-linked-toggle",
+      "since": "1.5.0",
+      "ios": "App/Components/RingSticker.swift, App/Views/TodayView.swift",
+      "web": "web/components/ringSticker.js, web/screens/today.js"
+    },
+    {
+      "id": "symptom-history-tour",
+      "since": "1.5.0",
+      "ios": "App/Components/SymptomEchoSheet.swift",
+      "web": "web/screens/symptomEcho.js"
+    },
+    {
+      "id": "log-symptom-echo-button",
+      "since": "1.5.0",
+      "ios": "App/Views/LogView.swift",
+      "web": "web/screens/log.js"
+    },
+    {
+      "id": "today-shop-entry",
+      "since": "1.5.0",
+      "ios": "App/Views/TodayView.swift",
+      "web": "web/screens/today.js"
+    },
+    {
+      "id": "trusted-contact",
+      "since": "1.5.0",
+      "ios": "App/Components/MessageComposers.swift (TrustedContact)",
+      "web": "web/core/trustedContact.js"
+    },
+    {
+      "id": "web-report-sharing",
+      "since": "1.5.0",
+      "ios": "App/Core/CycleWebReport.swift",
+      "web": "web/core/webReport.js, web/screens/insights.js"
+    },
+    {
+      "id": "collapsible-phase-report",
+      "since": "1.5.0",
+      "ios": "App/Views/InsightsView.swift",
+      "web": "web/screens/insights.js"
     }
   ],
   "platformDivergences": {
@@ -191,7 +239,8 @@
       "motion: several SwiftUI flourishes (Posey's animations, SparkleBurst) render as calmer static/CSS equivalents on web.",
       "larger-text: iOS raised its Dynamic Type clamp to xxxLarge (FlowtearApp.swift). The web uses fixed px type; honoring OS font scaling needs a rem-based type refactor \u2014 deliberate gap, not drift.",
       "backup wire format: identical JSON (FFBackupFile v1, inner store blobs base64-encoded, ISO-8601 dates) \u2014 a backup from either platform restores on the other. Verified by web/core/store.test.mjs round-trip.",
-      "flow selector: the vendored design-system FlowScale/DayCell predate Flow.superHeavy and cannot render it (ds-bundle.js is generated, not editable). The web uses web/components/flowScale.js and draws the 5th dot itself; both read the shared --flow-super-heavy token, so colors still come from Theme.swift."
+      "flow selector: the vendored design-system FlowScale/DayCell predate Flow.superHeavy and cannot render it (ds-bundle.js is generated, not editable). The web uses web/components/flowScale.js and draws the 5th dot itself; both read the shared --flow-super-heavy token, so colors still come from Theme.swift.",
+      "trusted-contact sharing: iOS offers a native Mail/Messages compose sheet (MessageComposers.swift) pre-filled with the report. Android has no such native sheet; it uses mailto:/sms: links (opens the OS's own mail/SMS app to compose) plus the existing share-sheet flow. The sms: body copy drops iOS's \"details in the attached page\" clause since an sms: link cannot carry an attachment \u2014 saying otherwise would be a false promise."
     ]
   },
   "howToStaySynced": [

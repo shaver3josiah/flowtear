@@ -1,24 +1,26 @@
 // Today — the home screen. Faithful port of App/Views/TodayView.swift:
-// header (bloom + date + tips + theme pencil), the CycleRing hero with drifting
-// petals and her pluckable ring sticker, the current phase badge (tap → phase
-// sheet), a next-period line, a quick flow log with a one-tap "My period
-// started" CTA when it's due (undo toast gives one gentle chance to take it
-// back), a rotating teaser pane (stretch → insights → calendar), and the
-// fertile window + basal-temperature card. Before her first confirmed period
-// the ring still shows, as a labelled best guess. The vendored DS CycleRing
-// can't be edited, so the Swift ring's jewelry pass (metal sheen, 7s phase
-// shimmer, solid today bead + glimmer) is an overlay sharing the ring's box —
-// same pattern as RingSticker. All state reads/writes go through the store.
+// header (bloom + date + tips + theme pencil + garden shop), the CycleRing hero
+// with drifting petals and her pluckable ring sticker, the current phase badge
+// (tap → phase sheet), a next-period line, a quick flow log with a one-tap "My
+// period started" CTA when it's due (undo toast gives one gentle chance to
+// take it back), a rotating teaser pane (stretch → insights → calendar), and
+// the fertile window + basal-temperature card. Before her first confirmed
+// period the ring still shows, as a labelled best guess. The vendored DS
+// CycleRing can't be edited, so the Swift ring's jewelry pass (metal sheen, 7s
+// phase shimmer, solid today bead + glimmer) is an overlay sharing the ring's
+// box — same pattern as RingSticker. A draggable chain-together toggle rides
+// the ring's bottom-trailing corner once she's wearing a bead plus at least
+// one more chained bloom. All state reads/writes go through the store.
 import { rewards } from "../core/rewards.js";
 import { emptyLog } from "../core/models.js";
-import { RingSticker, RingChain, trackRadius } from "../components/ringSticker.js";
+import { RingSticker, trackRadius } from "../components/ringSticker.js";
 import { GlitterHint } from "../components/glitterHint.js";
 // Five levels, not the vendored four: the DS FlowScale predates Flow.superHeavy
 // and can't show it (ds-bundle.js is uneditable). Drop-in same props.
 import { FlowScale } from "../components/flowScale.js";
 
 const React = window.React;
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 const mhtml = window.htm.bind(React.createElement);
 
 const reduceMotion = () =>
@@ -151,6 +153,18 @@ const Twinkle = ({ size, style }) => mhtml`
       fill="var(--flower-center)" />
   </svg>`;
 
+// LinkGlyph — stand-in for the "link" SF Symbol on the chain-together toggle;
+// no offline lucide glyph of a chain link exists (see vendor/icon.js's ICONS),
+// so this is a small hand-drawn pair of interlocking hooks, same pattern as
+// Twinkle above and RingSticker's Bloom.
+const LinkGlyph = ({ size, color }) => mhtml`
+  <svg width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke=${color}
+    stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+    <path d="M8.5 13.5 6 16a3 3 0 0 0 4.2 4.2l2.5-2.5" />
+    <path d="M15.5 10.5 18 8a3 3 0 0 0-4.2-4.2l-2.5 2.5" />
+    <path d="M9 15 15 9" />
+  </svg>`;
+
 function RingPolish({ size, day, cycleLength, periodLength, phase }) {
   const k = size / 200;
   const r = trackRadius(size);
@@ -223,6 +237,96 @@ export default function TodayScreen({ ctx }) {
   const p = store.prediction(today);
   const flow = store.logFor(today)?.flow ?? null;
   const openPhase = () => nav.open("phase", { phase: p.phase });
+
+  // The garden blob lives outside CycleStore's own subscription, so re-render
+  // Today when it changes too (equipping, chaining, spending) — the balance
+  // pill and the chain-together toggle both read it live.
+  const [, forceRewards] = useState(0);
+  useEffect(() => rewards.subscribe(() => forceRewards((n) => n + 1)), []);
+
+  // Chained blooms minus the one riding as the draggable bead, so a worn bloom
+  // never renders twice on the ring (TodayView.chainMinusBead).
+  const chainMinusBead = rewards.ringChain.filter((id) => id !== rewards.activeSticker);
+  const chainLinked = rewards.chainLinked ?? false;
+  const toggleChainLinked = () => {
+    // ponytail: rewards.js may not have grown chainLinked/setChainLinked yet
+    // (parallel Garden/Rewards port) — fall back to a direct, unpersisted
+    // toggle so the button still works this session. Once core/rewards.js
+    // adds setChainLinked, this branch is dead and can be deleted.
+    if (typeof rewards.setChainLinked === "function") {
+      rewards.setChainLinked(!chainLinked);
+    } else {
+      rewards.chainLinked = !chainLinked;
+      rewards._save();
+      rewards._notify();
+    }
+  };
+
+  // Where she's parked the chain toggle, relative to the ring's corner —
+  // same AppStorage keys as Swift (TodayView.chainBtnX/Y).
+  const CHAIN_X_KEY = "flowtear.chainBtnX", CHAIN_Y_KEY = "flowtear.chainBtnY";
+  const [chainPos, setChainPos] = useState(() => ({
+    x: parseFloat(localStorage.getItem(CHAIN_X_KEY)) || -18,
+    y: parseFloat(localStorage.getItem(CHAIN_Y_KEY)) || -18,
+  }));
+  const [chainDrag, setChainDrag] = useState({ x: 0, y: 0 });
+  const chainGesture = useRef(null); // { startX, startY, dx, dy, moved }
+
+  const onChainDown = (e) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    chainGesture.current = { startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, moved: false };
+  };
+  const onChainMove = (e) => {
+    const g = chainGesture.current;
+    if (!g) return;
+    g.dx = e.clientX - g.startX;
+    g.dy = e.clientY - g.startY;
+    // A drag only "counts" past 8px of travel — a plain tap must still toggle.
+    if (!g.moved && Math.hypot(g.dx, g.dy) > 8) g.moved = true;
+    if (g.moved) setChainDrag({ x: g.dx, y: g.dy });
+  };
+  const onChainUp = () => {
+    const g = chainGesture.current;
+    chainGesture.current = null;
+    if (g && g.moved) {
+      // Commit and clamp so it can never wander off the hero.
+      const x = Math.min(Math.max(chainPos.x + g.dx, -250), 6);
+      const y = Math.min(Math.max(chainPos.y + g.dy, -250), 6);
+      setChainPos({ x, y });
+      localStorage.setItem(CHAIN_X_KEY, String(x));
+      localStorage.setItem(CHAIN_Y_KEY, String(y));
+      setChainDrag({ x: 0, y: 0 });
+    } else if (g) {
+      toggleChainLinked();
+    }
+  };
+
+  // The chain-together toggle itself: a quiet little link she can drag
+  // anywhere around the ring and tap to snap or spread her flowers. Only
+  // shown when there's a bead plus at least one more bloom — something to
+  // snap (TodayView.chainButton).
+  const chainButton = rewards.activeSticker != null && chainMinusBead.length > 0 && html`
+    <div style=${{
+      position: "absolute", right: 0, bottom: 0,
+      transform: `translate(${chainPos.x + chainDrag.x}px, ${chainPos.y + chainDrag.y}px)`,
+    }}>
+      <${GlitterHint} hintKey="chainTogether">
+        <button type="button"
+          onPointerDown=${onChainDown} onPointerMove=${onChainMove}
+          onPointerUp=${onChainUp} onPointerCancel=${onChainUp}
+          aria-label=${chainLinked ? "Spread your flowers around the ring" : "Snap your flowers into a chain"}
+          aria-description="Drag to move this button"
+          style=${{
+            ...bareBtn, width: 34, height: 34, borderRadius: "50%",
+            display: "grid", placeItems: "center", cursor: "grab", touchAction: "none",
+            background: `color-mix(in srgb, var(${chainLinked ? "--surface-soft" : "--surface"}) 90%, transparent)`,
+            border: `${chainLinked ? 1.2 : 1}px solid var(${chainLinked ? "--primary-strong" : "--line"})`,
+          }}>
+          <${LinkGlyph} size=${13} color=${`var(${chainLinked ? "--primary-strong" : "--muted"})`} />
+        </button>
+      </${GlitterHint}>
+    </div>`;
 
   // Rotating bottom pane — a fresh nudge every ten seconds (TodayView.rotatingPane).
   const [pane, setPane] = useState(0);
@@ -307,6 +411,14 @@ export default function TodayScreen({ ctx }) {
           <${Icon} name="edit-3" size=${18} />
         </${IconButton}>
       </${GlitterHint}>
+      <${GlitterHint} hintKey="todayShop">
+        <!-- Swift's "bag" glyph has no offline lucide counterpart; "gift" is
+             the shop-shaped icon the vendored set carries (same substitution
+             log.js's garden-shop button already uses). -->
+        <${IconButton} label="Garden shop" variant="soft" onClick=${() => nav.open("garden")}>
+          <${Icon} name="gift" size=${18} />
+        </${IconButton}>
+      </${GlitterHint}>
     </div>`;
 
   const sampleBanner = store.sampleActive ? html`
@@ -320,7 +432,8 @@ export default function TodayScreen({ ctx }) {
   // The sticker shares the ring's box so its orbit center IS the ring's center,
   // and it rides the drawn track's exact radius — concentric, never offset.
   // RingPolish shares the same box for the Swift ring's sheen/shimmer/glimmer;
-  // her daisy chain rides the ring beneath the draggable bead (TodayView.swift).
+  // her daisy chain rides the ring beneath the draggable bead, and the
+  // chain-together toggle rides its bottom-trailing corner (TodayView.swift).
   const ring = (pred, size, onOpen) => {
     const cl = pred.averageCycleLength;
     const day = Math.min(Math.max(pred.cycleDay || 1, 1), cl);
@@ -357,8 +470,12 @@ export default function TodayScreen({ ctx }) {
           : dial}
         <${RingPolish} size=${size} day=${day} cycleLength=${cl}
           periodLength=${pred.averagePeriodLength} phase=${pred.phase} />
-        <${RingChain} radius=${trackRadius(size)} />
+        <!-- RingSticker now draws the whole chain itself (bead excluded, see
+             its chainBlooms), matching Swift's TodayView which no longer calls
+             RingChainView separately — do NOT re-add a <RingChain> call here,
+             it would double-render every chained bloom on top of itself. -->
         <${RingSticker} radius=${trackRadius(size)} periodFraction=${periodFraction(pred)} />
+        ${chainButton}
       </div>`;
   };
 
