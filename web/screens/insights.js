@@ -15,6 +15,8 @@ import { shareText, shareFile } from "../core/share.js";
 import { makeBackup, restoreBackup, backupFilename } from "../core/backup.js";
 import { rewards } from "../core/rewards.js";
 import { report as phaseReport } from "../core/phaseResearch.js";
+import * as trustedContact from "../core/trustedContact.js";
+import { buildWebReport, webReportFilename } from "../core/webReport.js";
 
 const React = window.React;
 const { useState, useEffect, useRef } = React;
@@ -26,6 +28,11 @@ export default function InsightsScreen({ ctx }) {
   const [saved, setSaved] = useState(false);
   const [backupNote, setBackupNote] = useState(null);
   const restoreInput = useRef(null);
+  const [contact, setContact] = useState(() => trustedContact.load());
+  const [editingContact, setEditingContact] = useState(false);
+  const [contactForm, setContactForm] = useState(trustedContact.emptyContact());
+  const [webReportNote, setWebReportNote] = useState(null);
+  const [phaseReportOpen, setPhaseReportOpen] = useState(false);
 
   useEffect(() => { store.markInsightsSeen(); }, []); // ponytail: mount-once, matches Swift .onAppear
 
@@ -85,28 +92,38 @@ export default function InsightsScreen({ ctx }) {
     </div>`;
 
   // ---- "right now" phase research card ----
-  // The research report for where she is right now — the same short report the
-  // ring's phase sheet shows, sitting right under the summary tiles so what
-  // this week feels like (and what the evidence says helps) is never more than
-  // one scroll away. (InsightsView.phaseReportCard)
+  // The research report for where she is right now. The headline is always
+  // visible; the paragraph, tips and evidence wait behind one tap so the
+  // screen never reads as a wall of text (InsightsView.phaseReportCard, v0.2.1).
   const phaseReportCard = p.phase ? (() => {
     const r = phaseReport(p.phase, p.cycleDay ?? 1, Math.max(p.averageCycleLength, 1));
     const tint = `var(--phase-${p.phase})`;
     return html`
       <${Card}>
         <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <h2 style=${{ display: "flex", alignItems: "center", gap: 8, margin: 0,
-            fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>
+          <button onClick=${() => setPhaseReportOpen(!phaseReportOpen)}
+            aria-expanded=${phaseReportOpen}
+            aria-label=${phaseReportOpen ? "Collapses the phase report" : "Expands the phase report"}
+            style=${{ display: "flex", alignItems: "center", gap: 8, margin: 0, width: "100%",
+              background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left",
+              font: "inherit", fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>
             <span style=${{ width: 10, height: 10, borderRadius: "50%", background: tint, flex: "0 0 auto" }} />
-            <span>Right now · ${r.title}</span>
-          </h2>
-          <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: "var(--leading-normal)" }}>${r.body}</div>
-          ${r.tips.map((tip) => html`
-            <div key=${tip} style=${{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-              <span style=${{ width: 5, height: 5, marginTop: 7, borderRadius: "50%", background: tint, flex: "0 0 auto" }} />
-              <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)" }}>${tip}</div>
-            </div>`)}
-          <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", lineHeight: "var(--leading-normal)", marginTop: 2 }}>${r.evidenceNote}</div>
+            <span style=${{ flex: 1 }}>Right now · ${r.title}</span>
+            <span style=${{ color: "var(--muted)", display: "inline-flex", flex: "0 0 auto",
+              transform: phaseReportOpen ? "rotate(180deg)" : "none", transition: "transform var(--dur-fast)" }}>
+              <${Icon} name="chevron-down" size=${16} />
+            </span>
+          </button>
+          ${phaseReportOpen && html`
+            <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: "var(--leading-normal)" }}>${r.body}</div>
+              ${r.tips.map((tip) => html`
+                <div key=${tip} style=${{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <span style=${{ width: 5, height: 5, marginTop: 7, borderRadius: "50%", background: tint, flex: "0 0 auto" }} />
+                  <div style=${{ fontSize: "var(--text-sm)", color: "var(--text)" }}>${tip}</div>
+                </div>`)}
+              <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)", lineHeight: "var(--leading-normal)", marginTop: 2 }}>${r.evidenceNote}</div>
+            </div>`}
         </div>
       </${Card}>`;
   })() : null;
@@ -234,6 +251,138 @@ export default function InsightsScreen({ ctx }) {
       </div>
     </${Card}>`;
 
+  // ---- the beautiful shareable: her month as an interactive page in her exact
+  // theme, made to be opened in any browser. Notes never leave the phone.
+  // (InsightsView.webReportCard, v0.2.0)
+  const shareWebReport = async () => {
+    const filename = webReportFilename();
+    const status = await shareFile({
+      filename, data: buildWebReport(store, { today }),
+      mimeType: "text/html", dialogTitle: "Your cycle report",
+    });
+    setWebReportNote(status === "shared" ? `Shared as ${filename}.` : `Saved to your downloads as ${filename}.`);
+  };
+  const webReportCard = html`
+    <${Card}>
+      <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+        ${cardLabel("sparkles", "The pretty report")}
+        <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+          Your month as an interactive page in your colors, for any browser. Notes stay on your phone.
+        </div>
+        <${Button} variant="soft" size="sm" onClick=${shareWebReport}>Share the report page</${Button}>
+        ${webReportNote && html`<div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>${webReportNote}</div>`}
+      </div>
+    </${Card}>`;
+
+  // ---- one trusted person (a partner, a parent, a sister) whose email or
+  // number is saved once, so a monthly update becomes two taps. Nothing ever
+  // sends until she taps Send in her own mail/messages app.
+  // (InsightsView.sendCard + TrustedContactEditor, v0.2.0)
+  const openContactEditor = () => {
+    setContactForm(contact ?? trustedContact.emptyContact());
+    setEditingContact(true);
+  };
+  const canSaveContact = contactForm.name.trim() !== "" &&
+    (contactForm.email.trim() !== "" || contactForm.phone.trim() !== "");
+  const saveContact = () => {
+    const c = {
+      name: contactForm.name.trim(), relationship: contactForm.relationship.trim(),
+      email: contactForm.email.trim(), phone: contactForm.phone.trim(),
+    };
+    trustedContact.save(c);
+    setContact(c);
+    setEditingContact(false);
+  };
+  const removeContact = () => {
+    trustedContact.clear();
+    setContact(null);
+    setEditingContact(false);
+  };
+  // Swift's updateTextBody, minus the "in the attached page" clause: an sms:
+  // link can't carry an attachment, so the copy doesn't promise one (the
+  // pretty report above is its own separate share).
+  const updateTextBody = (() => {
+    let s = "My cycle update from Uncorked.";
+    if (p.nextPeriodStart) {
+      const n = p.nextPeriodStart;
+      s += ` Next period expected around ${fmt.monthShort(n.getMonth())} ${n.getDate()}, ${n.getFullYear()}.`;
+    }
+    s += flags.length === 0
+      ? " Everything looks steady this month."
+      : ` ${flags.length} thing${flags.length === 1 ? "" : "s"} worth knowing this month.`;
+    return s;
+  })();
+  // mailto:/sms: are the honest web equivalent of Swift's native Mail/Messages
+  // compose sheets: they open the OS's own compose view and nothing sends
+  // until she taps Send there herself. No attachment, same as Swift's own
+  // mailtoFallback path for a device with no Mail account configured.
+  const emailContact = () => {
+    window.location.href = mailtoUrl(contact.email, "Cycle update", reportText(store, today));
+  };
+  const textContact = () => {
+    window.location.href = smsUrl(contact.phone, updateTextBody);
+  };
+  const contactField = (labelText, key, opts = {}) => html`
+    <label style=${{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, letterSpacing: "0.8px",
+        color: "var(--muted)", textTransform: "uppercase" }}>${labelText}</span>
+      <input type=${opts.type || "text"} value=${contactForm[key]} placeholder=${opts.placeholder || ""}
+        onChange=${(e) => setContactForm({ ...contactForm, [key]: e.target.value })}
+        style=${{ width: "100%", boxSizing: "border-box", font: "inherit", color: "var(--text)",
+          background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12,
+          padding: "10px 12px", height: 44 }} />
+    </label>`;
+  const contactEditor = html`
+    <div style=${{ display: "flex", flexDirection: "column", gap: 10, width: "100%",
+      marginTop: 4, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+      <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+        Updates only ever send when you tap Send yourself. Add an email, a phone number, or both.
+      </div>
+      ${contactField("Name", "name", { placeholder: "Alex" })}
+      ${contactField("Who they are", "relationship", { placeholder: "Partner, mom, sister" })}
+      ${contactField("Email", "email", { type: "email", placeholder: "alex@example.com" })}
+      ${contactField("Phone", "phone", { type: "tel", placeholder: "555-867-5309" })}
+      <div style=${{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <${Button} variant="primary" size="sm" disabled=${!canSaveContact} onClick=${saveContact}
+          iconLeft=${html`<${Icon} name="check" size=${14} />`}>Save</${Button}>
+        <${Button} variant="ghost" size="sm" onClick=${() => setEditingContact(false)}>Cancel</${Button}>
+        ${contact && html`<${Button} variant="ghost" size="sm" onClick=${removeContact}>Remove this contact</${Button}>`}
+      </div>
+    </div>`;
+  const sendCard = html`
+    <${Card} variant="accent">
+      <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start", width: "100%" }}>
+        <div style=${{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+          ${cardLabel("heart", "Keep someone in the loop")}
+          <div style=${{ flex: 1 }} />
+          ${contact && !editingContact && html`
+            <${Button} variant="ghost" size="sm" onClick=${openContactEditor}>Edit</${Button}>`}
+        </div>
+        ${contact ? html`
+          <div style=${{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+            <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+              The report page plus a plain summary, prefilled for ${contact.name}.
+            </div>
+            <div style=${{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              ${trustedContact.hasEmail(contact) && html`
+                <${Button} variant="primary" size="sm" onClick=${emailContact}>Email ${contact.name}</${Button}>`}
+              ${trustedContact.hasPhone(contact) && html`
+                <${Button} variant="soft" size="sm" onClick=${textContact}>Text ${contact.name}</${Button}>`}
+            </div>
+          </div>`
+          : html`
+          <div style=${{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
+            <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
+              Add one trusted person and updates become two taps. Nothing sends until you tap Send.
+            </div>
+            ${!editingContact && html`
+              <${Button} variant="primary" size="sm" onClick=${openContactEditor}
+                iconLeft=${html`<${Icon} name="plus" size=${14} />`}>Add a trusted contact</${Button}>`}
+          </div>`}
+        ${editingContact && contactEditor}
+      </div>
+    </${Card}>`;
+
   // ---- every logged day, as a spreadsheet ----
   const saveCsv = async () => {
     setSaved(await shareFile({
@@ -246,7 +395,7 @@ export default function InsightsScreen({ ctx }) {
       <div style=${{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
         ${cardLabel("calendar", "Your data, your spreadsheet")}
         <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-          Everything from the calendar (flow, discharge, temps, moods, symptoms, stretches, notes) as a CSV file.
+          Every logged day as a CSV file for your own records.
         </div>
         <${Button} variant="soft" size="sm" onClick=${saveCsv}>Share the spreadsheet</${Button}>
         ${saved && html`
@@ -294,7 +443,7 @@ export default function InsightsScreen({ ctx }) {
       <div style=${{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
         ${cardLabel("settings", "Backup & restore")}
         <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-          One file with everything: history, settings and your whole garden. Save it somewhere safe, or bring it to a new phone.
+          One file with everything, ready for a safe place or a new phone.
         </div>
         <div style=${{ display: "flex", gap: 8 }}>
           <${Button} variant="soft" size="sm" onClick=${saveBackup}>Save a backup</${Button}>
@@ -323,7 +472,7 @@ export default function InsightsScreen({ ctx }) {
         : emptyCard(html, ui, Icon)}
       ${flowChartCard}
       ${tuningCard}
-      ${store.hasAnyLogs ? html`${reportLeads ? null : reportCard}${exportCard}` : null}
+      ${store.hasAnyLogs ? html`${reportLeads ? null : reportCard}${webReportCard}${sendCard}${exportCard}` : null}
       ${backupCard}
     </div>`;
 }
@@ -332,6 +481,15 @@ export default function InsightsScreen({ ctx }) {
 // lives in tokens.css, another slice), so the deepest ramp color stands in.
 // models.js keys are camelCase; the CSS ramp is kebab (--flow-super-heavy).
 const flowRampColor = (key) => `var(--flow-${key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())})`;
+
+// mailto:/sms: URIs — the web's honest counterpart to MessageComposers.swift's
+// native Mail/Messages compose sheets. Both just hand a prefilled compose view
+// to the OS; nothing sends until she taps Send there herself, and (like
+// Swift's own mailtoFallback) neither carries an attachment. "to" is left
+// unencoded, same as Swift's URL(string:) call; subject/body are percent-encoded.
+const mailtoUrl = (to, subject, body) =>
+  `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+const smsUrl = (to, body) => `sms:${to}?body=${encodeURIComponent(body)}`;
 
 // ---------------------------------------------------------------------------
 // Monthly flow chart (InsightsView.flowChartCard / flowChartData). Swift draws

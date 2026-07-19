@@ -1,8 +1,9 @@
-// SymptomEcho — port of App/Components/SymptomEchoSheet.swift. The little
-// history card that appears when she logs a symptom she's felt before. It
-// answers three questions in one glance: when was the last time, what did that
-// whole day look like, and where in her cycle was she then compared to now. One
-// tap more shows those days on the calendar, annotated.
+// SymptomEcho — port of App/Components/SymptomEchoSheet.swift. The history
+// tour behind the little clock button next to a symptom she's felt before.
+// The headline answers the one essential question ("when was the last
+// time?") in a single calm line; everything deeper waits behind tappable
+// questions that expand in place, so she reads exactly as much as she wants
+// and never meets a wall of text.
 //
 // Opened as the "symptomEcho" overlay:
 //   nav.open("symptomEcho", { symptom, lastDate, loggingDate, onShowCalendar })
@@ -13,11 +14,13 @@
 // Swift's SymptomEcho struct carries the same three values; the callback is
 // LogView's `onShowCalendar`.
 
-import { daysBetween, isSameDay } from "../core/dates.js";
+import { daysBetween, isSameDay, startOfDay } from "../core/dates.js";
+
+const { useState } = window.React;
 
 export default function SymptomEchoScreen({ ctx }) {
   const { store, html, ui, Icon, fmt, today, nav, screenProps } = ctx;
-  const { Card, Button, IconButton } = ui;
+  const { Button, IconButton } = ui;
 
   const symptom = screenProps?.symptom;
   const loggingDate = screenProps?.loggingDate ?? today;
@@ -26,12 +29,20 @@ export default function SymptomEchoScreen({ ctx }) {
   // Swift only presents the sheet when there IS a last time (LogView.swift:96).
   if (!symptom || !lastDate) return null;
 
+  // Which tour rows are expanded (SymptomEchoSheet.open — a Set of row ids).
+  const [open, setOpen] = useState(() => new Set());
+  const toggleRow = (id) => setOpen((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   const daysAgo = daysBetween(lastDate, loggingDate);
   const loggingToday = isSameDay(loggingDate, today);
   const when = `${fmt.monthName(lastDate)} ${lastDate.getDate()}`;
   const lastFeltLine = daysAgo === 1
-    ? (loggingToday ? `Yesterday, ${when}` : `${when}, the day before`)
-    : (loggingToday ? `${when}, ${daysAgo} days ago` : `${when}, ${daysAgo} days earlier`);
+    ? (loggingToday ? `Last felt yesterday, ${when}` : `Last felt ${when}, the day before`)
+    : (loggingToday ? `Last felt ${when}, ${daysAgo} days ago` : `Last felt ${when}, ${daysAgo} days earlier`);
 
   const showCalendar = () => {
     nav.close();
@@ -68,21 +79,63 @@ export default function SymptomEchoScreen({ ctx }) {
         </span>`);
     }
   }
-  const phaseCompareCard = html`
-    <${Card} variant="soft">
-      <div style=${{ display: "flex", flexDirection: "column", gap: 6 }}>${compareRows}</div>
-    </${Card}>`;
+  const phaseCompare = html`
+    <div style=${{ display: "flex", flexDirection: "column", gap: 6 }}>${compareRows}</div>`;
 
   const log = store.logFor(lastDate);
 
+  // Every earlier day with this symptom, told in one gentle sentence
+  // (SymptomEchoSheet.timesContent/timesLine).
+  const cutoff = startOfDay(loggingDate);
+  const earlier = store.daysFelt(symptom).filter((d) => d < cutoff);
+  const timesLine = (() => {
+    if (!earlier.length) return "This is the first time you've logged it.";
+    const first = earlier[0];
+    const firstWhen = `${fmt.monthName(first)} ${first.getDate()}`;
+    if (earlier.length === 1) return `Once before now, on ${firstWhen}.`;
+    return `${earlier.length} times before now. The first was ${firstWhen}.`;
+  })();
+
+  // A question that expands in place (SymptomEchoSheet.tourRow). Icons: Swift's
+  // "arrow.triangle.2.circlepath" and "list.bullet.rectangle.portrait" have no
+  // offline lucide counterpart (see vendor/icon.js's ICONS) — "moon" (cycle
+  // phases) and "edit-3" (a written rundown) stand in; "calendar" is exact.
+  const tourRow = (id, iconName, title, content) => {
+    const isOpen = open.has(id);
+    return html`
+      <div key=${id} style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <button type="button" onClick=${() => toggleRow(id)} aria-expanded=${isOpen}
+          style=${{
+            display: "flex", alignItems: "center", gap: 10, minHeight: 44,
+            width: "100%", padding: 0, background: "none", border: "none",
+            cursor: "pointer", textAlign: "left", font: "inherit",
+          }}>
+          <span style=${{ width: 30, height: 30, borderRadius: "50%", flex: "none",
+            display: "grid", placeItems: "center", background: "var(--surface-soft)" }}>
+            <${Icon} name=${iconName} size=${13} color="var(--primary-strong)" />
+          </span>
+          <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)", flex: 1 }}>${title}</span>
+          <span style=${{
+            display: "inline-flex", color: "var(--muted)",
+            transform: isOpen ? "rotate(180deg)" : "none",
+            transition: "transform var(--dur-fast) var(--ease-signature)",
+          }}>
+            <${Icon} name="chevron-down" size=${13} />
+          </span>
+        </button>
+        ${isOpen && html`<div style=${{ paddingLeft: 40 }}>${content}</div>`}
+        <div style=${{ height: 1, background: "var(--line)" }} />
+      </div>`;
+  };
+
   return html`
-    <div style=${{ padding: "4px 20px 8px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style=${{ padding: "4px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
       <div style=${{ display: "flex", alignItems: "flex-start", gap: 10 }}>
         <${Icon} name="clock" size=${20} color="var(--primary-strong)" />
         <div style=${{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
           <h2 style=${{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700,
             fontSize: "var(--text-lg)", color: "var(--deep)" }}>
-            ${fmt.symptomLabel(symptom)}, last time
+            ${fmt.symptomLabel(symptom)}
           </h2>
           <span style=${{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>${lastFeltLine}</span>
         </div>
@@ -91,14 +144,15 @@ export default function SymptomEchoScreen({ ctx }) {
         </${IconButton}>
       </div>
 
-      ${phaseCompareCard}
+      <span style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>Tap any question below to open it up.</span>
 
-      ${log && html`
-        <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <h3 style=${{ margin: 0, fontSize: "var(--text-2xs)", fontWeight: 700,
-            letterSpacing: "0.8px", color: "var(--muted)" }}>THAT WHOLE DAY</h3>
-          <${DayLogSummary} ctx=${ctx} log=${log} />
-        </div>`}
+      <div style=${{ display: "flex", flexDirection: "column", gap: 12 }}>
+        ${tourRow("cycle", "moon", "Where in your cycle, then and now", phaseCompare)}
+        ${log && tourRow("day", "edit-3", "What that whole day looked like",
+          html`<${DayLogSummary} ctx=${ctx} log=${log} />`)}
+        ${tourRow("times", "calendar", "How often it visits",
+          html`<span style=${{ fontSize: "var(--text-sm)", color: "var(--text)", lineHeight: "var(--leading-normal)" }}>${timesLine}</span>`)}
+      </div>
 
       <${Button} variant="primary" block=${true} onClick=${showCalendar}
         iconLeft=${html`<${Icon} name="calendar" size=${16} />`}>

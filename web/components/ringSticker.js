@@ -280,12 +280,46 @@ export function RingSticker({ radius, periodFraction = 0 }) {
 
   const at = (x, y) => `translate(-50%, -50%) translate(${x}px, ${y}px)`;
 
+  // Her other worn blooms, riding the same ring (Swift: RingSticker's
+  // chainBlooms). Spread: evenly spaced from 12 o'clock. Linked (chain-together
+  // mode): snapped up behind the bead, one bloom-width (32px of arc) apart, so
+  // a drag or fling of the bead spins the whole chain as one. Tapping any bloom
+  // toggles the mode, same as the Today tab's chain button.
+  const chainBlooms = rewards.ringChain.filter((bid) => bid !== id);
+  const chainPos = (index, count) => {
+    const a = rewards.chainLinked
+      ? angle + (index + 1) * (32 / radius)
+      : (index / Math.max(count, 1)) * 2 * Math.PI - Math.PI / 2;
+    return { x: radius * Math.cos(a), y: radius * Math.sin(a) };
+  };
+
   return html`
     <div ref=${wrap} style=${{
       position: "absolute", left: "50%", top: "50%",
       transform: "translate(-50%, -50%)",
       width: diameter, height: diameter, pointerEvents: "none",
     }}>
+      ${chainBlooms.map((bid, i) => {
+        const p = chainPos(i, chainBlooms.length);
+        const name = (FLOWERS.find((f) => f.id === bid) || {}).name || bid;
+        return html`<button key=${bid} type="button" onClick=${() => rewards.toggleChainLinked()}
+          aria-label=${`${name} on your ring`}
+          aria-description=${rewards.chainLinked
+            ? "Spreads your flowers back around the ring"
+            : "Snaps your flowers together into a chain"}
+          style=${{
+            position: "absolute", left: "50%", top: "50%",
+            width: 36, height: 36, borderRadius: "50%", border: "none",
+            background: "none", padding: 0, margin: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transform: at(p.x, p.y),
+            transition: dragging || reduceMotion() ? "none" : "transform var(--dur-base) var(--ease-signature)",
+            pointerEvents: "auto", cursor: "pointer",
+          }}>
+          <${Bloom} id=${bid} size=${26} />
+        </button>`;
+      })}
+
       ${trail.map((b) => html`
         <span key=${b.key} style=${{
           position: "absolute", left: "50%", top: "50%", width: 6, height: 9,
@@ -308,7 +342,7 @@ export function RingSticker({ radius, periodFraction = 0 }) {
           animation: pop && !dragging ? "flowtier-pop var(--dur-base) var(--ease-signature)" : "none",
           pointerEvents: "auto", touchAction: "none", cursor: "grab",
         }}>
-        <${Bloom} id=${id} size=${30} />
+        <${Bloom} id=${id} size=${38} />
       </div>
 
       ${tease && html`

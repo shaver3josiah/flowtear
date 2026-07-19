@@ -87,6 +87,9 @@ export class RewardsStore {
     this.stickerMode = "ring";        // "ring" (riding it) or "free" (plucked off)
     this.ringChain = [];              // owned blooms chained around the Today ring, in add order
     this.poseyCrowned = false;        // Posey wears the chain as a crown (needs 3+ chained)
+    // Chain-together mode: worn blooms snap up behind the bead and spin with it
+    // as one daisy chain (off = evenly spread around the ring).
+    this.chainLinked = false;
     this._subs = new Set();
     this._load();
   }
@@ -245,9 +248,7 @@ export class RewardsStore {
     if (!f || this.ownedFlowers.has(id) || !this.canAfford(f.price)) return false;
     this.balance -= f.price;
     this.ownedFlowers.add(id);
-    if (this.activeSticker == null) this.activeSticker = id;
-    this._save();
-    this._notify();
+    this.toggleChain(id);   // a new bloom goes straight onto her ring
     return true;
   }
 
@@ -313,10 +314,13 @@ export class RewardsStore {
     return true;
   }
 
-  // Equip / unequip a sticker (flower id or "posey"); re-tapping the worn one
-  // takes it off. Mirrors the Swift `activeSticker` toggle in the shop.
-  equip(id) {
-    this.activeSticker = this.activeSticker === id ? null : id;
+  // Wear / take off Posey as the ring's bead (she never joins ringChain — she
+  // IS the coach, not a chained bloom). Taking her off hands the bead back to
+  // the newest chained bloom, so the ring never loses its draggable bead.
+  wearPosey() {
+    this.activeSticker = this.activeSticker === "posey"
+      ? (this.ringChain[this.ringChain.length - 1] ?? null)
+      : "posey";
     this._save();
     this._notify();
   }
@@ -342,14 +346,22 @@ export class RewardsStore {
 
   // ---- the flower chain (daisy-chained blooms around the Today ring) ----
   // Mirrors Swift's inChain/toggleChain: only OWNED blooms may join, order is
-  // the order she added them (= ring order), re-tapping removes.
+  // the order she added them (= ring order), re-tapping removes. Wearing is
+  // fully additive (no cap) — the chain IS what she wears. The newest-added
+  // bloom rides as the draggable bead (unless Posey holds it); removing the
+  // bead's bloom hands the bead to the last bloom still chained.
 
   inChain(id) { return this.ringChain.includes(id); }
 
   toggleChain(id) {
     const i = this.ringChain.indexOf(id);
-    if (i >= 0) this.ringChain.splice(i, 1);
-    else if (this.ownedFlowers.has(id)) this.ringChain.push(id);
+    if (i >= 0) {
+      this.ringChain.splice(i, 1);
+      if (this.activeSticker === id) this.activeSticker = this.ringChain[this.ringChain.length - 1] ?? null;
+    } else if (this.ownedFlowers.has(id)) {
+      this.ringChain.push(id);
+      if (this.activeSticker !== "posey") this.activeSticker = id;
+    }
     this._save();
     this._notify();
   }
@@ -359,6 +371,14 @@ export class RewardsStore {
   // un-crowns her when the chain later shrinks — exactly like Swift.
   setPoseyCrowned(on) {
     this.poseyCrowned = on;
+    this._save();
+    this._notify();
+  }
+
+  // Chain-together mode: on = worn blooms snap up behind the bead and spin
+  // with it as one daisy chain; off = evenly spread around the ring.
+  toggleChainLinked() {
+    this.chainLinked = !this.chainLinked;
     this._save();
     this._notify();
   }
@@ -393,6 +413,7 @@ export class RewardsStore {
       poseAwardLog: this.poseAwardLog,
       ringChain: [...this.ringChain],
       poseyCrowned: this.poseyCrowned,
+      chainLinked: this.chainLinked,
     };
   }
 
@@ -438,7 +459,13 @@ export class RewardsStore {
     this.stickerMode = b.stickerMode ?? "ring";
     this.poseAwardLog = b.poseAwardLog ?? {};
     this.ringChain = [...(b.ringChain ?? [])];
+    // Migrate: a single worn sticker from before additive wearing joins the
+    // chain, so the shop shows it as "on your ring" like everything else.
+    if (this.ringChain.length === 0 && this.activeSticker != null && this.activeSticker !== "posey") {
+      this.ringChain = [this.activeSticker];
+    }
     this.poseyCrowned = !!b.poseyCrowned;
+    this.chainLinked = !!b.chainLinked;
     // Migrate the old single-chime unlock into the crystal chime.
     if (b.soundUnlocked === true && this.ownedSounds.size === 0) {
       this.ownedSounds.add("crystal");
@@ -564,25 +591,80 @@ if (import.meta.main) {
     c.buyFlower("daisy");
     c.buyFlower("tulip");
     c.toggleChain("rose");                     // not owned — refused
-    assert.deepEqual(c.ringChain, [], "unowned blooms never chain");
-    c.toggleChain("tulip");
-    c.toggleChain("daisy");
-    assert.deepEqual(c.ringChain, ["tulip", "daisy"], "chain keeps add order");
+    assert.deepEqual(c.ringChain, ["daisy", "tulip"], "unowned blooms never chain (buys already auto-chained)");
+    c.toggleChain("daisy");                     // remove the non-bead member
+    assert.deepEqual(c.ringChain, ["tulip"], "re-tap removes from the chain");
     assert.equal(c.inChain("tulip"), true, "inChain sees members");
     assert.equal(c.inChain("rose"), false, "and only members");
-    c.toggleChain("tulip");
-    assert.deepEqual(c.ringChain, ["daisy"], "re-tap removes from the chain");
+    c.toggleChain("daisy");                     // add it back
+    assert.deepEqual(c.ringChain, ["tulip", "daisy"], "re-adding appends (chain keeps add order)");
     c.setPoseyCrowned(true);
 
     const round = new RewardsStore();
     round._hydrate(JSON.parse(c.backupData()));
-    assert.deepEqual(round.ringChain, ["daisy"], "chain survives the round trip");
+    assert.deepEqual(round.ringChain, ["tulip", "daisy"], "chain survives the round trip");
     assert.equal(round.poseyCrowned, true, "crown survives the round trip");
 
     const old = new RewardsStore();
     old._hydrate({ balance: 5 });              // a pre-chain blob
     assert.deepEqual(old.ringChain, [], "old blobs default to no chain");
     assert.equal(old.poseyCrowned, false, "and no crown");
+    assert.equal(old.chainLinked, false, "and chain-linked mode defaults off");
+  }
+
+  // ADDITIVE WEARING + BEAD REASSIGNMENT: buying goes straight onto the ring
+  // (no cap, no single-select), the newest bloom is the draggable bead, and
+  // removing the bead hands it to the last bloom still chained.
+  {
+    const w = new RewardsStore();
+    w._earn(2000);
+    w.buyFlower("daisy");
+    assert.deepEqual(w.ringChain, ["daisy"], "buying chains it");
+    assert.equal(w.activeSticker, "daisy", "and it becomes the bead");
+    w.buyFlower("tulip");
+    w.buyFlower("blossom");
+    assert.deepEqual(w.ringChain, ["daisy", "tulip", "blossom"], "wearing is additive, no cap");
+    assert.equal(w.activeSticker, "blossom", "newest bloom is the bead");
+
+    w.toggleChain("blossom");                   // remove the current bead
+    assert.deepEqual(w.ringChain, ["daisy", "tulip"], "bead's bloom leaves the chain");
+    assert.equal(w.activeSticker, "tulip", "bead hands off to the last remaining bloom");
+
+    w.toggleChain("daisy");                      // remove a non-bead member
+    assert.deepEqual(w.ringChain, ["tulip"], "removing a non-bead bloom leaves the bead alone");
+    assert.equal(w.activeSticker, "tulip", "bead unaffected");
+
+    w.toggleChain("tulip");                       // empty the chain entirely
+    assert.deepEqual(w.ringChain, [], "chain can go fully empty");
+    assert.equal(w.activeSticker, null, "and the bead clears with it");
+
+    // Posey holds the bead: a fresh buy joins the chain but never steals it.
+    w.balance = 10000; w.poseyOwned = true; w.activeSticker = "posey"; // fast-forward, not a purchase flow
+    w.buyFlower("rose");
+    assert.deepEqual(w.ringChain, ["rose"], "buying still chains while Posey wears the bead");
+    assert.equal(w.activeSticker, "posey", "but Posey keeps the bead");
+
+    w.toggleChainLinked();
+    assert.equal(w.chainLinked, true, "chain-linked mode toggles on");
+    w.toggleChainLinked();
+    assert.equal(w.chainLinked, false, "and back off");
+  }
+
+  // LEGACY MIGRATION: a single worn sticker from before additive wearing
+  // (ringChain empty, activeSticker set) joins the chain on load; a legacy
+  // Posey sticker never does (she isn't a chained bloom).
+  {
+    const m = new RewardsStore();
+    m._hydrate({ balance: 5, ownedFlowers: ["rose"], activeSticker: "rose" });
+    assert.deepEqual(m.ringChain, ["rose"], "legacy single sticker migrates into the chain");
+
+    const p = new RewardsStore();
+    p._hydrate({ balance: 5, poseyOwned: true, activeSticker: "posey" });
+    assert.deepEqual(p.ringChain, [], "a legacy Posey sticker never migrates into the chain");
+
+    const already = new RewardsStore();
+    already._hydrate({ balance: 5, activeSticker: "rose", ringChain: ["tulip"] });
+    assert.deepEqual(already.ringChain, ["tulip"], "a non-empty chain is never overwritten by migration");
   }
 
   assert.equal(r.buySoundItem("crystal"), false, "cannot afford the crystal chime");
