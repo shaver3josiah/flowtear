@@ -18,6 +18,16 @@ struct CyclePrediction: Equatable {
     var hasHistory: Bool { lastPeriodStart != nil }
 }
 
+/// One upcoming cycle's calendar marks: the predicted period and the fertile
+/// window that leads into it. `ovulation` sits inside `fertileStart...fertileEnd`.
+struct ProjectedCycle: Equatable {
+    var periodStart: Date
+    var periodEnd: Date
+    var fertileStart: Date
+    var fertileEnd: Date
+    var ovulation: Date
+}
+
 enum CycleEngine {
 
     /// Collapse a set of logged bleeding-days into period *start* dates. Consecutive
@@ -97,10 +107,8 @@ enum CycleEngine {
         }
 
         let next = cal.date(byAdding: .day, value: avgCycle, to: last)!
-        let ovulation = cal.date(byAdding: .day, value: -settings.lutealPhaseLength, to: next)!
-        // Fertile window: sperm survives ~5d before ovulation, egg ~1d after.
-        let fertileStart = cal.date(byAdding: .day, value: -5, to: ovulation)!
-        let fertileEnd = cal.date(byAdding: .day, value: 1, to: ovulation)!
+        let w = window(before: next, luteal: settings.lutealPhaseLength, cal: cal)!
+        let (ovulation, fertileStart, fertileEnd) = (w.ovulation, w.fertileStart, w.fertileEnd)
 
         let cycleDay = (cal.dateComponents([.day], from: last, to: today).day ?? 0) + 1
         let daysUntil = cal.dateComponents([.day], from: today, to: next).day
@@ -117,6 +125,50 @@ enum CycleEngine {
             fertileStart: fertileStart, fertileEnd: fertileEnd,
             cycleDay: max(cycleDay, 1), phase: phase, daysUntilNextPeriod: daysUntil
         )
+    }
+
+    /// The window leading into a period start: ovulation = start − luteal;
+    /// the fertile span runs ovulation −5…+1 (sperm survives ~5d before
+    /// ovulation, the egg ~1d after). The ONE place these offsets live —
+    /// predict() and projectedCycles() both read it.
+    private static func window(before start: Date, luteal: Int, cal: Calendar)
+        -> (ovulation: Date, fertileStart: Date, fertileEnd: Date)? {
+        guard let ov = cal.date(byAdding: .day, value: -luteal, to: start),
+              let fs = cal.date(byAdding: .day, value: -5, to: ov),
+              let fe = cal.date(byAdding: .day, value: 1, to: ov) else { return nil }
+        return (ov, fs, fe)
+    }
+
+    /// The prediction rolled forward: every upcoming cycle whose period starts
+    /// within `horizonDays` of `today`, one per average cycle length. The first
+    /// entry reproduces the prediction's own next period / fertile window
+    /// (both come from the same `window` helper). Empty until a first period
+    /// is logged.
+    static func projectedCycles(
+        prediction p: CyclePrediction,
+        settings: CycleSettings,
+        today: Date,
+        horizonDays: Int = 366,
+        cal: Calendar = .current
+    ) -> [ProjectedCycle] {
+        guard let next = p.nextPeriodStart,
+              let horizon = cal.date(byAdding: .day, value: horizonDays,
+                                     to: cal.startOfDay(for: today)) else { return [] }
+        let cycle = max(p.averageCycleLength, 1)
+        let period = max(p.averagePeriodLength, 1)
+        var out: [ProjectedCycle] = []
+        var start = cal.startOfDay(for: next)
+        while start <= horizon {
+            guard let periodEnd = cal.date(byAdding: .day, value: period - 1, to: start),
+                  let w = window(before: start, luteal: settings.lutealPhaseLength, cal: cal),
+                  let nextStart = cal.date(byAdding: .day, value: cycle, to: start)
+            else { break }
+            out.append(ProjectedCycle(periodStart: start, periodEnd: periodEnd,
+                                      fertileStart: w.fertileStart, fertileEnd: w.fertileEnd,
+                                      ovulation: w.ovulation))
+            start = nextStart
+        }
+        return out
     }
 
     private static func phase(

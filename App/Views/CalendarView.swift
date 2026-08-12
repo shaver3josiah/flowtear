@@ -1,10 +1,12 @@
 import SwiftUI
 
 // CalendarView — the month calendar (DS Flowtear/calendar-screen). One FFCard
-// holds the month pager, weekday row, and a 7-col grid of DayCell: each day
-// carries its own phase-soft wash, period fill, dashed predicted ring, fertile
-// band, and ovulation marker. A FFBadge legend names each state in text so
-// nothing rides on color alone. Tapping a day calls onLog(date).
+// holds the month pager (chevrons, swipes, a back-to-today chip), weekday row,
+// and a 7-col grid of DayCell: each day carries its own phase-soft wash, period
+// fill, dashed predicted ring, fertile band, and ovulation marker. Predictions
+// are projected a full year ahead; upcoming fertile days shimmer. A legend
+// names each state in text so nothing rides on color alone. Tapping a day
+// calls onLog(date).
 struct CalendarView: View {
     @Environment(Theme.self) private var theme
     @Environment(CycleStore.self) private var store
@@ -13,11 +15,15 @@ struct CalendarView: View {
     /// an explaining banner, and prev/next stepping between occurrences.
     @Binding var focus: SymptomFocus?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var month = Date()
     @State private var focusedOccurrence: Date? = nil
+    /// Which way the month just moved (+1 forward, −1 back) — shapes the
+    /// grid's slide-in so paging feels like turning, not swapping.
+    @State private var monthDirection = 1
+    /// Counts her own pager actions; drives the paging haptic.
+    @State private var pagerMoves = 0
     private let cal = Calendar.current
-
-    private var p: CyclePrediction { store.prediction() }
 
     /// Every day she's felt the focused symptom, oldest to newest.
     private var occurrences: [Date] {
@@ -33,10 +39,22 @@ struct CalendarView: View {
                 FFCard {
                     VStack(spacing: FFSpace.s3) {
                         monthHeader
+                        if !isOnThisMonth { todayChip }
                         weekdayRow
                         grid
+                            .id(monthKey)
+                            .transition(.asymmetric(
+                                insertion: .offset(x: CGFloat(monthDirection) * 28).combined(with: .opacity),
+                                removal: .opacity))
                     }
+                    .contentShape(Rectangle())
+                    // simultaneous, so the page's vertical scroll keeps first
+                    // claim on up-and-down drags (onEnded filters direction).
+                    .simultaneousGesture(monthSwipe)
                 }
+                // Keyed to deliberate pager taps (chevrons, swipes, the chip),
+                // never the programmatic jump a symptom-history landing makes.
+                .sensoryFeedback(.selection, trigger: pagerMoves)
                 legend
             }
             .padding(.horizontal, FFSpace.s4)
@@ -51,7 +69,7 @@ struct CalendarView: View {
     private func adoptFocus() {
         guard let f = focus else { return }
         focusedOccurrence = cal.startOfDay(for: f.anchor)
-        withAnimation(FFMotion.fast) { month = f.anchor }
+        go(to: f.anchor)
     }
 
     // MARK: symptom history banner
@@ -121,10 +139,8 @@ struct CalendarView: View {
               let idx = days.firstIndex(where: { cal.isDate($0, inSameDayAs: sel) }) else { return }
         let next = idx + by
         guard days.indices.contains(next) else { return }
-        withAnimation(FFMotion.fast) {
-            focusedOccurrence = days[next]
-            month = days[next]
-        }
+        withAnimation(FFMotion.fast) { focusedOccurrence = days[next] }
+        go(to: days[next])
     }
 
     // MARK: month pager
@@ -149,7 +165,7 @@ struct CalendarView: View {
                 .frame(width: FFSpace.tapMin, height: FFSpace.tapMin)
                 .background(theme.color(.surfaceSoft), in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FFPressButtonStyle(scale: 0.92))
         .accessibilityLabel(label)
     }
 
@@ -176,19 +192,26 @@ struct CalendarView: View {
 
     private var grid: some View {
         let days = monthGrid()
+        // One projection pass per render: every predicted period and fertile
+        // window for the year ahead, instead of re-deriving per day cell.
+        let windows = store.projectedCycles()
+        let today0 = cal.startOfDay(for: Date())
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
             ForEach(Array(days.enumerated()), id: \.offset) { _, day in
-                if let day { dayCell(day) }
+                if let day { dayCell(day, windows: windows, today0: today0) }
                 else { Color.clear.frame(width: FFSpace.tapMin, height: FFSpace.tapMin) }
             }
         }
     }
 
-    private func dayCell(_ date: Date) -> some View {
-        let st = state(for: date)
+    private func dayCell(_ date: Date, windows: [ProjectedCycle], today0: Date) -> some View {
+        let st = state(for: date, windows: windows)
         let isOccurrence = focus != nil && occurrences.contains { cal.isDate($0, inSameDayAs: date) }
         let isSelectedOccurrence = isOccurrence
             && focusedOccurrence.map { cal.isDate($0, inSameDayAs: date) } == true
+        // Upcoming fertile days carry the shimmer; the gleam is staggered by
+        // weekday column so it travels along the window like light on water.
+        let shimmers = (st.isFertile || st.isOvulation) && date >= today0
         return DayCell(
             day: cal.component(.day, from: date),
             isToday: cal.isDateInToday(date),
@@ -198,6 +221,8 @@ struct CalendarView: View {
             isOvulation: st.isOvulation,
             flow: st.flow,
             stretchDone: store.log(for: date)?.stretchDone ?? false,
+            shimmers: shimmers,
+            shimmerDelay: Double(column(for: date)) * 0.14,
             action: {
                 // In history mode a marked day selects itself in the banner;
                 // everything else still opens the day's log as always.
@@ -235,31 +260,23 @@ struct CalendarView: View {
     }
 
     // Logged bleeding wins; then ovulation, fertile window, then a predicted
-    // upcoming period. Mutually exclusive so a day reads as exactly one state.
-    private func state(for date: Date) -> DayState {
+    // period, across every projected cycle in the year ahead. Mutually
+    // exclusive so a day reads as exactly one state.
+    private func state(for date: Date, windows: [ProjectedCycle]) -> DayState {
         let d0 = cal.startOfDay(for: date)
         if let log = store.log(for: date), log.isPeriod {
             return DayState(isPeriod: true, flow: log.flow)
         }
-        if let ov = p.ovulationDate, cal.isDate(d0, inSameDayAs: ov) {
+        if windows.contains(where: { cal.isDate(d0, inSameDayAs: $0.ovulation) }) {
             return DayState(isOvulation: true)
         }
-        if let s = p.fertileStart, let e = p.fertileEnd,
-           d0 >= cal.startOfDay(for: s), d0 <= cal.startOfDay(for: e) {
+        if windows.contains(where: { d0 >= $0.fertileStart && d0 <= $0.fertileEnd }) {
             return DayState(isFertile: true)
         }
-        if isPredictedPeriod(d0) {
+        if windows.contains(where: { d0 >= $0.periodStart && d0 <= $0.periodEnd }) {
             return DayState(isPredicted: true)
         }
         return DayState()
-    }
-
-    // Predicted period: next start .. next start + avg period length − 1.
-    private func isPredictedPeriod(_ d0: Date) -> Bool {
-        guard let next = p.nextPeriodStart else { return false }
-        let start = cal.startOfDay(for: next)
-        guard let end = cal.date(byAdding: .day, value: p.averagePeriodLength - 1, to: start) else { return false }
-        return d0 >= start && d0 <= end
     }
 
     // MARK: legend
@@ -287,6 +304,10 @@ struct CalendarView: View {
                     legendGlyph("leaf.fill", .phaseLuteal, "Stretched")
                     Spacer(minLength: 0)
                 }
+                Text("Fertile days shimmer a whole year ahead, projected from your average cycle. The further out, the softer the guess.")
+                    .font(ffBody(FFType.xs))
+                    .foregroundStyle(theme.color(.muted))
+                    .lineSpacing(2)
             }
         }
     }
@@ -307,17 +328,92 @@ struct CalendarView: View {
     // MARK: grid math
 
     private func shift(_ by: Int) {
-        if let m = cal.date(byAdding: .month, value: by, to: month) {
-            withAnimation(FFMotion.fast) { month = m }
+        guard let m = cal.date(byAdding: .month, value: by, to: month) else { return }
+        pagerMoves += 1
+        go(to: m)
+    }
+
+    /// Every month move funnels through here so the slide direction and the
+    /// animation stay consistent (chevrons, swipes, the today chip, and
+    /// symptom-history steps all land the same way). Reduce Motion swaps the
+    /// slide for an instant change.
+    private func go(to target: Date) {
+        monthDirection = target >= month ? 1 : -1
+        withAnimation(reduceMotion ? nil : FFMotion.signature) { month = target }
+    }
+
+    private var isOnThisMonth: Bool {
+        cal.isDate(month, equalTo: Date(), toGranularity: .month)
+    }
+
+    /// Stable per-month identity for the grid transition and the haptic trigger.
+    private var monthKey: Int {
+        cal.component(.year, from: month) * 100 + cal.component(.month, from: month)
+    }
+
+    /// "next month" / "4 months ahead" / "2 months back" for the today chip.
+    private var monthDistance: String {
+        let now = cal.dateComponents([.year, .month], from: Date())
+        let then = cal.dateComponents([.year, .month], from: month)
+        let m = ((then.year ?? 0) - (now.year ?? 0)) * 12 + (then.month ?? 0) - (now.month ?? 0)
+        switch m {
+        case 1: return "next month"
+        case -1: return "last month"
+        case let x where x > 1: return "\(x) months ahead"
+        case let x where x < -1: return "\(-x) months back"
+        default: return ""
         }
+    }
+
+    // One tap home after wandering the year ahead.
+    private var todayChip: some View {
+        Button {
+            pagerMoves += 1
+            go(to: Date())
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(theme.color(.primaryStrong))
+                Text("Back to today")
+                    .font(ffBody(FFType.xs, weight: .bold))
+                    .foregroundStyle(theme.color(.primaryStrong))
+                if !monthDistance.isEmpty {
+                    Text("· \(monthDistance)")
+                        .font(ffBody(FFType.xs))
+                        .foregroundStyle(theme.color(.muted))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(theme.color(.surfaceSoft), in: Capsule())
+            .frame(minHeight: 32)
+        }
+        .buttonStyle(FFPressButtonStyle())
+        .transition(.ffViewIn)
+        .accessibilityLabel("Back to today. Viewing \(monthDistance).")
+    }
+
+    /// A sideways swipe pages the month; vertical drags stay with the scroll.
+    private var monthSwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { v in
+                guard abs(v.translation.width) > abs(v.translation.height),
+                      abs(v.translation.width) > 40 else { return }
+                shift(v.translation.width < 0 ? 1 : -1)
+            }
+    }
+
+    /// 0-based grid column (weekday rotated to the calendar's firstWeekday).
+    private func column(for date: Date) -> Int {
+        (cal.component(.weekday, from: date) - cal.firstWeekday + 7) % 7
     }
 
     /// nil-padded 7-col grid for the visible month (leading blanks before day 1).
     private func monthGrid() -> [Date?] {
         guard let range = cal.range(of: .day, in: .month, for: month),
               let first = cal.date(from: cal.dateComponents([.year, .month], from: month)) else { return [] }
-        let leading = (cal.component(.weekday, from: first) - cal.firstWeekday + 7) % 7
-        var cells: [Date?] = Array(repeating: nil, count: leading)
+        var cells: [Date?] = Array(repeating: nil, count: column(for: first))
         for d in range { cells.append(cal.date(byAdding: .day, value: d - 1, to: first)) }
         return cells
     }

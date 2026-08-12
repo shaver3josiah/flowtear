@@ -30,10 +30,28 @@ final class CycleStore {
 
     // MARK: mutations
 
+    /// Fired when TODAY first gains cycle content (dateKey, the streak ending
+    /// today) — the app wires this to the rewards store so every log path
+    /// (quick buttons, sliders, the full editor) pays the streak bonus through
+    /// this one funnel. Stretch-only checkmarks don't qualify (the pose
+    /// economy already pays those), and back-filled days never fire it, so
+    /// nothing can farm bonuses.
+    var onDayLogged: ((String, Int) -> Void)?
+    /// Fired when today's cycle content is cleared again (the quick-log Undo),
+    /// so the streak bonus can be taken back.
+    var onDayUnlogged: ((String) -> Void)?
+
     func upsert(_ log: DayLog) {
+        let todayKey = key(for: Date())
+        let hadToday = logs[todayKey]?.hasCycleContent ?? false
         if log.isEmpty { logs[log.dateKey] = nil } else { logs[log.dateKey] = log }
         save()
         noteEdited()
+        if log.dateKey == todayKey {
+            let hasToday = logs[todayKey]?.hasCycleContent ?? false
+            if !hadToday && hasToday { onDayLogged?(todayKey, logStreak()) }
+            if hadToday && !hasToday { onDayUnlogged?(todayKey) }
+        }
     }
 
     /// Set (or clear, with nil) a day's basal body temperature in °C.
@@ -135,6 +153,13 @@ final class CycleStore {
         CycleEngine.predict(periodDays: periodDays, today: today, settings: settings, cal: cal)
     }
 
+    /// Every predicted cycle in the year ahead — periods and fertile windows —
+    /// for calendar marking. Empty until a first period is logged.
+    func projectedCycles(today: Date = Date()) -> [ProjectedCycle] {
+        CycleEngine.projectedCycles(prediction: prediction(today: today),
+                                    settings: settings, today: today, cal: cal)
+    }
+
     /// The phase and cycle day AT a past date, judged only from the history
     /// that existed by then. Feeds the "last time you felt this" comparisons.
     func phaseSnapshot(at date: Date) -> (phase: CyclePhase?, day: Int?) {
@@ -158,6 +183,25 @@ final class CycleStore {
             .filter { $0.symptoms.contains(symptom) }
             .compactMap { Self.dateFmt.date(from: $0.dateKey) }
             .sorted()
+    }
+
+    /// Consecutive days with cycle content logged, ending today (or yesterday,
+    /// so an unlogged today never breaks a run she's still on) — the logging
+    /// twin of stretchStreak below. Stretch-only days don't count, matching
+    /// what pays the streak bonus.
+    func logStreak(today: Date = Date()) -> Int {
+        var d = cal.startOfDay(for: today)
+        if log(for: d)?.hasCycleContent != true {
+            guard let y = cal.date(byAdding: .day, value: -1, to: d) else { return 0 }
+            d = y
+        }
+        var streak = 0
+        while log(for: d)?.hasCycleContent == true {
+            streak += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: d) else { break }
+            d = prev
+        }
+        return streak
     }
 
     /// Consecutive stretch days ending today (or yesterday, so an unfinished
@@ -234,15 +278,22 @@ final class CycleStore {
         (try? JSONDecoder().decode(Snapshot.self, from: data)) != nil
     }
 
+    /// The day the ring-center streak celebration last played (TodayView's
+    /// @AppStorage reads it; restore stamps it below).
+    static let streakCelebratedKey = "flowtear.streakCelebrated"
+
     /// Replace the whole store from a backup blob. Validates before touching
     /// anything; returns false (and changes nothing) if the data won't decode.
-    /// Restoring real data also retires the first-launch sample banner.
+    /// Restoring real data also retires the first-launch sample banner, and
+    /// stamps today's streak celebration as already played — imported state
+    /// is a move-in, not a live win to cheer with "+N petals earned".
     @discardableResult
     func restore(from data: Data) -> Bool {
         guard let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return false }
         logs = Dictionary(uniqueKeysWithValues: snap.logs.map { ($0.dateKey, $0) })
         settings = snap.settings
         UserDefaults.standard.set(false, forKey: Self.sampleSeededKey)
+        UserDefaults.standard.set(key(for: Date()), forKey: Self.streakCelebratedKey)
         save()
         noteEdited()
         return true

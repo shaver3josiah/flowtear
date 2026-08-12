@@ -32,6 +32,7 @@ struct FFSwitch: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: isOn)
         .accessibilityAddTraits(.isToggle)
         .accessibilityValue(isOn ? "On" : "Off")
     }

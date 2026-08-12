@@ -305,6 +305,12 @@ struct InsightsView: View {
     /// With no flow logged at all, a labeled one-month preview shows instead.
     private var flowChartCard: some View {
         let data = flowChartData()
+        let today = cal.startOfDay(for: Date())
+        // Weekly ticks crowd once the projection stretches the window past
+        // ~6 weeks; step to fortnights so the labels keep breathing room.
+        let lastDate = data.projected.last?.date ?? data.logged.last?.date ?? today
+        let spanDays = cal.dateComponents([.day], from: data.logged.first?.date ?? today,
+                                          to: lastDate).day ?? 30
         return FFCard {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 HStack {
@@ -323,7 +329,10 @@ struct InsightsView: View {
                         AreaMark(x: .value("Day", pt.date, unit: .day),
                                  y: .value("Flow", pt.weight),
                                  series: .value("Series", "Logged"))
-                            .foregroundStyle(theme.color(.phaseMenstrual).opacity(0.14))
+                            .foregroundStyle(LinearGradient(
+                                colors: [theme.color(.phaseMenstrual).opacity(0.30),
+                                         theme.color(.phaseMenstrual).opacity(0.02)],
+                                startPoint: .top, endPoint: .bottom))
                             .interpolationMethod(.monotone)
                         LineMark(x: .value("Day", pt.date, unit: .day),
                                  y: .value("Flow", pt.weight),
@@ -332,7 +341,32 @@ struct InsightsView: View {
                             .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
                             .interpolationMethod(.monotone)
                     }
+                    // Each logged flow day gets its own dot, so single days
+                    // read as facts rather than dissolving into the curve.
+                    ForEach(data.logged.filter { $0.weight > 0 }) { pt in
+                        PointMark(x: .value("Day", pt.date, unit: .day),
+                                  y: .value("Flow", pt.weight))
+                            .foregroundStyle(theme.color(.phaseMenstrual))
+                            .symbolSize(20)
+                    }
+                    // A quiet rule where "what happened" hands off to "what's
+                    // expected".
+                    if !data.isPreview {
+                        RuleMark(x: .value("Today", today, unit: .day))
+                            .foregroundStyle(theme.color(.line))
+                            .lineStyle(StrokeStyle(lineWidth: 1))
+                            .annotation(position: .topLeading) {
+                                Text("Today")
+                                    .font(ffBody(FFType.xs2, weight: .semibold))
+                                    .foregroundStyle(theme.color(.muted))
+                            }
+                    }
                     ForEach(data.projected) { pt in
+                        AreaMark(x: .value("Day", pt.date, unit: .day),
+                                 y: .value("Flow", pt.weight),
+                                 series: .value("Series", "ExpectedFill"))
+                            .foregroundStyle(theme.color(.muted).opacity(0.08))
+                            .interpolationMethod(.monotone)
                         LineMark(x: .value("Day", pt.date, unit: .day),
                                  y: .value("Flow", pt.weight),
                                  series: .value("Series", "Expected"))
@@ -341,7 +375,7 @@ struct InsightsView: View {
                             .interpolationMethod(.monotone)
                     }
                 }
-                .chartYScale(domain: 0...5)
+                .chartYScale(domain: 0...5.3)   // headroom so a "super" peak's stroke isn't clipped
                 .chartYAxis {
                     AxisMarks(values: [1, 3, 5]) { value in
                         AxisGridLine().foregroundStyle(theme.color(.line))
@@ -353,7 +387,7 @@ struct InsightsView: View {
                     }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 7)) { _ in
+                    AxisMarks(values: .stride(by: .day, count: spanDays > 45 ? 14 : 7)) { _ in
                         AxisGridLine().foregroundStyle(theme.color(.line))
                         AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                             .font(ffBody(FFType.xs2, weight: .medium))
@@ -438,22 +472,22 @@ struct InsightsView: View {
             }
         }
 
-        // Projection: dashes from tomorrow through the predicted period's end,
-        // shaped by her own per-day intensity averages (a soft bell until then).
+        // Projection: just the expected hump, shaped by her own per-day
+        // intensity averages (a soft bell until then). One zero anchor on each
+        // side lets the dashed curve rise out of the baseline and settle back,
+        // with no flat dashed run-up dragging across the quiet days.
         var projected: [FlowChartPoint] = []
         if let next = p.nextPeriodStart {
             let start = cal.startOfDay(for: next)
             let len = max(p.averagePeriodLength, 1)
             let pattern = projectedPattern(len: len)
-            if let end = cal.date(byAdding: .day, value: len - 1, to: start),
-               var d = cal.date(byAdding: .day, value: 1, to: today) {
-                while d <= end, (cal.dateComponents([.day], from: today, to: d).day ?? 99) <= 35 {
-                    let k = cal.dateComponents([.day], from: start, to: d).day ?? -1
-                    let w = (k >= 0 && k < len) ? pattern[min(k, pattern.count - 1)] : 0
-                    projected.append(FlowChartPoint(date: d, weight: w))
-                    guard let n = cal.date(byAdding: .day, value: 1, to: d) else { break }
-                    d = n
-                }
+            for k in -1...len {
+                guard let d = cal.date(byAdding: .day, value: k, to: start),
+                      d > today,
+                      (cal.dateComponents([.day], from: today, to: d).day ?? 99) <= 35
+                else { continue }
+                let w = (k >= 0 && k < len) ? pattern[min(k, pattern.count - 1)] : 0
+                projected.append(FlowChartPoint(date: d, weight: w))
             }
         }
         return (logged, projected, false)
@@ -746,6 +780,9 @@ private struct TrustedContactEditor: View {
     @State private var email = ""
     @State private var phone = ""
 
+    private enum Field: Hashable { case name, relationship, email, phone }
+    @FocusState private var focused: Field?
+
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
         (!email.trimmingCharacters(in: .whitespaces).isEmpty ||
@@ -766,10 +803,14 @@ private struct TrustedContactEditor: View {
                     .font(ffBody(FFType.sm))
                     .foregroundStyle(theme.color(.muted))
 
-                field("Name", text: $name, placeholder: "Alex")
-                field("Who they are", text: $relationship, placeholder: "Partner, mom, sister")
-                field("Email", text: $email, placeholder: "alex@example.com", keyboard: .emailAddress)
-                field("Phone", text: $phone, placeholder: "555-867-5309", keyboard: .phonePad)
+                field("Name", text: $name, placeholder: "Alex",
+                      focus: .name, next: .relationship)
+                field("Who they are", text: $relationship, placeholder: "Partner, mom, sister",
+                      focus: .relationship, next: .email)
+                field("Email", text: $email, placeholder: "alex@example.com", keyboard: .emailAddress,
+                      focus: .email, next: .phone)
+                field("Phone", text: $phone, placeholder: "555-867-5309", keyboard: .phonePad,
+                      focus: .phone, next: nil)
 
                 FFButton("Save", style: .primary, icon: "checkmark") {
                     let c = TrustedContact(
@@ -794,6 +835,7 @@ private struct TrustedContactEditor: View {
             }
             .padding(FFSpace.s5)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(theme.color(.bg))
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -806,7 +848,8 @@ private struct TrustedContactEditor: View {
     }
 
     private func field(_ label: String, text: Binding<String>, placeholder: String,
-                       keyboard: UIKeyboardType = .default) -> some View {
+                       keyboard: UIKeyboardType = .default,
+                       focus: Field, next: Field?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label.uppercased())
                 .font(ffBody(FFType.xs2, weight: .bold)).tracking(0.8)
@@ -818,6 +861,10 @@ private struct TrustedContactEditor: View {
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(keyboard == .default ? .words : .never)
                 .autocorrectionDisabled(keyboard != .default)
+                // Return walks the form: next field until the last, then done.
+                .focused($focused, equals: focus)
+                .submitLabel(next == nil ? .done : .next)
+                .onSubmit { focused = next }
                 .padding(.horizontal, 14)
                 .frame(height: 46)
                 .background(theme.color(.surface), in: RoundedRectangle(cornerRadius: FFRadius.md, style: .continuous))

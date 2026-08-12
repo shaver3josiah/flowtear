@@ -2,8 +2,9 @@ import SwiftUI
 
 // DayCell — one day in the month calendar (DS tracking/DayCell). Layers a
 // phase-soft wash, an optional dashed predicted ring, an amber ovulation ring,
-// a today ring, and a logged-flow dot. 44pt tap target; the state is spelled
-// out in the accessibility label so nothing is conveyed by color alone.
+// a gold glimmer on upcoming fertile days, a today ring, and a logged-flow
+// dot. 44pt tap target; the state is spelled out in the accessibility label
+// so nothing is conveyed by color alone.
 struct DayCell: View {
     @Environment(Theme.self) private var theme
 
@@ -15,6 +16,10 @@ struct DayCell: View {
     let isOvulation: Bool
     var flow: Flow? = nil
     var stretchDone: Bool = false
+    /// Upcoming fertile days glimmer; `shimmerDelay` staggers the gleam per
+    /// weekday column so it travels along the window.
+    var shimmers: Bool = false
+    var shimmerDelay: Double = 0
     let action: () -> Void
 
     private let disc: CGFloat = 38   // wash disc; leaves a gap for the today ring
@@ -50,6 +55,15 @@ struct DayCell: View {
                         .offset(x: 13, y: -13)
                 }
 
+                if shimmers {
+                    FertileGlimmer(delay: shimmerDelay,
+                                   amber: theme.color(.phaseOvulation),
+                                   highlight: theme.isDarkMode ? .white : theme.color(.phaseOvulation),
+                                   size: disc)
+                        .frame(width: disc, height: disc)
+                        .allowsHitTesting(false)
+                }
+
                 Text("\(day)")
                     .font(ffBody(FFType.sm, weight: isToday ? .bold : .medium))
                     .foregroundStyle(numberColor)
@@ -77,7 +91,7 @@ struct DayCell: View {
             .frame(width: tap, height: tap)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FFPressButtonStyle(scale: 0.9))
         .accessibilityLabel(a11yLabel)
     }
 
@@ -114,5 +128,48 @@ struct DayCell: View {
         if stretchDone { parts.append("stretch done") }
         if isToday     { parts.append("today") }
         return parts.joined(separator: ", ")
+    }
+}
+
+// The fertile forecast's signature: a slow gold gleam that crosses the disc,
+// staggered per weekday so it travels along the window like light moving on
+// water. Built from the house shimmer recipe (SlideToLog's offset sweep +
+// GlitterHint's staggered delay): one Core-Animation loop, no per-frame body
+// work. The band spends most of each lap outside the clip, so it reads as a
+// periodic glint rather than constant motion, and the off-screen snap-back
+// between laps is invisible. Purely decorative (the fill, glyph, and label
+// carry the state), so under Reduce Motion it simply doesn't render.
+private struct FertileGlimmer: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let delay: Double
+    let amber: Color
+    let highlight: Color
+    let size: CGFloat
+
+    @State private var sweep = false
+
+    var body: some View {
+        if !reduceMotion {
+            Color.clear
+                .overlay(
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [.clear,
+                                     amber.opacity(0.35),
+                                     highlight.opacity(0.55),
+                                     amber.opacity(0.35),
+                                     .clear],
+                            startPoint: .leading, endPoint: .trailing))
+                        .frame(width: size * 0.85, height: size * 2)
+                        .rotationEffect(.degrees(24))
+                        .offset(x: (sweep ? 2.5 : -2.5) * size)
+                )
+                .clipShape(Circle())
+                .onAppear {
+                    withAnimation(.linear(duration: 4.6)
+                        .repeatForever(autoreverses: false)
+                        .delay(delay)) { sweep = true }
+                }
+        }
     }
 }

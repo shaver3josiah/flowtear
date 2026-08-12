@@ -5,6 +5,7 @@ import SwiftUI
 // Insights summary: average cycle, average period, cycles tracked, streak.
 struct StatTile: View {
     @Environment(Theme.self) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let title: String
     let value: String
@@ -19,6 +20,9 @@ struct StatTile: View {
                     // Deep plum numerals — the tint on surfaceSoft fails WCAG (~2.2:1).
                     // Color identity stays on the ring/badge; the stat reads as brand plum.
                     .foregroundStyle(theme.color(.deep))
+                    // A fresh log rolls the digits instead of snapping them.
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : FFMotion.signature, value: value)
                 if let unit {
                     Text(unit)
                         .font(ffBody(FFType.sm, weight: .medium))

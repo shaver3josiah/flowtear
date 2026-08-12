@@ -127,6 +127,11 @@ struct LogView: View {
             .padding(.top, FFSpace.s2)
             .padding(.bottom, FFSpace.section)
         }
+        // Dragging down tucks the keyboard away with the scroll, so the note
+        // field never traps the screen.
+        .scrollDismissesKeyboard(.interactively)
+        // Day-stepping answers in the fingertips like every other selection.
+        .sensoryFeedback(.selection, trigger: date)
         // The progress row rides above the scroll — always visible.
         .safeAreaInset(edge: .top, spacing: 0) {
             glanceRow

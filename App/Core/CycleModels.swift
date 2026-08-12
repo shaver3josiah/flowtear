@@ -68,6 +68,15 @@ struct DayLog: Codable, Identifiable, Equatable {
             && discharge == nil && (tempSkipped ?? false) == false
             && (stretchMovesDone?.isEmpty ?? true)
     }
+    /// True when the day carries actual CYCLE tracking (flow, discharge,
+    /// temperature, mood, symptom, or a note) — stretch checkmarks alone
+    /// don't count. The log-streak bonus and its celebration key off this,
+    /// so the pose economy can never double-pay a stretch-only day.
+    var hasCycleContent: Bool {
+        flow != nil || discharge != nil || temperatureC != nil
+            || (tempSkipped ?? false) || !moods.isEmpty || !symptoms.isEmpty
+            || !note.isEmpty
+    }
 }
 
 // User cycle configuration (defaults used until enough history exists).

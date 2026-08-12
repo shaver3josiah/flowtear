@@ -58,4 +58,42 @@ final class CycleEngineTests: XCTestCase {
         let days = [1, 2, 3, 20, 21, 22].map { day(2026, 7, $0) }
         XCTAssertEqual(CycleEngine.periodStarts(from: days, cal: cal).count, 2)
     }
+
+    func testProjectedCyclesCoverAYear() {
+        // 5-day period starting Jul 1 (so the logged average period IS 5),
+        // default 28-day cycle, luteal 14.
+        let days = (1...5).map { day(2026, 7, $0) }
+        let today = day(2026, 7, 13)
+        let p = CycleEngine.predict(periodDays: days, today: today,
+                                    settings: CycleSettings(), cal: cal)
+        let cycles = CycleEngine.projectedCycles(prediction: p, settings: CycleSettings(),
+                                                 today: today, cal: cal)
+
+        // First entry reproduces the prediction itself.
+        XCTAssertEqual(cycles.first?.periodStart, p.nextPeriodStart)
+        XCTAssertEqual(cycles.first?.ovulation, p.ovulationDate)
+        XCTAssertEqual(cycles.first?.fertileStart, p.fertileStart)
+        XCTAssertEqual(cycles.first?.fertileEnd, p.fertileEnd)
+
+        // Second cycle sits one average cycle later, window shaped the same.
+        XCTAssertEqual(cycles[1].periodStart, day(2026, 8, 26))      // Jul 29 + 28
+        XCTAssertEqual(cycles[1].ovulation, day(2026, 8, 12))        // start − 14 luteal
+        XCTAssertEqual(cycles[1].fertileStart, day(2026, 8, 7))      // ovulation − 5
+        XCTAssertEqual(cycles[1].fertileEnd, day(2026, 8, 13))       // ovulation + 1
+        XCTAssertEqual(cycles[1].periodEnd, day(2026, 8, 30))        // start + 5 − 1
+
+        // The list reaches a year out, one entry per cycle: Jul 29 2026 + k·28
+        // stays within the 366-day horizon (Jul 14 2027) through Jun 30 2027.
+        XCTAssertEqual(cycles.count, 13)
+        XCTAssertEqual(cycles.last?.periodStart, day(2027, 6, 30))
+        XCTAssertNil(cycles.first { $0.fertileStart >= $0.periodStart },
+                     "every fertile window precedes its period")
+    }
+
+    func testProjectedCyclesEmptyWithoutHistory() {
+        let p = CycleEngine.predict(periodDays: [], today: day(2026, 7, 13),
+                                    settings: CycleSettings(), cal: cal)
+        XCTAssertTrue(CycleEngine.projectedCycles(prediction: p, settings: CycleSettings(),
+                                                  today: day(2026, 7, 13), cal: cal).isEmpty)
+    }
 }

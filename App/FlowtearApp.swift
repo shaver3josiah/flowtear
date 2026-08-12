@@ -16,6 +16,16 @@ struct FlowtearApp: App {
                     // First open: seed 3 months of lived-in sample data so every
                     // screen previews rich. One-shot, clearable from Insights.
                     store.seedSampleIfFirstLaunch()
+                    // Today's first log pays the streak bonus, whichever screen
+                    // it lands from. (Sample data and restores bypass upsert,
+                    // so neither can mint petals.)
+                    store.onDayLogged = { key, streak in
+                        rewards.awardLogStreak(dateKey: key, streak: streak)
+                    }
+                    // ...and the quick-log Undo takes it back, exactly as paid.
+                    store.onDayUnlogged = { key in
+                        rewards.revokeLogStreak(dateKey: key)
+                    }
                 }
         }
     }

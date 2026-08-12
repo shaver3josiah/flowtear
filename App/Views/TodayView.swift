@@ -26,6 +26,9 @@ struct TodayView: View {
     @AppStorage("flowtear.chainBtnX") private var chainBtnX = -18.0
     @AppStorage("flowtear.chainBtnY") private var chainBtnY = -18.0
     @State private var chainBtnDrag: CGSize = .zero
+    /// Bumped when the one-tap period button commits, so it lands with a
+    /// success haptic like every other big moment in the app.
+    @State private var periodLogToken = 0
 
     /// The chain-together toggle: a quiet little link she can drag anywhere
     /// around the ring and tap to snap or spread her flowers. It twinkles
@@ -76,7 +79,34 @@ struct TodayView: View {
     @State private var paneIndex = 0
     @State private var undoToast: UndoAction? = nil
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
+    /// The last day the ring-center streak moment played (once per day).
+    @AppStorage(CycleStore.streakCelebratedKey) private var streakCelebratedDay = ""
+    @State private var celebrating = false
     private let paneTimer = Timer.publish(every: 10, on: .main, in: .common).autoconnect()
+
+    /// The ring-center streak moment, mounted over whichever ring is showing.
+    @ViewBuilder private func streakOverlay(size: CGFloat) -> some View {
+        if celebrating {
+            let streak = store.logStreak()
+            StreakCelebration(streak: streak,
+                              bonus: RewardsStore.logStreakBonus(streak),
+                              size: size) {
+                withAnimation(FFMotion.signature) { celebrating = false }
+            }
+        }
+    }
+
+    /// Play the Welcome → Streak +1 → N days sequence the first time Today
+    /// shows with today's cycle log in place — once per day, never over demo
+    /// data, and never for stretch-only days (those aren't a log streak).
+    private func maybeCelebrateStreak() {
+        let key = store.key(for: today)
+        guard !store.sampleActive,
+              store.log(for: today)?.hasCycleContent == true,
+              streakCelebratedDay != key else { return }
+        streakCelebratedDay = key
+        withAnimation(FFMotion.spring) { celebrating = true }
+    }
 
     var body: some View {
         ScrollView {
@@ -113,6 +143,10 @@ struct TodayView: View {
         }
         .sheet(isPresented: $showAbout) { AboutView() }
         .sheet(isPresented: $showTips) { TipsSheet() }
+        .onAppear { maybeCelebrateStreak() }
+        .onChange(of: store.log(for: today)?.hasCycleContent == true) { _, hasLog in
+            if hasLog { maybeCelebrateStreak() }
+        }
         .sheet(isPresented: $showShop) {
             GardenShopView(onGoEarn: {
                 showShop = false
@@ -214,6 +248,7 @@ struct TodayView: View {
                     // or snapped together behind the bead (chain-together mode).
                     RingSticker(radius: CycleRing.trackRadius(for: 244),
                                 periodFraction: periodFraction(p))
+                    streakOverlay(size: 244)
                 }
                 .overlay(alignment: .bottomTrailing) { chainButton }
                 PhaseBadge(phase: p.phase)
@@ -221,6 +256,9 @@ struct TodayView: View {
                     .font(ffBody(FFType.sm, weight: .medium))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)
+                    // The countdown rolls over gently instead of snapping.
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : FFMotion.signature, value: nextPeriodLine)
             }
         }
         .padding(.vertical, 2)
@@ -314,6 +352,7 @@ struct TodayView: View {
                         var log = store.log(for: today) ?? DayLog(dateKey: store.key(for: today))
                         log.flow = .medium
                         store.upsert(log)
+                        periodLogToken += 1
                         withAnimation(FFMotion.spring) {
                             undoToast = UndoAction(message: "Logged a medium flow for today") {
                                 var l = store.log(for: today) ?? DayLog(dateKey: store.key(for: today))
@@ -335,6 +374,7 @@ struct TodayView: View {
                 }
             }
         }
+        .sensoryFeedback(.success, trigger: periodLogToken)
     }
 
     // Today's flow, read from and written straight back to the store.
@@ -357,6 +397,7 @@ struct TodayView: View {
                 CycleRing(prediction: store.previewPrediction(), size: 220)
                 RingSticker(radius: CycleRing.trackRadius(for: 220),
                             periodFraction: periodFraction(store.previewPrediction()))
+                streakOverlay(size: 220)
             }
             .overlay(alignment: .bottomTrailing) { chainButton }
             Text("A first guess. It sharpens as you log")

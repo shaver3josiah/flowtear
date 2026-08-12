@@ -41,6 +41,9 @@ final class RewardsStore {
     var activeSound: String? { didSet { save() } }
     private(set) var penalizedDays: Set<String> = []   // lock-in misses already charged
     private(set) var periodLandDays: Set<String> = []  // ring-landing bonuses already paid
+    /// Daily log-streak bonuses already paid (dateKey → amount), a ledger so
+    /// the quick-log Undo can refund exactly what landed.
+    private(set) var logStreakAwards: [String: Int] = [:]
     /// Per-day stack of pose awards actually paid (newest last) — the ledger
     /// revokePose refunds from, so award/refund stay symmetric across tier switches.
     private(set) var poseAwardLog: [String: [Int]] = [:]
@@ -141,6 +144,36 @@ final class RewardsStore {
         periodLandDays.insert(dateKey)
         earn(5)
         return true
+    }
+
+    /// The daily logging bonus: doubles with the streak until it settles at
+    /// the cap, so every extra day in a row visibly pays more.
+    /// ponytail: 5·2^(streak−1) capped at 80 (streak 5+) — one knob to retune
+    /// if the petal economy ever shifts. The clamp also keeps the shift from
+    /// overflowing on year-long streaks.
+    static func logStreakBonus(_ streak: Int) -> Int {
+        5 << (min(max(streak, 1), 5) - 1)
+    }
+
+    /// Pay the streak bonus for today's first log — at most once per calendar
+    /// day, however many times the log is edited afterwards.
+    @discardableResult
+    func awardLogStreak(dateKey: String, streak: Int) -> Int {
+        guard logStreakAwards[dateKey] == nil else { return 0 }
+        let amount = Self.logStreakBonus(streak)
+        logStreakAwards[dateKey] = amount
+        earn(amount)
+        return amount
+    }
+
+    /// Symmetric take-back when the day's log is cleared again (the quick-log
+    /// Undo): refund exactly what the ledger says was paid. Same accepted
+    /// ceiling as revokePose — the balance clamps at zero and lifetime stays,
+    /// so round-tripping only ever games the unspendable number.
+    func revokeLogStreak(dateKey: String) {
+        guard let paid = logStreakAwards.removeValue(forKey: dateKey) else { return }
+        balance = max(0, balance - paid)
+        save()
     }
 
     /// Lock-in: −5 petals for a missed plan day, charged at most once per day.
@@ -311,6 +344,7 @@ final class RewardsStore {
         var ringChain: [String]? = []
         var poseyCrowned: Bool? = false
         var chainLinked: Bool? = false
+        var logStreakAwards: [String: Int]? = [:]
     }
 
     private func makeBlob() -> Blob {
@@ -324,7 +358,7 @@ final class RewardsStore {
              penalizedDays: penalizedDays, stickerAngle: stickerAngle,
              periodLandDays: periodLandDays, stickerMode: stickerMode,
              poseAwardLog: poseAwardLog, ringChain: ringChain, poseyCrowned: poseyCrowned,
-             chainLinked: chainLinked)
+             chainLinked: chainLinked, logStreakAwards: logStreakAwards)
     }
 
     private func apply(_ b: Blob) {
@@ -348,6 +382,7 @@ final class RewardsStore {
         if ringChain.isEmpty, let s = activeSticker, s != "posey" { ringChain = [s] }
         poseyCrowned = b.poseyCrowned ?? false
         chainLinked = b.chainLinked ?? false
+        logStreakAwards = b.logStreakAwards ?? [:]
         // Migrate the old single-chime unlock into the crystal chime.
         if b.soundUnlocked == true && ownedSounds.isEmpty {
             ownedSounds.insert("crystal")
