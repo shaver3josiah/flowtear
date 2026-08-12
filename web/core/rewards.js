@@ -74,6 +74,9 @@ export class RewardsStore {
     this.activeSound = null;
     this.penalizedDays = new Set();   // lock-in misses already charged
     this.periodLandDays = new Set();  // ring-landing bonuses already paid
+    // Daily log-streak bonuses already paid (dateKey -> amount), a ledger so
+    // the quick-log Undo can refund exactly what landed.
+    this.logStreakAwards = {};        // { "YYYY-MM-DD": amount }
     // Per-day stack of pose awards actually paid (newest last) — the ledger
     // revokePose refunds from, so award/refund stay symmetric across tier switches.
     this.poseAwardLog = {};           // { "YYYY-MM-DD": [amounts] }
@@ -206,6 +209,38 @@ export class RewardsStore {
     this.periodLandDays.add(dateKey);
     this._earn(5);
     return true;
+  }
+
+  // The daily logging bonus: doubles with the streak until it settles at the
+  // cap, so every extra day in a row visibly pays more.
+  // ponytail: 5·2^(streak−1) capped at 80 (streak 5+) — one knob to retune if
+  // the petal economy ever shifts. The clamp also keeps the shift from
+  // overflowing on year-long streaks. (RewardsStore.logStreakBonus)
+  static logStreakBonus(streak) {
+    return 5 << (Math.min(Math.max(streak, 1), 5) - 1);
+  }
+
+  // Pay the streak bonus for today's first log — at most once per calendar day,
+  // however many times the log is edited afterwards.
+  awardLogStreak(dateKey, streak) {
+    if (this.logStreakAwards[dateKey] != null) return 0;
+    const amount = RewardsStore.logStreakBonus(streak);
+    this.logStreakAwards[dateKey] = amount;
+    this._earn(amount);
+    return amount;
+  }
+
+  // Symmetric take-back when the day's log is cleared again (the quick-log
+  // Undo): refund exactly what the ledger says was paid. Same accepted ceiling
+  // as revokePose — the balance clamps at zero and lifetime stays, so
+  // round-tripping only ever games the unspendable number.
+  revokeLogStreak(dateKey) {
+    const paid = this.logStreakAwards[dateKey];
+    if (paid == null) return;
+    delete this.logStreakAwards[dateKey];
+    this.balance = Math.max(0, this.balance - paid);
+    this._save();
+    this._notify();
   }
 
   // Lock-in: −5 petals for a missed plan day, charged at most once per day.
@@ -414,6 +449,7 @@ export class RewardsStore {
       ringChain: [...this.ringChain],
       poseyCrowned: this.poseyCrowned,
       chainLinked: this.chainLinked,
+      logStreakAwards: this.logStreakAwards,
     };
   }
 
@@ -458,6 +494,7 @@ export class RewardsStore {
     this.periodLandDays = new Set(b.periodLandDays ?? []);
     this.stickerMode = b.stickerMode ?? "ring";
     this.poseAwardLog = b.poseAwardLog ?? {};
+    this.logStreakAwards = b.logStreakAwards ?? {};
     this.ringChain = [...(b.ringChain ?? [])];
     // Migrate: a single worn sticker from before additive wearing joins the
     // chain, so the shop shows it as "on your ring" like everything else.
@@ -527,6 +564,27 @@ if (import.meta.main) {
   r.awardPose("2026-07-16", 1, 4, 2);         // (15+5) × 2
   assert.equal(r.balance, 70, "earning");
   assert.equal(r.lifetime, 70, "lifetime");
+
+  // STREAK: exponential to a cap, paid once a day, refunded exactly.
+  {
+    assert.equal(RewardsStore.logStreakBonus(1), 5, "day 1 pays 5");
+    assert.equal(RewardsStore.logStreakBonus(2), 10, "day 2 doubles");
+    assert.equal(RewardsStore.logStreakBonus(3), 20, "day 3 doubles");
+    assert.equal(RewardsStore.logStreakBonus(4), 40, "day 4 doubles");
+    assert.equal(RewardsStore.logStreakBonus(5), 80, "day 5 hits the cap");
+    assert.equal(RewardsStore.logStreakBonus(365), 80, "a year-long streak stays capped");
+    assert.equal(RewardsStore.logStreakBonus(0), 5, "a fresh start clamps up to 5");
+
+    const st = new RewardsStore();
+    assert.equal(st.awardLogStreak("2026-07-16", 3), 20, "streak 3 pays 20");
+    assert.equal(st.awardLogStreak("2026-07-16", 3), 0, "the same day never pays twice");
+    assert.equal(st.balance, 20, "one payment landed");
+    st.revokeLogStreak("2026-07-16");
+    assert.equal(st.balance, 0, "undo refunds exactly what was paid");
+    st.revokeLogStreak("2026-07-16");
+    assert.equal(st.balance, 0, "a second undo is a no-op");
+    assert.equal(st.awardLogStreak("2026-07-16", 5), 80, "cleared day can be re-earned");
+  }
 
   // LEDGER: tier switched ×2 → ×4 between check and uncheck — the refunds are
   // the ×2 amounts actually paid (40 then 30), never the ×4 recomputation.

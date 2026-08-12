@@ -122,4 +122,43 @@ st.upsert({ ...emptyLog(kd(0)), stretchDone: true });
 assert.equal(st.stretchStreak(new Date()), 3, "finishing today extends the run");
 assert.equal(fresh().stretchStreak(new Date()), 0, "no stretches, no streak");
 
+// ---- log streak + the award funnel (CycleStore.logStreak / onDayLogged) ----
+{
+  const mk = (store, d, patch) => ({ ...emptyLog(keyFromDate(d)), ...patch });
+  const today = new Date();
+
+  // Consecutive CYCLE days count; a stretch-only day does not.
+  const s1 = fresh();
+  for (const off of [-3, -2, -1, 0]) s1.upsert(mk(s1, addDays(today, off), { flow: "light" }));
+  assert.equal(s1.logStreak(today), 4, "four consecutive cycle days");
+
+  const s2 = fresh();
+  s2.upsert(mk(s2, addDays(today, -2), { flow: "light" }));
+  s2.upsert(mk(s2, addDays(today, -1), { stretchDone: true }));  // stretch-only breaks it
+  s2.upsert(mk(s2, today, { flow: "light" }));
+  assert.equal(s2.logStreak(today), 1, "a stretch-only day does not extend the streak");
+
+  // The funnel fires once when today first gains cycle content, and fires the
+  // un-log hook when that content is cleared again (the quick-log Undo).
+  const s3 = fresh();
+  const paid = [], undone = [];
+  s3.onDayLogged = (k, streak) => paid.push([k, streak]);
+  s3.onDayUnlogged = (k) => undone.push(k);
+  s3.upsert(mk(s3, today, { stretchDone: true }));
+  assert.equal(paid.length, 0, "stretch-only never pays the log streak");
+  s3.upsert(mk(s3, today, { stretchDone: true, flow: "medium" }));
+  assert.deepEqual(paid, [[keyFromDate(today), 1]], "first cycle content pays once");
+  s3.upsert(mk(s3, today, { stretchDone: true, flow: "heavy", note: "ow" }));
+  assert.equal(paid.length, 1, "editing the same day never pays twice");
+  s3.upsert(mk(s3, today, { stretchDone: true }));
+  assert.deepEqual(undone, [keyFromDate(today)], "clearing the cycle content refunds");
+
+  // Back-filling yesterday never fires the award (only TODAY can pay).
+  const s4 = fresh();
+  const back = [];
+  s4.onDayLogged = (k) => back.push(k);
+  s4.upsert(mk(s4, addDays(today, -1), { flow: "medium" }));
+  assert.equal(back.length, 0, "back-filled days cannot farm the bonus");
+}
+
 console.log("store.test.mjs: all assertions passed");

@@ -1,7 +1,7 @@
 {
   "product": "Uncorked (Flowtear)",
-  "contractsVersion": "1.5.0",
-  "updated": "2026-07-17",
+  "contractsVersion": "1.6.0",
+  "updated": "2026-08-12",
   "summary": "Single source of truth shared by the two implementations of Uncorked: native SwiftUI (App/, ships to iOS) and the web app (web/, wrapped by Capacitor for Android). Neither shares runtime code; they conform to the shared behavior described here. Run `npm run check:parity` to see whether a platform has drifted or fallen behind.",
   "platforms": {
     "ios": {
@@ -20,7 +20,7 @@
     }
   },
   "sharedTruth": {
-    "algorithm": "cycle-vectors.json \u2014 golden input->output vectors for the predictor. Both engines MUST reproduce these. Regenerate from the JS engine with `npm run gen:vectors` after an intentional algorithm change, then port the same change to CycleEngine.swift.",
+    "algorithm": "cycle-vectors.json \u2014 golden input->output vectors for the predictor AND its year-ahead projection (the `projected` block on each vector). Both engines MUST reproduce these. Regenerate from the JS engine with `npm run gen:vectors` after an intentional algorithm change, then port the same change to CycleEngine.swift.",
     "tokens": "tokens.json \u2014 design tokens (colors, radii, type). The web tokens.css and Swift Theme.swift both mirror these values.",
     "models": "The logged-data enums (Flow, Mood, Symptom, Discharge, Phase) and the DayLog shape must match between web/core/models.js and App/Core/CycleModels.swift. Persistence blob key is `flowtear.state.v1` on both."
   },
@@ -228,6 +228,34 @@
       "since": "1.5.0",
       "ios": "App/Views/InsightsView.swift",
       "web": "web/screens/insights.js"
+    },
+    {
+      "id": "year-ahead-projection",
+      "since": "1.6.0",
+      "note": "projectedCycles() rolls the prediction forward 366 days; the calendar marks every predicted period and fertile window, not just the next one. Pinned by the `projected` block in cycle-vectors.json.",
+      "ios": "App/Core/CycleEngine.swift (projectedCycles), App/Views/CalendarView.swift",
+      "web": "web/core/engine.js (projectedCycles), web/screens/calendar.js"
+    },
+    {
+      "id": "fertile-shimmer",
+      "since": "1.6.0",
+      "note": "Upcoming fertile days glimmer, staggered per weekday column. Decorative only: gated off under Reduce Motion on both platforms.",
+      "ios": "App/Components/DayCell.swift (FertileGlimmer)",
+      "web": "web/screens/calendar.js, web/styles/app.css (.ff-fertile-glimmer)"
+    },
+    {
+      "id": "log-streak",
+      "since": "1.6.0",
+      "note": "Consecutive days with CYCLE content (stretch-only days never count) pay 5/10/20/40/80 petals, once per day, with a symmetric revoke when the day's log is cleared. Awarded through the store's single upsert funnel.",
+      "ios": "App/Core/CycleStore.swift (logStreak, onDayLogged), App/Core/RewardsStore.swift (logStreakBonus)",
+      "web": "web/core/store.js (logStreak, onDayLogged), web/core/rewards.js (logStreakBonus)"
+    },
+    {
+      "id": "streak-celebration",
+      "since": "1.6.0",
+      "note": "Ring-center sequence after today's log lands: Welcome! -> Streak +1 (+N petals) -> X days in a row. Once per day; Reduce Motion shows the final line only.",
+      "ios": "App/Components/StreakCelebration.swift",
+      "web": "web/screens/today.js (StreakCelebration)"
     }
   ],
   "platformDivergences": {

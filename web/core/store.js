@@ -3,9 +3,9 @@
 // kept before every write so a bad write can never destroy her history.
 // Predictions are derived on demand from logs (see prediction()).
 
-import { emptyLog, isEmptyLog, FLOW_WEIGHT, DEFAULT_SETTINGS } from "./models.js";
+import { emptyLog, isEmptyLog, hasCycleContent, FLOW_WEIGHT, DEFAULT_SETTINGS } from "./models.js";
 import { keyFromDate, dateFromKey, startOfDay, addDays } from "./dates.js";
-import { predict } from "./engine.js";
+import { predict, projectedCycles } from "./engine.js";
 import { buildSampleLogs } from "./sampleData.js";
 
 const K = {
@@ -16,7 +16,10 @@ const K = {
   lastEdit: "flowtear.lastEdit",
   insightsSeen: "flowtear.insightsSeen",
   seeded: "flowtear.sample.seeded",
+  streakCelebrated: "flowtear.streakCelebrated",
 };
+
+export const STREAK_CELEBRATED_KEY = K.streakCelebrated;
 
 export const STRETCH_TIERS = ["trio", "starter", "full"];
 
@@ -25,6 +28,14 @@ export class CycleStore {
     this.logs = {}; // dateKey -> DayLog
     this.settings = { ...DEFAULT_SETTINGS };
     this._subs = new Set();
+    // Fired when TODAY first gains cycle content (dateKey, the streak ending
+    // today) — app.js wires these to the rewards store so every log path (quick
+    // buttons, sliders, the full editor) pays the streak bonus through this one
+    // funnel, and the quick-log Undo takes it back. Stretch-only checkmarks
+    // don't qualify (the pose economy already pays those) and back-filled days
+    // never fire, so nothing can farm bonuses. (CycleStore.swift onDayLogged)
+    this.onDayLogged = null;
+    this.onDayUnlogged = null;
     this._load();
   }
 
@@ -40,11 +51,18 @@ export class CycleStore {
 
   // ---- mutations ----
   upsert(log) {
+    const todayKey = this.key(new Date());
+    const hadToday = hasCycleContent(this.logs[todayKey]);
     if (isEmptyLog(log)) delete this.logs[log.dateKey];
     else this.logs[log.dateKey] = log;
     this._save();
     this._noteEdited();
     this._notify();
+    if (log.dateKey === todayKey) {
+      const hasToday = hasCycleContent(this.logs[todayKey]);
+      if (!hadToday && hasToday) this.onDayLogged?.(todayKey, this.logStreak());
+      if (hadToday && !hasToday) this.onDayUnlogged?.(todayKey);
+    }
   }
 
   _mutateDay(date, fn) {
@@ -68,6 +86,12 @@ export class CycleStore {
       .map((l) => ({ date: dateFromKey(l.dateKey), celsius: l.temperatureC }))
       .sort((a, b) => a.date - b.date)
       .slice(-limit);
+  }
+
+  /// Every predicted cycle in the year ahead — periods and fertile windows —
+  /// for calendar marking. Empty until a first period is logged.
+  projectedCycles(today = new Date()) {
+    return projectedCycles(this.prediction(today), this.settings, today);
   }
 
   stretchDone(date) { return this.logFor(date)?.stretchDone ?? false; }
@@ -193,6 +217,18 @@ export class CycleStore {
       .sort((a, b) => a - b);
   }
 
+  /// Consecutive days with cycle content logged, ending today (or yesterday, so
+  /// an unlogged today never breaks a run she's still on) — the logging twin of
+  /// stretchStreak. Stretch-only days don't count, matching what pays the
+  /// streak bonus. (CycleStore.swift logStreak)
+  logStreak(today = new Date()) {
+    let d = startOfDay(today);
+    if (!hasCycleContent(this.logFor(d))) d = addDays(d, -1);
+    let streak = 0;
+    while (hasCycleContent(this.logFor(d))) { streak += 1; d = addDays(d, -1); }
+    return streak;
+  }
+
   /// Consecutive stretch days ending today (or yesterday, so an unfinished
   /// today never breaks a run she's still on).
   stretchStreak(today = new Date()) {
@@ -231,6 +267,7 @@ export class CycleStore {
     this.logs = Object.fromEntries(snap.logs.map((l) => [l.dateKey, l]));
     this.settings = { ...DEFAULT_SETTINGS, ...(snap.settings ?? {}) };
     localStorage.setItem(K.seeded, "false");
+    localStorage.setItem(K.streakCelebrated, this.key(new Date()));
     this._save();
     this._noteEdited();
     this._notify();

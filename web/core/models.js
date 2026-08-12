@@ -53,6 +53,22 @@ export function emptyLog(dateKey) {
   };
 }
 
+// True when the day carries actual CYCLE tracking (flow, discharge,
+// temperature, mood, symptom, or a note) — stretch checkmarks alone don't
+// count. The log-streak bonus and its celebration key off this, so the pose
+// economy can never double-pay a stretch-only day. (DayLog.hasCycleContent)
+export function hasCycleContent(l) {
+  return !!l && (
+    l.flow != null ||
+    l.discharge != null ||
+    l.temperatureC != null ||
+    (l.tempSkipped ?? false) ||
+    (l.moods?.length ?? 0) > 0 ||
+    (l.symptoms?.length ?? 0) > 0 ||
+    !!(l.note && l.note.length)
+  );
+}
+
 // Matches DayLog.isEmpty exactly — an empty log is deleted, not stored.
 export function isEmptyLog(l) {
   return (

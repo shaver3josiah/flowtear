@@ -80,10 +80,7 @@ export function predict(periodDays, today, settings) {
   }
 
   const next = addDays(last, avgCycle);
-  const ovulation = addDays(next, -settings.lutealPhaseLength);
-  // Fertile window: sperm survives ~5d before ovulation, egg ~1d after.
-  const fertileStart = addDays(ovulation, -5);
-  const fertileEnd = addDays(ovulation, 1);
+  const { ovulation, fertileStart, fertileEnd } = fertileWindow(next, settings.lutealPhaseLength);
 
   const cycleDay = daysBetween(last, today) + 1;
   const daysUntil = daysBetween(today, next);
@@ -97,6 +94,41 @@ export function predict(periodDays, today, settings) {
     cycleDay: Math.max(cycleDay, 1), phase, daysUntilNextPeriod: daysUntil,
     hasHistory: true,
   };
+}
+
+// The window leading into a period start: ovulation = start - luteal; the
+// fertile span runs ovulation -5..+1 (sperm survives ~5d before ovulation, the
+// egg ~1d after). The ONE place these offsets live -- predict() and
+// projectedCycles() both read it (CycleEngine.swift `window(before:luteal:cal:)`).
+function fertileWindow(start, luteal) {
+  const ovulation = addDays(start, -luteal);
+  return { ovulation, fertileStart: addDays(ovulation, -5), fertileEnd: addDays(ovulation, 1) };
+}
+
+// The prediction rolled forward: every upcoming cycle whose period starts
+// within `horizonDays` of `today`, one per average cycle length. The first
+// entry reproduces the prediction's own next period / fertile window (both come
+// from `fertileWindow`). Empty until a first period is logged.
+// Port of CycleEngine.projectedCycles(prediction:settings:today:horizonDays:cal:).
+export function projectedCycles(p, settings, today, horizonDays = 366) {
+  if (!p.nextPeriodStart) return [];
+  const horizon = addDays(startOfDay(today), horizonDays);
+  const cycle = Math.max(p.averageCycleLength, 1);
+  const period = Math.max(p.averagePeriodLength, 1);
+  const out = [];
+  let start = startOfDay(p.nextPeriodStart);
+  while (start <= horizon) {
+    const w = fertileWindow(start, settings.lutealPhaseLength);
+    out.push({
+      periodStart: start,
+      periodEnd: addDays(start, period - 1),
+      fertileStart: w.fertileStart,
+      fertileEnd: w.fertileEnd,
+      ovulation: w.ovulation,
+    });
+    start = addDays(start, cycle);
+  }
+  return out;
 }
 
 function phaseOf({ today, periodLength, fertileStart, fertileEnd, ovulation, cycleStart }) {

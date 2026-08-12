@@ -9,7 +9,7 @@
 
 import { FLOW_WEIGHT } from "../core/models.js";
 import { FLOW_COLOR } from "../components/flowScale.js";
-import { keyFromDate, dateFromKey, addDays, startOfDay, daysBetween } from "../core/dates.js";
+import { keyFromDate, dateFromKey, startOfDay, daysBetween } from "../core/dates.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
@@ -83,26 +83,32 @@ export default function CalendarScreen({ ctx }) {
 
   const shift = (by) => setMonthDate(new Date(year, month + by, 1));
 
-  // Predicted period run: nextPeriodStart .. + averagePeriodLength − 1.
-  const isPredictedPeriod = (d0) => {
-    if (!p.nextPeriodStart) return false;
-    const start = startOfDay(p.nextPeriodStart);
-    const end = addDays(start, p.averagePeriodLength - 1);
-    return d0 >= start && d0 <= end;
-  };
+  // "next month" / "4 months ahead" — how far she's wandered from today.
+  const onThisMonth = year === today.getFullYear() && month === today.getMonth();
+  const monthsOut = (year - today.getFullYear()) * 12 + (month - today.getMonth());
+  const monthDistance =
+    monthsOut === 1 ? "next month"
+    : monthsOut === -1 ? "last month"
+    : monthsOut > 1 ? `${monthsOut} months ahead`
+    : monthsOut < -1 ? `${-monthsOut} months back`
+    : "";
+
+  // Every predicted cycle in the year ahead — periods AND fertile windows — so
+  // the calendar marks all of them, not just the next one. One pass per render.
+  const windows = store.projectedCycles(today);
+  const today0 = startOfDay(today);
 
   // Logged bleeding wins, then ovulation, fertile window, then a predicted
-  // upcoming period — mutually exclusive so each day reads as one state.
-  // Note: only real bleeding (flow weight >= 2) washes as "period"; a spotting
-  // day still shows its flow dot but no full wash.
+  // period, across every projected cycle — mutually exclusive so each day reads
+  // as one state. Note: only real bleeding (flow weight >= 2) washes as
+  // "period"; a spotting day still shows its flow dot but no full wash.
   const stateFor = (date) => {
     const flow = store.logFor(date)?.flow ?? null;
     if (flow && FLOW_WEIGHT[flow] >= 2) return "period";
     const d0 = startOfDay(date);
-    if (p.ovulationDate && daysBetween(d0, p.ovulationDate) === 0) return "ovulation";
-    if (p.fertileStart && p.fertileEnd &&
-        d0 >= startOfDay(p.fertileStart) && d0 <= startOfDay(p.fertileEnd)) return "fertile";
-    if (isPredictedPeriod(d0)) return "predicted";
+    if (windows.some((w) => daysBetween(d0, w.ovulation) === 0)) return "ovulation";
+    if (windows.some((w) => d0 >= w.fertileStart && d0 <= w.fertileEnd)) return "fertile";
+    if (windows.some((w) => d0 >= w.periodStart && d0 <= w.periodEnd)) return "predicted";
     return null;
   };
 
@@ -191,6 +197,10 @@ export default function CalendarScreen({ ctx }) {
     const flow = store.logFor(date)?.flow ?? null;
     const isSelected = k === selectedKey;
     const isOcc = occKeys.includes(k);
+    // Upcoming fertile days glimmer; the gleam is staggered by weekday column
+    // so it travels along the window (DayCell.swift shimmers/shimmerDelay).
+    const st = stateFor(date);
+    const shimmers = (st === "fertile" || st === "ovulation") && startOfDay(date) >= today0;
     // Tapping a marked day selects it in the banner too; every day still just
     // selects (the web's summary card + "Edit this day" open the log, where
     // Swift's untracked days open it on tap).
@@ -204,7 +214,7 @@ export default function CalendarScreen({ ctx }) {
       <div key=${k} style=${{ position: "relative", display: "inline-flex" }}>
         <${ui.DayCell}
           day=${date.getDate()}
-          state=${stateFor(date)}
+          state=${st}
           flow=${superHeavy ? null : flow}
           today=${daysBetween(date, today) === 0}
           selected=${isSelected}
@@ -214,6 +224,9 @@ export default function CalendarScreen({ ctx }) {
             "aria-pressed": k === selectedOccKey,
           } : {}}
         />
+        ${shimmers && html`
+          <span aria-hidden="true" class="ff-fertile-glimmer"
+            style=${{ "--ff-delay": `${date.getDay() * 0.14}s` }} />`}
         ${superHeavy && !isSelected && html`
           <span aria-hidden="true" style=${{ position: "absolute", bottom: 5.6, left: "50%",
             transform: "translateX(-50%)", width: 5, height: 5, borderRadius: "50%",
@@ -241,6 +254,14 @@ export default function CalendarScreen({ ctx }) {
           </${IconButton}>
         </div>
 
+        ${!onThisMonth && html`
+          <div style=${{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+            <${Button} variant="soft" size="sm"
+              onClick=${() => setMonthDate(firstOfMonth(today))}>
+              Back to today${monthDistance ? ` · ${monthDistance}` : ""}
+            </${Button}>
+          </div>`}
+
         <div style=${{ ...cell, marginTop: 12 }} aria-hidden="true">
           ${weekdayHeaders(fmt).map((s, i) => html`
             <div key=${i} style=${{ fontSize: "var(--text-2xs)", fontWeight: 700, color: "var(--muted)" }}>${s}</div>
@@ -262,6 +283,11 @@ export default function CalendarScreen({ ctx }) {
           <span style=${{ width: 12, height: 12, borderRadius: "50%", border: "1.5px dashed var(--phase-menstrual)" }} />
           <span style=${{ fontSize: "var(--text-xs)", color: "var(--text)" }}>Predicted</span>
         </span>
+        <p style=${{ margin: 0, flexBasis: "100%", fontSize: "var(--text-xs)",
+                     color: "var(--muted)", lineHeight: 1.5 }}>
+          Fertile days shimmer a whole year ahead, projected from your average
+          cycle. The further out, the softer the guess.
+        </p>
       </${Card}>
 
       <${Card} style=${{ marginTop: 12 }}>

@@ -10,7 +10,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { predict } from "../web/core/engine.js";
+import { predict, projectedCycles } from "../web/core/engine.js";
 import { dateFromKey, keyFromDate } from "../web/core/dates.js";
 import { CONTRACTS_VERSION as WEB_VERSION } from "../web/core/version.js";
 
@@ -56,6 +56,14 @@ if (!existsSync(join(root, "contracts/cycle-vectors.json"))) {
       cycleDay: p.cycleDay, phase: p.phase, daysUntilNextPeriod: p.daysUntilNextPeriod, hasHistory: p.hasHistory,
     };
     if (JSON.stringify(got) !== JSON.stringify(vec.expect)) { fail(`vector "${name}" no longer matches — web engine drifted from the golden spec.`); mism++; }
+    // The year-ahead projection is part of the contract too (contracts v1.6.0).
+    if (vec.projected) {
+      const gotProj = projectionOf(p, vec.input.settings, dateFromKey(vec.input.today));
+      if (JSON.stringify(gotProj) !== JSON.stringify(vec.projected)) {
+        fail(`vector "${name}" projection no longer matches — projectedCycles drifted from the golden spec.`);
+        mism++;
+      }
+    }
   }
   if (mism === 0) ok(`all ${Object.keys(gv.vectors).length} vectors reproduce`);
 }
@@ -73,6 +81,19 @@ process.exit(problems === 0 ? 0 : 1);
 
 // ── helpers ────────────────────────────────────────────────────────
 function iso(d) { return d ? keyFromDate(d) : null; }
+// Same compact shape gen-vectors.mjs writes (see its comment for why).
+function cycleKeys(c) {
+  return c && [c.periodStart, c.periodEnd, c.fertileStart, c.fertileEnd, c.ovulation].map(keyFromDate).join("|");
+}
+function projectionOf(p, settings, today) {
+  const cycles = projectedCycles(p, settings, today);
+  return {
+    count: cycles.length,
+    first: cycleKeys(cycles[0]) ?? null,
+    second: cycleKeys(cycles[1]) ?? null,
+    last: cycleKeys(cycles[cycles.length - 1]) ?? null,
+  };
+}
 function cmp(a, b) {
   const pa = a.split(".").map(Number), pb = b.split(".").map(Number);
   for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); }

@@ -1,7 +1,7 @@
 {
   "meta": {
     "generatedFrom": "web/core/engine.js",
-    "note": "Golden vectors for the cycle predictor. Do not hand-edit — run `npm run gen:vectors`."
+    "note": "Golden vectors for the cycle predictor and its year-ahead projection. Do not hand-edit — run `npm run gen:vectors`."
   },
   "settings": {
     "defaultCycleLength": 28,
@@ -31,6 +31,12 @@
         "phase": null,
         "daysUntilNextPeriod": null,
         "hasHistory": false
+      },
+      "projected": {
+        "count": 0,
+        "first": null,
+        "second": null,
+        "last": null
       }
     },
     "singlePeriod": {
@@ -61,6 +67,12 @@
         "phase": "luteal",
         "daysUntilNextPeriod": 9,
         "hasHistory": true
+      },
+      "projected": {
+        "count": 13,
+        "first": "2026-05-29|2026-06-02|2026-05-10|2026-05-16|2026-05-15",
+        "second": "2026-06-26|2026-06-30|2026-06-07|2026-06-13|2026-06-12",
+        "last": "2027-04-30|2027-05-04|2027-04-11|2027-04-17|2027-04-16"
       }
     },
     "threeCleanCycles": {
@@ -101,6 +113,12 @@
         "phase": "ovulation",
         "daysUntilNextPeriod": 14,
         "hasHistory": true
+      },
+      "projected": {
+        "count": 13,
+        "first": "2026-06-24|2026-06-28|2026-06-05|2026-06-11|2026-06-10",
+        "second": "2026-07-22|2026-07-26|2026-07-03|2026-07-09|2026-07-08",
+        "last": "2027-05-26|2027-05-30|2027-05-07|2027-05-13|2027-05-12"
       }
     },
     "irregular": {
@@ -130,6 +148,12 @@
         "phase": "follicular",
         "daysUntilNextPeriod": 23,
         "hasHistory": true
+      },
+      "projected": {
+        "count": 12,
+        "first": "2026-04-28|2026-04-28|2026-04-09|2026-04-15|2026-04-14",
+        "second": "2026-05-27|2026-05-27|2026-05-08|2026-05-14|2026-05-13",
+        "last": "2027-03-13|2027-03-13|2027-02-22|2027-02-28|2027-02-27"
       }
     },
     "twoDayGapMerges": {
@@ -158,6 +182,12 @@
         "phase": "follicular",
         "daysUntilNextPeriod": 28,
         "hasHistory": true
+      },
+      "projected": {
+        "count": 12,
+        "first": "2026-04-30|2026-04-30|2026-04-11|2026-04-17|2026-04-16",
+        "second": "2026-05-30|2026-05-30|2026-05-11|2026-05-17|2026-05-16",
+        "last": "2027-03-26|2027-03-26|2027-03-07|2027-03-13|2027-03-12"
       }
     },
     "midCycleToday": {
@@ -189,6 +219,12 @@
         "phase": "fertile",
         "daysUntilNextPeriod": 15,
         "hasHistory": true
+      },
+      "projected": {
+        "count": 13,
+        "first": "2026-03-29|2026-03-31|2026-03-10|2026-03-16|2026-03-15",
+        "second": "2026-04-26|2026-04-28|2026-04-07|2026-04-13|2026-04-12",
+        "last": "2027-02-28|2027-03-02|2027-02-09|2027-02-15|2027-02-14"
       }
     },
     "lockedCycleLength": {
@@ -221,6 +257,12 @@
         "phase": "fertile",
         "daysUntilNextPeriod": 17,
         "hasHistory": true
+      },
+      "projected": {
+        "count": 12,
+        "first": "2026-03-31|2026-04-05|2026-03-12|2026-03-18|2026-03-17",
+        "second": "2026-04-30|2026-05-05|2026-04-11|2026-04-17|2026-04-16",
+        "last": "2027-02-24|2027-03-01|2027-02-05|2027-02-11|2027-02-10"
       }
     }
   }

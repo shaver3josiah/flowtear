@@ -115,3 +115,36 @@ h1, h2, h3 { font-family: var(--font-display, var(--font-body)); margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .overlay-scrim, .overlay-sheet { animation: none; }
 }
+
+/* ---- Fertile-day glimmer (DayCell.swift FertileGlimmer) ------------------ */
+/* A slow gold gleam crossing an upcoming fertile day, staggered per weekday
+   column (--ff-delay) so it travels along the window like light on water. The
+   band spends most of each lap outside the circular clip, so it reads as a
+   periodic glint rather than constant motion. Purely decorative: the wash,
+   badge and legend carry the state, so Reduce Motion simply stops it. */
+.ff-fertile-glimmer {
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: .55;
+}
+.ff-fertile-glimmer::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  bottom: -50%;
+  left: 0;
+  width: 85%;
+  background: linear-gradient(90deg, transparent, var(--phase-ovulation), transparent);
+  animation: ff-fertile-sweep 4.6s linear infinite;
+  animation-delay: var(--ff-delay, 0s);
+}
+@keyframes ff-fertile-sweep {
+  from { transform: translateX(-180%) rotate(24deg); }
+  to   { transform: translateX(260%) rotate(24deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ff-fertile-glimmer { display: none; }
+}

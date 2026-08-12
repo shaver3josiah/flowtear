@@ -15,6 +15,7 @@
 // The whole tree re-renders on any store change, so screens just read store state.
 
 import { CycleStore } from "./core/store.js";
+import { rewards } from "./core/rewards.js";
 import { Icon } from "./vendor/icon.js";
 import * as fmt from "./core/format.js";
 
@@ -40,6 +41,12 @@ const UI = window.FlowtierDesignSystem_6b3d0d || {};
 
 const store = new CycleStore();
 store.seedSampleIfFirstLaunch();
+
+// Today's first cycle log pays the streak bonus, whichever screen it lands
+// from, and the quick-log Undo takes it back exactly as paid. (Sample data and
+// restores bypass upsert, so neither can mint petals.) Mirrors FlowtearApp.swift.
+store.onDayLogged = (key, streak) => rewards.awardLogStreak(key, streak);
+store.onDayUnlogged = (key) => rewards.revokeLogStreak(key);
 
 // (Uncaught errors surface via the inline reporter in index.html — registered
 // before any module loads, so even a module-graph failure shows on screen.)

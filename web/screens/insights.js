@@ -540,17 +540,19 @@ function flowChartData(store, today) {
     logged.push({ date, weight: flow ? FLOW_WEIGHT[flow] : 0 });
   }
 
-  // Projection: dashes from tomorrow through the predicted period's end, shaped
-  // by her own per-day intensity averages (a soft bell until then).
+  // Projection: just the expected hump, shaped by her own per-day intensity
+  // averages (a soft bell until then). One zero anchor on each side lets the
+  // dashed curve rise out of the baseline and settle back, with no flat dashed
+  // run-up dragging across the quiet days.
   const projected = [];
   const p = store.prediction(today);
   if (p.nextPeriodStart) {
     const start = startOfDay(p.nextPeriodStart);
     const len = Math.max(p.averagePeriodLength, 1);
     const pattern = projectedPattern(store, len);
-    const end = addDays(start, len - 1);
-    for (let d = addDays(t0, 1); d <= end && daysBetween(t0, d) <= 35; d = addDays(d, 1)) {
-      const k = daysBetween(start, d);
+    for (let k = -1; k <= len; k++) {
+      const d = addDays(start, k);
+      if (d <= t0 || daysBetween(t0, d) > 35) continue;
       projected.push({ date: d, weight: (k >= 0 && k < len) ? pattern[Math.min(k, pattern.length - 1)] : 0 });
     }
   }
@@ -624,9 +626,13 @@ function monthlyFlowChart(store, today, html, ui, fmt, cardTitle) {
     ? `${loggedLine} L ${loggedPts[loggedPts.length - 1].x.toFixed(1)},${bottom} L ${loggedPts[0].x.toFixed(1)},${bottom} Z`
     : "";
 
-  // X gridlines every 7 days (AxisMarks(.stride(by: .day, count: 7))).
+  // X gridlines every 7 days, stepping to fortnights once the projection
+  // stretches the window past ~6 weeks so the labels keep breathing room.
+  const tickStep = spanDays > 45 ? 14 : 7;
   const ticks = [];
-  for (let k = 0; k <= spanDays; k += 7) ticks.push(addDays(first, k));
+  for (let k = 0; k <= spanDays; k += tickStep) ticks.push(addDays(first, k));
+  // Where "what happened" hands off to "what's expected".
+  const todayX = data.isPreview ? null : X(startOfDay(today));
 
   const legendSwatch = (dashed, label) => html`
     <div key=${label} style=${{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -665,9 +671,26 @@ function monthlyFlowChart(store, today, html, ui, fmt, cardTitle) {
               <text x=${X(d).toFixed(1)} y=${H - 5} textAnchor="middle"
                 fontSize=${9} fontWeight=${500} fill="var(--muted)">${fmt.monthShort(d.getMonth())} ${d.getDate()}</text>
             </g>`)}
-          ${loggedArea && html`<path d=${loggedArea} fill="var(--phase-menstrual)" fillOpacity=${0.14} />`}
+          <defs>
+            <linearGradient id="ff-flow-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--phase-menstrual)" stopOpacity=${0.30} />
+              <stop offset="100%" stopColor="var(--phase-menstrual)" stopOpacity=${0.02} />
+            </linearGradient>
+          </defs>
+          ${loggedArea && html`<path d=${loggedArea} fill="url(#ff-flow-fill)" />`}
+          ${todayX != null && html`
+            <g>
+              <line x1=${todayX.toFixed(1)} y1=${P.t} x2=${todayX.toFixed(1)} y2=${bottom}
+                stroke="var(--line)" strokeWidth=${1} />
+              <text x=${todayX.toFixed(1)} y=${P.t + 8} textAnchor="middle"
+                fontSize=${9} fontWeight=${600} fill="var(--muted)">Today</text>
+            </g>`}
           <path d=${loggedLine} fill="none" stroke="var(--phase-menstrual)"
             strokeWidth=${2.5} strokeLinecap="round" strokeLinejoin="round" />
+          ${/* a dot per logged flow day, so single days read as facts */ ""}
+          ${data.logged.filter((pt) => pt.weight > 0).map((pt) => html`
+            <circle key=${pt.date.getTime()} cx=${X(pt.date).toFixed(1)} cy=${Y(pt.weight).toFixed(1)}
+              r=${2.6} fill="var(--phase-menstrual)" />`)}
           ${data.projected.length > 1 && html`
             <path d=${monotonePath(toPts(data.projected))} fill="none" stroke="var(--muted)"
               strokeWidth=${2} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5 4" />`}

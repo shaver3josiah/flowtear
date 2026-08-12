@@ -11,8 +11,9 @@
 // box — same pattern as RingSticker. A draggable chain-together toggle rides
 // the ring's bottom-trailing corner once she's wearing a bead plus at least
 // one more chained bloom. All state reads/writes go through the store.
-import { rewards } from "../core/rewards.js";
-import { emptyLog } from "../core/models.js";
+import { rewards, RewardsStore } from "../core/rewards.js";
+import { emptyLog, hasCycleContent } from "../core/models.js";
+import { STREAK_CELEBRATED_KEY } from "../core/store.js";
 import { RingSticker, trackRadius } from "../components/ringSticker.js";
 import { GlitterHint } from "../components/glitterHint.js";
 // Five levels, not the vendored four: the DS FlowScale predates Flow.superHeavy
@@ -40,8 +41,70 @@ if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
     "@keyframes ft-twinkle-lo { from { opacity: 1; } to { opacity: .2; } }",
     // Undo toast: move(edge: .top) + opacity (TodayView.swift).
     "@keyframes ft-toast-in { from { opacity: 0; transform: translate(-50%, -12px); } }",
+    // StreakCelebration: each line springs in over the ring's open center.
+    "@keyframes ft-streak-line { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }",
+    "@keyframes ft-streak-disc { from { opacity: 0; } to { opacity: 1; } }",
   ].join("\n");
   document.head.appendChild(el);
+}
+
+// StreakCelebration (App/Components/StreakCelebration.swift) — the ring-center
+// moment after today's log lands: "Welcome!" -> "Streak +1" (with the petals it
+// paid) -> "X days in a row", each line springing in over a soft disc while gold
+// twinkles wake, then everything fades and the day readout returns. Plays once
+// per day and calls onDone. Reduce Motion collapses it to the one line that
+// matters, shown statically (the media query is checked, not just the CSS, so
+// the sequence itself shortens).
+function StreakCelebration({ html, streak, bonus, size, onDone }) {
+  const { useState, useEffect } = window.React;
+  const [phase, setPhase] = useState(-1);
+  const reduce = typeof window.matchMedia === "function"
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  useEffect(() => {
+    let cancelled = false;
+    const timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(() => { if (!cancelled) fn(); }, ms));
+    if (reduce) {
+      setPhase(2);
+      at(2200, () => { setPhase(3); onDone(); });
+    } else {
+      setPhase(0);
+      at(1000, () => setPhase(1));
+      at(2000, () => setPhase(2));
+      at(3600, () => { setPhase(3); onDone(); });
+    }
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, []);
+
+  if (phase < 0 || phase > 2) return null;
+
+  const line = phase === 0 ? "Welcome!"
+    : phase === 1 ? "Streak +1"
+    : streak === 1 ? "1 day in a row" : `${streak} days in a row`;
+  const spring = reduce ? "none" : "ft-streak-line var(--dur-base, .3s) cubic-bezier(.34,1.56,.64,1) both";
+
+  return html`
+    <div aria-hidden="true" style=${{ position: "absolute", inset: 0, display: "flex",
+        flexDirection: "column", alignItems: "center", justifyContent: "center",
+        pointerEvents: "none", zIndex: 3 }}>
+      <div style=${{ position: "absolute", width: size * 0.62, height: size * 0.62,
+        borderRadius: "50%", background: "var(--surface)", opacity: .94,
+        animation: reduce ? "none" : "ft-streak-disc var(--dur-fast, .18s) ease-out both" }} />
+      <div key=${phase} style=${{ position: "relative", textAlign: "center",
+        padding: `0 ${size * 0.16}px`, animation: spring }}>
+        <div style=${{ fontFamily: "var(--font-display)", fontWeight: 700,
+          fontSize: "var(--text-xl)", color: "var(--deep)", whiteSpace: "nowrap" }}>${line}</div>
+        ${phase >= 1 && bonus > 0 && html`
+          <div style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--primary-strong)" }}>
+            +${bonus} petals
+          </div>`}
+      </div>
+      ${phase >= 1 && html`
+        <${Twinkle} size=${9} style=${{ left: `${size * 0.32}px`, top: `${size * 0.34}px` }} />`}
+      ${phase === 2 && html`
+        <${Twinkle} size=${6} style=${{ left: `${size * 0.69}px`, top: `${size * 0.40}px` }} />`}
+    </div>`;
 }
 
 // She can switch the drifting petals off in the pencil settings — same key and
@@ -237,6 +300,20 @@ export default function TodayScreen({ ctx }) {
   const p = store.prediction(today);
   const flow = store.logFor(today)?.flow ?? null;
   const openPhase = () => nav.open("phase", { phase: p.phase });
+
+  // The ring-center streak moment: plays the first time Today shows with
+  // today's CYCLE log in place — once per day, never over demo data, and never
+  // for stretch-only days (TodayView.maybeCelebrateStreak).
+  const [celebrating, setCelebrating] = useState(false);
+  const loggedToday = hasCycleContent(store.logFor(today));
+  useEffect(() => {
+    const key = store.key(today);
+    if (store.sampleActive || !loggedToday) return;
+    if (localStorage.getItem(STREAK_CELEBRATED_KEY) === key) return;
+    localStorage.setItem(STREAK_CELEBRATED_KEY, key);
+    setCelebrating(true);
+  }, [loggedToday]);
+  const streak = store.logStreak(today);
 
   // The garden blob lives outside CycleStore's own subscription, so re-render
   // Today when it changes too (equipping, chaining, spending) — the balance
@@ -476,6 +553,9 @@ export default function TodayScreen({ ctx }) {
              it would double-render every chained bloom on top of itself. -->
         <${RingSticker} radius=${trackRadius(size)} periodFraction=${periodFraction(pred)} />
         ${chainButton}
+        ${celebrating && html`<${StreakCelebration} html=${html} streak=${streak}
+          bonus=${RewardsStore.logStreakBonus(streak)} size=${size}
+          onDone=${() => setCelebrating(false)} />`}
       </div>`;
   };
 
