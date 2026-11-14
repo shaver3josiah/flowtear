@@ -10,6 +10,9 @@ struct PhaseDetailSheet: View {
     let day: Int
     let cycleLength: Int
     var isToday: Bool = false
+    /// Named when the sheet is about a specific day rather than right now —
+    /// a day she tapped on the calendar. Without it the hero reads as "now".
+    var dateLabel: String? = nil
     var onJumpToToday: (() -> Void)? = nil
 
     private var report: PhaseReport {
@@ -44,7 +47,12 @@ struct PhaseDetailSheet: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Cycle day \(day) of \(cycleLength)\(isToday ? " · today" : "")")
+            if let dateLabel {
+                Text(dateLabel)
+                    .font(ffDisplay(FFType.md, weight: .semibold))
+                    .foregroundStyle(theme.color(.deep))
+            }
+            Text("Cycle day \(day) of \(cycleLength)\(isToday ? " · today" : (dateLabel != nil ? " · predicted" : ""))")
                 .font(ffBody(FFType.sm, weight: .semibold))
                 .foregroundStyle(theme.color(.muted))
             HStack(spacing: 10) {

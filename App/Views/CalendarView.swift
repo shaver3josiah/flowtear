@@ -18,6 +18,9 @@ struct CalendarView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var month = Date()
     @State private var focusedOccurrence: Date? = nil
+    /// A tapped day that hasn't happened yet: we show what's predicted for it
+    /// rather than an editable log, so a future day can never be written to.
+    @State private var peek: PeekDay? = nil
     /// Which way the month just moved (+1 forward, −1 back) — shapes the
     /// grid's slide-in so paging feels like turning, not swapping.
     @State private var monthDirection = 1
@@ -63,6 +66,13 @@ struct CalendarView: View {
         }
         .onAppear { adoptFocus() }
         .onChange(of: focus?.anchor) { _, _ in adoptFocus() }
+        .sheet(item: $peek) { p in
+            PhaseDetailSheet(phase: p.phase, day: p.day,
+                             cycleLength: store.prediction().averageCycleLength,
+                             dateLabel: p.date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     /// Land on the anchor occurrence and scroll the month to it.
@@ -224,10 +234,18 @@ struct CalendarView: View {
             shimmers: shimmers,
             shimmerDelay: Double(column(for: date)) * 0.14,
             action: {
-                // In history mode a marked day selects itself in the banner;
-                // everything else still opens the day's log as always.
+                let d0 = cal.startOfDay(for: date)
+                // In history mode a marked day selects itself in the banner.
                 if isOccurrence {
-                    withAnimation(FFMotion.fast) { focusedOccurrence = cal.startOfDay(for: date) }
+                    withAnimation(FFMotion.fast) { focusedOccurrence = d0 }
+                } else if d0 > today0 {
+                    // A day that hasn't happened has nothing to log. Show what
+                    // the prediction says about it instead; with no history
+                    // yet there is nothing to say, so the tap stays quiet.
+                    let snap = store.phaseSnapshot(at: date)
+                    if let phase = snap.phase, let day = snap.day {
+                        peek = PeekDay(date: d0, phase: phase, day: day)
+                    }
                 } else {
                     onLog(date)
                 }
@@ -248,7 +266,10 @@ struct CalendarView: View {
         // VoiceOver hears what the ring shows: which days are marked, which is
         // selected, and that tapping now selects instead of opening the log.
         .accessibilityValue(isOccurrence ? "\(focus?.symptom.label ?? "symptom") day" : "")
-        .accessibilityHint(isOccurrence ? "Selects this day in the history banner" : "")
+        .accessibilityHint(isOccurrence ? "Selects this day in the history banner"
+                           : (cal.startOfDay(for: date) > today0
+                              ? "Shows what's predicted for this day"
+                              : "Opens this day's log"))
         .accessibilityAddTraits(isSelectedOccurrence ? .isSelected : [])
     }
 
@@ -417,6 +438,14 @@ struct CalendarView: View {
         for d in range { cells.append(cal.date(byAdding: .day, value: d - 1, to: first)) }
         return cells
     }
+}
+
+/// A future day the calendar is showing a prediction for, not a log.
+private struct PeekDay: Identifiable {
+    let date: Date
+    let phase: CyclePhase
+    let day: Int
+    var id: Date { date }
 }
 
 /// A calendar deep-link: show one symptom's whole history, opened on `anchor`.

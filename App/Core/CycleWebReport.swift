@@ -291,25 +291,27 @@ tick(); setInterval(tick, 30000);
     private static func temperatureCard(days: [(date: Date, log: DayLog?, phase: CyclePhase?)],
                                         theme: Theme, df: DateFormatter) -> String {
         let pts: [(i: Int, f: Double, date: Date)] = days.enumerated().compactMap { i, d in
-            d.log?.temperatureC.map { (i, $0 * 9 / 5 + 32, d.date) }
+            d.log?.temperatureC.map { (i, BasalTemp.display($0), d.date) }
         }
         guard pts.count >= 2 else {
             return #"<section class="card"><h2>Morning temperature</h2><p class="quiet">Not enough temperatures logged this month to draw the line yet.</p></section>"#
         }
-        let lo = (pts.map(\.f).min() ?? 97) - 0.3
-        let hi = (pts.map(\.f).max() ?? 99) + 0.3
+        // Headroom scaled to the unit: 0.3 °F is a sliver, 0.3 °C is half the chart.
+        let pad = BasalTemp.usesCelsius ? 0.15 : 0.3
+        let lo = (pts.map(\.f).min() ?? BasalTemp.typicalDisplay) - pad
+        let hi = (pts.map(\.f).max() ?? BasalTemp.typicalDisplay + 1) + pad
         let w = 640.0, h = 200.0, padL = 44.0, padR = 14.0, padT = 16.0, padB = 30.0
         func x(_ i: Int) -> Double { padL + Double(i) / Double(max(days.count - 1, 1)) * (w - padL - padR) }
         func y(_ f: Double) -> Double { padT + (1 - (f - lo) / (hi - lo)) * (h - padT - padB) }
         let line = pts.map { "\(fmt(x($0.i))),\(fmt(y($0.f)))" }.joined(separator: " ")
         let dots = pts.map {
-            #"<circle class="dot" cx="\#(fmt(x($0.i)))" cy="\#(fmt(y($0.f)))" r="4.5" fill="\#(hx(theme, .phaseOvulation))" data-tip="\#(esc(df.string(from: $0.date))) · \#(String(format: "%.2f", $0.f))°F"/>"#
+            #"<circle class="dot" cx="\#(fmt(x($0.i)))" cy="\#(fmt(y($0.f)))" r="4.5" fill="\#(hx(theme, .phaseOvulation))" data-tip="\#(esc(df.string(from: $0.date))) · \#(String(format: "%.2f", $0.f))\#(BasalTemp.unit)"/>"#
         }.joined()
         return #"""
 <section class="card"><h2>Morning temperature</h2>
 <svg class="chart" viewBox="0 0 \#(fmt(w)) \#(fmt(h))" role="img" aria-label="Temperature line chart">
-  <text class="axis" x="6" y="\#(fmt(y(hi - 0.3) + 4))">\#(String(format: "%.1f", hi - 0.3))°</text>
-  <text class="axis" x="6" y="\#(fmt(y(lo + 0.3) + 4))">\#(String(format: "%.1f", lo + 0.3))°</text>
+  <text class="axis" x="6" y="\#(fmt(y(hi - pad) + 4))">\#(String(format: "%.1f", hi - pad))°</text>
+  <text class="axis" x="6" y="\#(fmt(y(lo + pad) + 4))">\#(String(format: "%.1f", lo + pad))°</text>
   <text class="axis" x="\#(fmt(padL))" y="\#(fmt(h - 8))">\#(esc(df.string(from: days.first!.date)))</text>
   <text class="axis" x="\#(fmt(w - 70))" y="\#(fmt(h - 8))">\#(esc(df.string(from: days.last!.date)))</text>
   <line x1="\#(fmt(padL))" y1="\#(fmt(h - padB))" x2="\#(fmt(w - padR))" y2="\#(fmt(h - padB))" stroke="var(--line)"/>

@@ -77,6 +77,10 @@ struct TodayView: View {
     @State private var showTips = false
     @State private var showShop = false
     @State private var paneIndex = 0
+    /// Once she touches the pane she owns it: the carousel stops rotating and
+    /// the dots do the steering. A tap target that moves under the thumb is
+    /// the one thing an auto-rotating card reliably gets wrong.
+    @State private var paneHeld = false
     @State private var undoToast: UndoAction? = nil
     @AppStorage("flowtear.petalsOnRing") private var petalsOnRing = true
     /// The last day the ring-center streak moment played (once per day).
@@ -264,9 +268,47 @@ struct TodayView: View {
         .padding(.vertical, 2)
     }
 
+    private static let paneTitles = ["Stretch", "Insights", "Calendar"]
+
     // The bottom pane takes turns: the stretch plan, then a peek at Insights,
     // then the Calendar — a fresh nudge every ten seconds, all tappable.
+    // Three dots say there is more than one, and the first touch hands her the
+    // wheel. Reduce Motion never gets the automatic shuffle at all.
     private var rotatingPane: some View {
+        VStack(spacing: 8) {
+            paneCard
+            paneDots
+        }
+        // simultaneous, so the card's own button still fires on the same tap.
+        .simultaneousGesture(TapGesture().onEnded { paneHeld = true })
+        .onReceive(paneTimer) { _ in
+            guard !paneHeld, !reduceMotion else { return }
+            withAnimation(FFMotion.signature) { paneIndex = (paneIndex + 1) % 3 }
+        }
+    }
+
+    private var paneDots: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<3, id: \.self) { i in
+                Button {
+                    paneHeld = true
+                    withAnimation(FFMotion.signature) { paneIndex = i }
+                } label: {
+                    Circle()
+                        .fill(theme.color(i == paneIndex ? .primaryStrong : .line))
+                        .frame(width: 6, height: 6)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Self.paneTitles[i])
+                .accessibilityAddTraits(i == paneIndex ? [.isButton, .isSelected] : .isButton)
+            }
+        }
+        .animation(reduceMotion ? nil : FFMotion.fast, value: paneIndex)
+    }
+
+    private var paneCard: some View {
         Group {
             switch paneIndex {
             case 1:
@@ -285,9 +327,6 @@ struct TodayView: View {
         }
         .id(paneIndex)
         .transition(.ffViewIn)
-        .onReceive(paneTimer) { _ in
-            withAnimation(FFMotion.signature) { paneIndex = (paneIndex + 1) % 3 }
-        }
     }
 
     private func teaserCard(icon: String, tint: Tok, title: String,
@@ -450,6 +489,14 @@ struct TodayView: View {
                     .font(ffBody(FFType.sm))
                     .foregroundStyle(theme.color(.muted))
                     .multilineTextAlignment(.center)
+
+                // Periods rarely start on the day an app is installed. Rather
+                // than wait a month for the first prediction, she can put the
+                // day it actually began on the calendar.
+                FFButton("It started a few days ago", style: .ghost, size: .sm,
+                         icon: "calendar") {
+                    onOpenCalendar()
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, FFSpace.s5)

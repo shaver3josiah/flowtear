@@ -262,16 +262,18 @@ struct LogView: View {
 
     // MARK: temperature — slider ready by default; a checkbox if she skipped
 
-    private var tempF: Double? { draft.temperatureC.map { $0 * 9 / 5 + 32 } }
+    /// Today's reading in whichever unit her region reads (see BasalTemp).
+    private var tempShown: Double? { draft.temperatureC.map(BasalTemp.display) }
 
     private var tempValueText: String? {
         if draft.tempSkipped == true { return "Not today" }
-        return tempF.map { String(format: "%.2f°", $0) }
+        return draft.temperatureC.map { BasalTemp.text($0) + "°" }
     }
 
-    /// Sensible slider start: her last reading, else a typical 97.8.
-    private var suggestedF: Double {
-        store.recentTemperatures().last.map { $0.celsius * 9 / 5 + 32 } ?? 97.8
+    /// Sensible slider start: her last reading, else a typical one.
+    private var suggested: Double {
+        store.recentTemperatures().last.map { BasalTemp.display($0.celsius) }
+            ?? BasalTemp.typicalDisplay
     }
 
     @ViewBuilder private var temperatureContent: some View {
@@ -282,14 +284,14 @@ struct LogView: View {
         } else {
             VStack(alignment: .leading, spacing: FFSpace.s2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(String(format: "%.2f", tempF ?? suggestedF))
+                    Text(String(format: "%.2f", tempShown ?? suggested))
                         .font(ffNumber(FFType.xl2, weight: .semibold))
-                        .foregroundStyle(theme.color(tempF == nil ? .muted : .deep))
+                        .foregroundStyle(theme.color(tempShown == nil ? .muted : .deep))
                         .contentTransition(.numericText())
-                    Text("°F")
+                    Text(BasalTemp.unit)
                         .font(ffBody(FFType.sm, weight: .semibold))
                         .foregroundStyle(theme.color(.muted))
-                    if tempF == nil {
+                    if tempShown == nil {
                         Text("slide to set")
                             .font(ffBody(FFType.xs))
                             .foregroundStyle(theme.color(.muted))
@@ -298,16 +300,18 @@ struct LogView: View {
                 }
                 Slider(
                     value: Binding(
-                        get: { tempF ?? suggestedF },
-                        set: { draft.temperatureC = ($0 - 32) * 5 / 9 }
+                        get: { tempShown ?? suggested },
+                        set: { draft.temperatureC = BasalTemp.celsius(fromDisplay: $0) }
                     ),
-                    in: 96.0...100.0, step: 0.05
+                    in: BasalTemp.range, step: BasalTemp.step
                 )
                 .tint(theme.color(.phaseOvulation))
                 .accessibilityLabel("Basal temperature")
-                .accessibilityValue(String(format: "%.2f degrees Fahrenheit", tempF ?? suggestedF))
+                .accessibilityValue(BasalTemp.spoken(display: tempShown ?? suggested))
                 HStack {
-                    Text("96°"); Spacer(); Text("100°")
+                    Text(String(format: "%g°", BasalTemp.range.lowerBound))
+                    Spacer()
+                    Text(String(format: "%g°", BasalTemp.range.upperBound))
                 }
                 .font(ffBody(FFType.xs2, weight: .medium))
                 .foregroundStyle(theme.color(.muted))

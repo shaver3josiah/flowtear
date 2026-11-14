@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Fertile window + basal body temperature (BBT). Shows the estimated fertile
-// window and ovulation day, lets her log today's waking temperature (°F), and
+// window and ovulation day, lets her log today's waking temperature, and
 // charts the recent trend — the sustained rise is what confirms ovulation.
 // Estimates only, and explicitly NOT a contraceptive method.
 struct FertileWindowCard: View {
@@ -82,8 +82,9 @@ struct FertileWindowCard: View {
 
     // MARK: basal temperature
 
-    private var tempF: Double? {
-        store.log(for: today)?.temperatureC.map { $0 * 9 / 5 + 32 }
+    /// Today's reading in whichever unit her region reads (see BasalTemp).
+    private var tempShown: Double? {
+        store.log(for: today)?.temperatureC.map(BasalTemp.display)
     }
 
     @ViewBuilder private var tempSection: some View {
@@ -93,7 +94,7 @@ struct FertileWindowCard: View {
                     .font(ffBody(FFType.sm, weight: .semibold))
                     .foregroundStyle(theme.color(.text))
                 Spacer()
-                if tempF != nil {
+                if tempShown != nil {
                     Button { store.setTemperatureC(nil, on: today) } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(theme.color(.muted))
@@ -103,22 +104,22 @@ struct FertileWindowCard: View {
                 }
             }
 
-            if let f = tempF {
-                Text(String(format: "%.2f °F", f))
+            if let shown = tempShown {
+                Text("\(String(format: "%.2f", shown)) \(BasalTemp.unit)")
                     .font(ffNumber(FFType.xl, weight: .semibold))
                     .foregroundStyle(theme.color(.deep))
                     .contentTransition(.numericText())
-                Slider(value: tempBinding, in: 96.0...100.0, step: 0.05)
+                Slider(value: tempBinding, in: BasalTemp.range, step: BasalTemp.step)
                     .tint(theme.color(.phaseFertile))
-                    .sensoryFeedback(.selection, trigger: tempF)
+                    .sensoryFeedback(.selection, trigger: tempShown)
                     .accessibilityLabel("Basal temperature")
-                    .accessibilityValue(String(format: "%.2f degrees Fahrenheit", f))
+                    .accessibilityValue(BasalTemp.spoken(display: shown))
 
                 let temps = store.recentTemperatures()
                 if temps.count >= 2 { sparkline(temps) }
             } else {
                 FFButton("Log today's temp", style: .soft, size: .sm, icon: "plus") {
-                    store.setTemperatureC(fToC(97.8), on: today)   // seed a typical reading
+                    store.setTemperatureC(BasalTemp.typicalCelsius, on: today)   // seed a typical reading
                 }
             }
         }
@@ -126,14 +127,14 @@ struct FertileWindowCard: View {
 
     private var tempBinding: Binding<Double> {
         Binding(
-            get: { tempF ?? 97.8 },
-            set: { store.setTemperatureC(fToC($0), on: today) }
+            get: { tempShown ?? BasalTemp.typicalDisplay },
+            set: { store.setTemperatureC(BasalTemp.celsius(fromDisplay: $0), on: today) }
         )
     }
 
-    // Simple normalized line of the recent readings (in °F).
+    // Simple normalized line of the recent readings, in her display unit.
     private func sparkline(_ temps: [(date: Date, celsius: Double)]) -> some View {
-        let fs = temps.map { $0.celsius * 9 / 5 + 32 }
+        let fs = temps.map { BasalTemp.display($0.celsius) }
         let lo = (fs.min() ?? 97) - 0.1
         let hi = (fs.max() ?? 98) + 0.1
         let span = max(hi - lo, 0.2)
@@ -154,6 +155,5 @@ struct FertileWindowCard: View {
         .accessibilityLabel("Recent basal temperature trend, \(temps.count) readings")
     }
 
-    private func fToC(_ f: Double) -> Double { (f - 32) * 5 / 9 }
     private func fmt(_ d: Date) -> String { d.formatted(.dateTime.month(.abbreviated).day()) }
 }

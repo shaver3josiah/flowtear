@@ -110,17 +110,17 @@ enum CycleReport {
     /// Each row carries its cycle day and phase so the sheet sorts, filters,
     /// and pivots cleanly without her doing cycle math in Excel.
     static func csv(store: CycleStore) -> String {
-        var rows = ["date,cycle_day,phase,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note"]
+        var rows = ["date,cycle_day,phase,flow,discharge,temp_\(BasalTemp.usesCelsius ? "c" : "f"),temp_skipped,moods,symptoms,stretch_done,note"]
         for log in store.logsSnapshot.sorted(by: { $0.dateKey < $1.dateKey }) {
             // ponytail: phaseSnapshot re-predicts per row (O(n²) over the log
             // count); fine for years of daily logs, precompute if it ever isn't.
             let snap = CycleStore.dateFmt.date(from: log.dateKey)
                 .map { store.phaseSnapshot(at: $0) } ?? (phase: nil, day: nil)
-            let tempF = log.temperatureC.map { String(format: "%.2f", $0 * 9 / 5 + 32) } ?? ""
+            let temp = log.temperatureC.map(BasalTemp.text) ?? ""
             let moods = log.moods.map(\.rawValue).sorted().joined(separator: "; ")
             let symptoms = log.symptoms.map(\.rawValue).sorted().joined(separator: "; ")
             let note = log.note.replacingOccurrences(of: "\"", with: "\"\"")
-            rows.append("\(log.dateKey),\(snap.day.map(String.init) ?? ""),\(snap.phase?.rawValue ?? ""),\(log.flow?.rawValue ?? ""),\(log.discharge?.rawValue ?? ""),\(tempF),\(log.tempSkipped == true ? "yes" : ""),\"\(moods)\",\"\(symptoms)\",\(log.stretchDone == true ? "yes" : ""),\"\(note)\"")
+            rows.append("\(log.dateKey),\(snap.day.map(String.init) ?? ""),\(snap.phase?.rawValue ?? ""),\(log.flow?.rawValue ?? ""),\(log.discharge?.rawValue ?? ""),\(temp),\(log.tempSkipped == true ? "yes" : ""),\"\(moods)\",\"\(symptoms)\",\(log.stretchDone == true ? "yes" : ""),\"\(note)\"")
         }
         return rows.joined(separator: "\n")
     }

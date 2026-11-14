@@ -63,7 +63,18 @@ struct RootView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(.ffViewIn)
-                FFTabBar(selection: $tab)
+                // Picking Log from the bar always lands on today — the way
+                // every other tracker behaves. Browsing back to Tuesday and
+                // coming back tomorrow must never put today's symptoms on
+                // Tuesday. Deep links (a calendar day, a symptom's history)
+                // go through openLog and keep the day they point at.
+                FFTabBar(selection: Binding(
+                    get: { tab },
+                    set: { t in
+                        if t == .log { logDate = Date() }
+                        switchTo(t)
+                    }
+                ))
             }
             .frame(maxWidth: 620)
             .frame(maxWidth: .infinity)
@@ -90,7 +101,10 @@ struct RootView: View {
     }
 
     private func openLog(_ date: Date) {
-        logDate = date
+        // Nothing is ever logged forward in time, whichever screen asked.
+        // The calendar answers a future day with a prediction sheet instead;
+        // this is the backstop for every other caller.
+        logDate = min(date, Date())
         switchTo(.log)
     }
 

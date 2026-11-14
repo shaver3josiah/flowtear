@@ -218,7 +218,7 @@ struct DayLogSummary: View {
             }
             if let c = log.temperatureC {
                 row("thermometer.medium", .phaseOvulation,
-                    String(format: "%.2f° in the morning", c * 9 / 5 + 32))
+                    "\(BasalTemp.text(c))° in the morning")
             }
             if !log.moods.isEmpty {
                 row("face.smiling", .phaseLuteal,
