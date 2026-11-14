@@ -46,6 +46,5 @@ export function daysUntil(today, target) {
   return daysBetween(today, target);
 }
 
-// °C stored -> shown in °F to one decimal (matches the sample seed, which is °F).
-export const cToF = (c) => (c == null ? null : (c * 9) / 5 + 32);
-export const fToC = (f) => (f == null ? null : ((f - 32) * 5) / 9);
+// Basal temperature display lives in core/basalTemp.js — it reads her region's
+// unit, which a bare cToF here could never do. Import that module directly.

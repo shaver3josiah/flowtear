@@ -17,6 +17,7 @@ import { rewards } from "../core/rewards.js";
 import { report as phaseReport } from "../core/phaseResearch.js";
 import * as trustedContact from "../core/trustedContact.js";
 import { buildWebReport, webReportFilename } from "../core/webReport.js";
+import * as temp from "../core/basalTemp.js";
 
 const React = window.React;
 const { useState, useEffect, useRef } = React;
@@ -178,7 +179,7 @@ export default function InsightsScreen({ ctx }) {
       </${Card}>`
     : null;
 
-  // ---- basal temperature (inline SVG biphasic curve, shown in °F) ----
+  // ---- basal temperature (inline SVG biphasic curve, in her region's unit) ----
   const tempCard = temperatureCard(store, html, ui, fmt, cardTitle);
 
   // ---- your flow, this month (InsightsView.flowChartCard) ----
@@ -709,13 +710,13 @@ function monthlyFlowChart(store, today, html, ui, fmt, cardTitle) {
 }
 
 // Lightweight offline line/area chart — no chart lib. Maps the recent basal
-// temperatures (°C in the store) to °F and plots them in a fixed viewBox.
+// temperatures (°C in the store) to her region's unit and plots them.
 function temperatureCard(store, html, ui, fmt, cardTitle) {
   const { Card } = ui;
   const temps = store.recentTemperatures(14);
   if (temps.length < 2) return null; // need two points to draw a line
 
-  const fs = temps.map((t) => fmt.cToF(t.celsius));
+  const fs = temps.map((t) => temp.display(t.celsius));
   const lo0 = Math.min(...fs), hi0 = Math.max(...fs);
   const padV = (hi0 - lo0) * 0.25 || 0.5; // headroom so a flat run isn't glued to the edges
   const lo = lo0 - padV, hi = hi0 + padV, span = hi - lo || 1;
@@ -733,14 +734,14 @@ function temperatureCard(store, html, ui, fmt, cardTitle) {
       <div style=${{ display: "flex", flexDirection: "column", gap: 10 }}>
         ${cardTitle("Your basal temperature")}
         <svg viewBox=${`0 0 ${W} ${H}`} width="100%" style=${{ display: "block", height: "auto" }}
-          role="img" aria-label="Basal body temperature trend, in Fahrenheit">
+          role="img" aria-label=${`Basal body temperature trend, in ${temp.usesCelsius ? "Celsius" : "Fahrenheit"}`}>
           <path d=${areaD} fill="var(--phase-fertile-soft)" />
           <polyline points=${pts} fill="none" stroke="var(--primary-strong)"
             strokeWidth=${2} strokeLinecap="round" strokeLinejoin="round" />
           ${fs.map((v, i) => html`<circle key=${i} cx=${X(i)} cy=${Y(v)} r=${2.2} fill="var(--primary-strong)" />`)}
         </svg>
         <div style=${{ fontSize: "var(--text-xs)", color: "var(--muted)" }}>
-          ${fmt.shortDate(temps[0].date)} – ${fmt.shortDate(temps[n - 1].date)} · ${lo0.toFixed(1)}°–${hi0.toFixed(1)}°F
+          ${fmt.shortDate(temps[0].date)} – ${fmt.shortDate(temps[n - 1].date)} · ${lo0.toFixed(1)}°–${hi0.toFixed(1)}${temp.unit}
         </div>
       </div>
     </${Card}>`;

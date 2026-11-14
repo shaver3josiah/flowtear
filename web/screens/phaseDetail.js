@@ -2,7 +2,8 @@
 // Port of App/Components/PhaseDetailSheet.swift: what's happening hormonally,
 // what's common right now, the short research report for this stretch of the
 // cycle (the sheet's centerpiece), and its tips, all phase-colored. Opened via
-// nav.open("phase", { phase }); reads that phase from ctx.screenProps.
+// nav.open("phase", { phase, day?, cycleLength?, dateLabel? }); reads them from
+// ctx.screenProps. A dateLabel means the sheet is about that day, not about now.
 
 import { report as phaseReport } from "../core/phaseResearch.js";
 
@@ -46,9 +47,12 @@ export default function PhaseDetailScreen({ ctx }) {
   const cycleLength = (screenProps && screenProps.cycleLength) ?? Math.max(p.averageCycleLength, 1);
   const report = phaseReport(phase, day, cycleLength);
 
-  const dayLine = p.hasHistory
-    ? `Cycle day ${p.cycleDay} of ${p.averageCycleLength} · today`
-    : null;
+  // Named when the sheet is about a specific day rather than right now — a day
+  // she tapped on the calendar. Without it the hero reads as "now".
+  const dateLabel = (screenProps && screenProps.dateLabel) || null;
+  const dayLine = dateLabel
+    ? `Cycle day ${day} of ${cycleLength} · predicted`
+    : (p.hasHistory ? `Cycle day ${p.cycleDay} of ${p.averageCycleLength} · today` : null);
 
   // Real headings mirror Swift's .accessibilityAddTraits(.isHeader).
   const heading = (t) => html`
@@ -84,6 +88,7 @@ export default function PhaseDetailScreen({ ctx }) {
     <div style=${{ padding: "4px 20px 8px", display: "flex", flexDirection: "column", gap: 18 }}>
       <div style=${{ display: "flex", alignItems: "flex-start" }}>
         <div style=${{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+          ${dateLabel && html`<span style=${{ fontFamily: "var(--font-display)", fontSize: "var(--text-md)", fontWeight: 600, color: "var(--deep)" }}>${dateLabel}</span>`}
           ${dayLine && html`<span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--muted)" }}>${dayLine}</span>`}
           <div style=${{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style=${{ width: 14, height: 14, borderRadius: "50%", background: tint, flex: "0 0 auto" }} />

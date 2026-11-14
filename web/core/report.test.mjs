@@ -1,9 +1,16 @@
 // Self-check for the CSV builder. Run: node web/core/report.test.mjs
 // Expectations are hand-written from CycleReport.swift's csv(store:) — column
-// order, the quoted moods/symptoms/note fields, "" escaping, %.2f °F, and the
-// dateKey sort. A broken port fails loudly here.
+// order, the quoted moods/symptoms/note fields, "" escaping, the two-decimal
+// temperature, and the dateKey sort. A broken port fails loudly here.
+//
+// The temperature column follows her region's unit (core/basalTemp.js), so the
+// expectations derive it rather than pinning Fahrenheit -- otherwise this file
+// would only pass in the US.
 import assert from "node:assert";
 import { csv, flags, text, CSV_HEADER, CSV_FILENAME } from "./report.js";
+import * as temp from "./basalTemp.js";
+
+const TEMP_COL = `temp_${temp.usesCelsius ? "c" : "f"}`;
 
 // A phaseSnapshot stub keyed by dateKey — csv() places the columns; the engine's
 // own snapshot math is tested in engine.test.mjs, so here we only pin the wiring.
@@ -32,12 +39,14 @@ const store = {
 
 assert.deepEqual(csv(store).split("\n"), [
   CSV_HEADER,
-  // date,cycle_day,phase,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note
+  // date,cycle_day,phase,flow,discharge,<temp col>,temp_skipped,moods,symptoms,stretch_done,note
   '2026-06-01,,,,,,yes,"","",,""',
-  '2026-06-02,2,menstrual,medium,creamy,98.33,,"happy; sad","cramps",yes,"she said ""ow"""',
+  `2026-06-02,2,menstrual,medium,creamy,${temp.text(36.85)},,"happy; sad","cramps",yes,"she said ""ow"""`,
 ]);
 
-assert.equal(CSV_HEADER, "date,cycle_day,phase,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note");
+assert.equal(temp.text(36.85), temp.usesCelsius ? "36.85" : "98.33");
+assert.equal(CSV_HEADER,
+  `date,cycle_day,phase,flow,discharge,${TEMP_COL},temp_skipped,moods,symptoms,stretch_done,note`);
 assert.equal(CSV_FILENAME, "uncorked-cycle-data.csv");
 assert.equal(csv({ logsSnapshot: [] }), CSV_HEADER); // header-only, never empty
 

@@ -151,14 +151,31 @@ function App() {
   const [overlay, setOverlay] = useState(null); // { name, props } | null
   // Dark ("Plum Night") is the house default — anything she's picked wins.
   const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "dark");
-  const today = React.useMemo(() => new Date(), []);
+  // ponytail: keyed on the day, not on mount. A tab left open past midnight was
+  // handing every screen yesterday's date — and the Log screen writes to the
+  // date it is given. The identity still only changes once a day, so nothing
+  // re-renders on the minute tick unless the day actually turned.
+  const [dayKey, setDayKey] = useState(() => new Date().toDateString());
+  const today = React.useMemo(() => new Date(), [dayKey]);
+  useEffect(() => {
+    const check = () => setDayKey(new Date().toDateString());
+    const t = setInterval(check, 60000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
+  }, []);
 
   useEffect(() => { applyTheme(theme); localStorage.setItem(THEME_KEY, theme); }, [theme]);
 
   const nav = {
     tab,
     setTab: (id) => { setOverlay(null); setTab(id); },
-    open: (name, props = {}) => setOverlay({ name, props }),
+    // Nothing is ever logged forward in time, whichever screen asked. The
+    // calendar answers a future day with a prediction sheet instead; this is
+    // the backstop for every other caller. (RootView.openLog.)
+    open: (name, props = {}) => setOverlay({
+      name,
+      props: name === "log" && props.date > today ? { ...props, date: today } : props,
+    }),
     close: () => setOverlay(null),
     theme,
     setTheme,

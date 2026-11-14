@@ -16,6 +16,7 @@ import { addDays, daysBetween, dateFromKey } from "../core/dates.js";
 import { FlowScale } from "../components/flowScale.js";
 import { GlitterHint } from "../components/glitterHint.js";
 import { requestSymptomFocus } from "./calendar.js";
+import * as temp from "../core/basalTemp.js";
 
 const React = window.React;
 const { useState } = React;
@@ -56,13 +57,14 @@ export default function LogScreen({ ctx }) {
     setDate(d);
   };
 
-  // Temperature is stored °C, shown/edited in °F.
-  const tempF = log.temperatureC == null ? null : fmt.cToF(log.temperatureC);
+  // Temperature is stored °C, shown/edited in whichever unit her region
+  // reads (core/basalTemp.js).
+  const tempShown = temp.display(log.temperatureC);
   const recent = store.recentTemperatures().slice(-1)[0];
-  const suggestedF = recent ? fmt.cToF(recent.celsius) : 97.8;
+  const suggested = recent ? temp.display(recent.celsius) : temp.typicalDisplay;
   const tempValue = log.tempSkipped === true
     ? "Not today"
-    : (tempF != null ? `${tempF.toFixed(2)}°` : null);
+    : (tempShown != null ? `${temp.text(log.temperatureC)}°` : null);
 
   const count = (n) => (n ? `${n} picked` : null);
 
@@ -190,7 +192,7 @@ export default function LogScreen({ ctx }) {
             onClick=${() => mutate({ discharge: log.discharge === d ? null : d })}>${label(d)}</${Chip}>`)}
         </div>`)}
 
-      <!-- Temperature (edit in °F, store °C; skip -> tempSkipped) -->
+      <!-- Temperature (edit in her unit, store °C; skip -> tempSkipped) -->
       ${Section("thermometer", "Temperature", "--phase-ovulation", "--phase-ovulation-soft", tempValue,
         log.tempSkipped === true
           ? checkbox(true, "Didn't take it this morning", () => mutate({ tempSkipped: null }))
@@ -198,16 +200,16 @@ export default function LogScreen({ ctx }) {
             <div>
               <div style=${{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
                 <span style=${{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 600,
-                    color: tempF == null ? "var(--muted)" : "var(--deep)" }}>${(tempF ?? suggestedF).toFixed(2)}</span>
-                <span style=${{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>°F</span>
-                ${tempF == null && html`<span style=${{ fontSize: 12, color: "var(--muted)" }}>slide to set</span>`}
+                    color: tempShown == null ? "var(--muted)" : "var(--deep)" }}>${(tempShown ?? suggested).toFixed(2)}</span>
+                <span style=${{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>${temp.unit}</span>
+                ${tempShown == null && html`<span style=${{ fontSize: 12, color: "var(--muted)" }}>slide to set</span>`}
               </div>
-              <input type="range" min="96" max="100" step="0.05" value=${tempF ?? suggestedF}
+              <input type="range" min=${temp.min} max=${temp.max} step=${temp.step} value=${tempShown ?? suggested}
                 aria-label="Basal temperature"
-                onChange=${(e) => mutate({ temperatureC: fmt.fToC(parseFloat(e.target.value)), tempSkipped: null })}
+                onChange=${(e) => mutate({ temperatureC: temp.celsius(parseFloat(e.target.value)), tempSkipped: null })}
                 style=${{ width: "100%", accentColor: "var(--phase-ovulation)" }} />
               <div style=${{ display: "flex", justifyContent: "space-between", fontSize: 11,
-                  fontWeight: 500, color: "var(--muted)" }}><span>96°</span><span>100°</span></div>
+                  fontWeight: 500, color: "var(--muted)" }}><span>${temp.min}°</span><span>${temp.max}°</span></div>
               ${checkbox(false, "Didn't take it this morning", () => mutate({ tempSkipped: true, temperatureC: null }))}
             </div>`)}
 

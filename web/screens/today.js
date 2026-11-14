@@ -19,6 +19,7 @@ import { GlitterHint } from "../components/glitterHint.js";
 // Five levels, not the vendored four: the DS FlowScale predates Flow.superHeavy
 // and can't show it (ds-bundle.js is uneditable). Drop-in same props.
 import { FlowScale } from "../components/flowScale.js";
+import * as temp from "../core/basalTemp.js";
 
 const React = window.React;
 const { useState, useEffect, useRef } = React;
@@ -406,9 +407,19 @@ export default function TodayScreen({ ctx }) {
     </div>`;
 
   // Rotating bottom pane — a fresh nudge every ten seconds (TodayView.rotatingPane).
+  // Once she touches it she owns it: the rotation stops and the dots do the
+  // steering. A tap target that moves under the thumb is the one thing an
+  // auto-rotating card reliably gets wrong. Reduced motion never gets the
+  // automatic shuffle at all.
   const [pane, setPane] = useState(0);
+  // A ref, not state: the interval reads it directly, so there is one
+  // subscription for the screen's life and nothing to re-run or race.
+  const paneHeld = useRef(false);
   useEffect(() => {
-    const t = setInterval(() => setPane((i) => (i + 1) % 3), 10000);
+    if (reduceMotion()) return;
+    const t = setInterval(() => {
+      if (!paneHeld.current) setPane((i) => (i + 1) % 3);
+    }, 10000);
     return () => clearInterval(t);
   }, []);
 
@@ -610,9 +621,21 @@ export default function TodayScreen({ ctx }) {
       action: () => nav.setTab("calendar") },
   ];
   const pc = panes[pane];
+  // Three dots say there is more than one card, and give her a way to pick.
+  const paneDots = html`
+    <div style=${{ display: "flex", justifyContent: "center", gap: 2 }}>
+      ${panes.map((q, i) => html`
+        <button key=${q.title} style=${{ ...bareBtn, width: 30, height: 30, display: "grid", placeItems: "center" }}
+          aria-label=${q.title} aria-pressed=${i === pane}
+          onClick=${() => { paneHeld.current = true; setPane(i); }}>
+          <span style=${{ width: 6, height: 6, borderRadius: "50%",
+                          background: i === pane ? "var(--primary-strong)" : "var(--line)" }} />
+        </button>`)}
+    </div>`;
   const rotatingPane = html`
+    <div style=${{ display: "flex", flexDirection: "column", gap: 8 }}>
     <div key=${pane} style=${{ animation: "flowtier-view-in var(--dur-base) var(--ease-signature)" }}>
-      <${Card} interactive=${true} as="button" onClick=${pc.action}
+      <${Card} interactive=${true} as="button" onClick=${() => { paneHeld.current = true; pc.action(); }}
         style=${{ width: "100%", textAlign: "left" }} aria-label=${`Open ${pc.title}`}>
         <div style=${{ display: "flex", alignItems: "center", gap: 12 }}>
           <${Icon} name=${pc.icon} size=${22} color=${pc.tint} />
@@ -623,6 +646,8 @@ export default function TodayScreen({ ctx }) {
           <${Icon} name="chevron-right" size=${16} color="var(--muted)" />
         </div>
       </${Card}>
+    </div>
+    ${paneDots}
     </div>`;
 
   const startedState = html`
@@ -642,6 +667,13 @@ export default function TodayScreen({ ctx }) {
         </button>
         <span style=${{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-lg)", color: "var(--deep)" }}>Nothing logged yet</span>
         <span style=${{ fontSize: "var(--text-sm)", color: "var(--muted)" }}>Tap to log your first period.</span>
+        <!-- Periods rarely start on the day an app is installed. Rather than
+             wait a month for the first prediction, she can put the day it
+             actually began on the calendar. -->
+        <${Button} variant="ghost" size="sm" iconLeft=${html`<${Icon} name="calendar" size=${16} />`}
+          onClick=${() => nav.setTab("calendar")}>
+          It started a few days ago
+        </${Button}>
       </div>
     </${Card}>`;
 
@@ -664,7 +696,8 @@ function FertileWindow({ ctx, p }) {
   const { store, html, ui, Icon, fmt, today } = ctx;
   const { Card, Button, Badge } = ui;
 
-  const tempF = fmt.cToF(store.logFor(today)?.temperatureC ?? null);
+  const tempCelsius = store.logFor(today)?.temperatureC ?? null;
+  const tempShown = temp.display(tempCelsius);
 
   // "Fertile now" inside the window, "In Nd" when it opens within a fortnight.
   let status = null;
@@ -686,7 +719,7 @@ function FertileWindow({ ctx, p }) {
   const temps = store.recentTemperatures();
   let sparkline = null;
   if (temps.length >= 2) {
-    const fs = temps.map((t) => fmt.cToF(t.celsius));
+    const fs = temps.map((t) => temp.display(t.celsius));
     const lo = Math.min(...fs) - 0.1;
     const hi = Math.max(...fs) + 0.1;
     const span = Math.max(hi - lo, 0.2);
@@ -718,21 +751,21 @@ function FertileWindow({ ctx, p }) {
           <div style=${{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style=${{ fontSize: "var(--text-sm)", fontWeight: 600, color: "var(--text)" }}>Basal temperature</span>
             <div style=${{ flex: 1 }} />
-            ${tempF != null && html`
+            ${tempShown != null && html`
               <button style=${{ ...bareBtn }} onClick=${() => store.setTemperatureC(null, today)} aria-label="Remove today's temperature">
                 <${Icon} name="x" size=${16} color="var(--muted)" />
               </button>`}
           </div>
-          ${tempF != null
+          ${tempShown != null
             ? html`
-              <span style=${{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-xl)", color: "var(--deep)" }}>${tempF.toFixed(2)} °F</span>
-              <input type="range" min="96" max="100" step="0.05" value=${tempF}
-                onInput=${(e) => store.setTemperatureC(fmt.fToC(parseFloat(e.target.value)), today)}
+              <span style=${{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "var(--text-xl)", color: "var(--deep)" }}>${temp.labelled(tempCelsius)}</span>
+              <input type="range" min=${temp.min} max=${temp.max} step=${temp.step} value=${tempShown}
+                onInput=${(e) => store.setTemperatureC(temp.celsius(parseFloat(e.target.value)), today)}
                 aria-label="Basal temperature"
                 style=${{ width: "100%", accentColor: "var(--phase-fertile)" }} />
               ${sparkline}`
             : html`<${Button} variant="soft" size="sm" iconLeft=${html`<${Icon} name="plus" size=${16} />`}
-                onClick=${() => store.setTemperatureC(fmt.fToC(97.8), today)}>Log today's temp</${Button}>`}
+                onClick=${() => store.setTemperatureC(temp.typicalCelsius, today)}>Log today's temp</${Button}>`}
         </div>
 
         <span style=${{ fontSize: "var(--text-2xs)", color: "var(--muted)" }}>Estimates, not a birth-control method.</span>

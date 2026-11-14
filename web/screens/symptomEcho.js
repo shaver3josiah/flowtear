@@ -15,6 +15,7 @@
 // LogView's `onShowCalendar`.
 
 import { daysBetween, isSameDay, startOfDay } from "../core/dates.js";
+import * as temp from "../core/basalTemp.js";
 
 const { useState } = window.React;
 
@@ -182,7 +183,7 @@ export function DayLogSummary({ ctx, log }) {
     log.flow && row("droplet", "--phase-menstrual", `${fmt.flowLabel(log.flow)} flow`),
     log.discharge && row("cloud-rain", "--phase-fertile", `${fmt.dischargeLabel(log.discharge)} discharge`),
     log.temperatureC != null &&
-      row("thermometer", "--phase-ovulation", `${fmt.cToF(log.temperatureC).toFixed(2)}° in the morning`),
+      row("thermometer", "--phase-ovulation", `${temp.text(log.temperatureC)}° in the morning`),
     log.moods?.length && row("smile", "--phase-luteal", labels(log.moods, fmt.moodLabel)),
     log.symptoms?.length && row("heart", "--primary-strong", labels(log.symptoms, fmt.symptomLabel)),
     log.note && row("edit-3", "--deep", `“${log.note}”`),

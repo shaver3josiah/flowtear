@@ -10,6 +10,7 @@
 import { FLOW_WEIGHT } from "../core/models.js";
 import { FLOW_COLOR } from "../components/flowScale.js";
 import { keyFromDate, dateFromKey, startOfDay, daysBetween } from "../core/dates.js";
+import * as temp from "../core/basalTemp.js";
 
 const React = window.React;
 const { useState, useEffect } = React;
@@ -115,6 +116,11 @@ export default function CalendarScreen({ ctx }) {
   const selectedDate = dateFromKey(selectedKey);
   const selectedLog = store.logFor(selectedDate);
   const selectedState = stateFor(selectedDate);
+  // A day that hasn't happened has nothing to log. The summary card answers it
+  // with what the prediction says instead, and never offers to edit it.
+  // (CalendarView.swift's PeekDay sheet.)
+  const selectedIsFuture = startOfDay(selectedDate) > today0;
+  const selectedSnap = selectedIsFuture ? store.phaseSnapshot(selectedDate) : null;
 
   const cell = { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, justifyItems: "center" };
 
@@ -296,7 +302,15 @@ export default function CalendarScreen({ ctx }) {
           ${selectedState && html`<${Badge} tone=${stateTone(selectedState)} dot=${true}>${stateLabel(selectedState)}</${Badge}>`}
         </div>
 
-        ${selectedLog
+        ${selectedIsFuture
+          ? (selectedSnap?.phase
+            ? html`<div style=${{ marginTop: 10, display: "grid", gap: 8 }}>
+                ${row(html, "Phase", `${fmt.phaseLabel(selectedSnap.phase)}, cycle day ${selectedSnap.day}`)}
+              </div>`
+            : html`<p style=${{ marginTop: 8, color: "var(--muted)" }}>
+                Log a period and this day gets a prediction.
+              </p>`)
+          : selectedLog
           ? html`<div style=${{ marginTop: 10, display: "grid", gap: 8 }}>
               ${row(html, "Flow", selectedLog.flow ? fmt.flowLabel(selectedLog.flow) : null)}
               ${row(html, "Temperature", tempF(fmt, selectedLog.temperatureC))}
@@ -307,10 +321,21 @@ export default function CalendarScreen({ ctx }) {
             </div>`
           : html`<p style=${{ marginTop: 8, color: "var(--muted)" }}>Nothing logged on this day.</p>`}
 
-        <${Button} variant="soft" block=${true} style=${{ marginTop: 14 }}
-          onClick=${() => nav.open("log", { date: selectedDate })}>
-          Edit this day
-        </${Button}>
+        ${selectedIsFuture
+          ? (selectedSnap?.phase && html`
+            <${Button} variant="soft" block=${true} style=${{ marginTop: 14 }}
+              onClick=${() => nav.open("phase", {
+                phase: selectedSnap.phase,
+                day: selectedSnap.day,
+                dateLabel: fmt.longDate(selectedDate),
+              })}>
+              What's predicted
+            </${Button}>`)
+          : html`
+            <${Button} variant="soft" block=${true} style=${{ marginTop: 14 }}
+              onClick=${() => nav.open("log", { date: selectedDate })}>
+              Edit this day
+            </${Button}>`}
       </${Card}>
     </div>
   `;
@@ -328,10 +353,7 @@ function row(html, label, value) {
 const listLabels = (labeler, arr) =>
   arr && arr.length ? arr.map(labeler).join(", ") : null;
 
-const tempF = (fmt, celsius) => {
-  const f = fmt.cToF(celsius);
-  return f == null ? null : `${f.toFixed(1)} °F`;
-};
+const tempF = (fmt, celsius) => temp.labelled(celsius, 1);
 
 const stateTone = (s) => (s === "predicted" || s === "period" ? "menstrual" : s);
 const stateLabel = (s) =>

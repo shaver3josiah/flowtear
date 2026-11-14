@@ -9,7 +9,8 @@
 
 import { periodStarts } from "./engine.js";
 import { startOfDay, daysBetween, dateFromKey } from "./dates.js";
-import { cToF, monthShort } from "./format.js";
+import { monthShort } from "./format.js";
+import * as temp from "./basalTemp.js";
 
 // Swift's DateFormatter with dateStyle .medium — "Jul 16, 2026".
 const mediumDate = (d) => `${monthShort(d.getMonth())} ${d.getDate()}, ${d.getFullYear()}`;
@@ -110,7 +111,10 @@ export function text(store, today = new Date()) {
   return lines.join("\n");
 }
 
-export const CSV_HEADER = "date,cycle_day,phase,flow,discharge,temp_f,temp_skipped,moods,symptoms,stretch_done,note";
+// The temperature column names the unit it carries, so a sheet is never
+// ambiguous about whether 36.5 is a fever or a normal morning.
+export const CSV_HEADER =
+  `date,cycle_day,phase,flow,discharge,temp_${temp.usesCelsius ? "c" : "f"},temp_skipped,moods,symptoms,stretch_done,note`;
 export const CSV_FILENAME = "uncorked-cycle-data.csv"; // same name Swift's csvFile() writes
 
 /**
@@ -124,7 +128,7 @@ export function csv(store) {
     a.dateKey < b.dateKey ? -1 : a.dateKey > b.dateKey ? 1 : 0);
   for (const log of byDate) {
     const snap = store.phaseSnapshot(dateFromKey(log.dateKey));
-    const tempF = log.temperatureC == null ? "" : cToF(log.temperatureC).toFixed(2);
+    const tempF = temp.text(log.temperatureC) ?? "";
     const moods = [...(log.moods ?? [])].sort().join("; ");
     const symptoms = [...(log.symptoms ?? [])].sort().join("; ");
     const note = (log.note ?? "").replaceAll('"', '""');
